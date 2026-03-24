@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UGC Scanner</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Render Deployment</p>
+        <h1>UGC Scanner</h1>
+        <p class="lede">Upload a CSV of sites, start a Playwright scan job, track progress, and download structured results.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Start Scan</h2>
+        <form id="upload-form" class="form">
+          <label class="field">
+            <span>CSV File</span>
+            <input id="csv-file" name="file" type="file" accept=".csv,text/csv" required>
+          </label>
+          <label class="field">
+            <span>URL Column</span>
+            <input id="url-column" name="urlColumn" type="text" placeholder="url">
+          </label>
+          <button class="primary" type="submit">Start Job</button>
+        </form>
+        <p id="form-message" class="message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Job Status</h2>
+          <button id="refresh-jobs" class="secondary" type="button">Refresh</button>
+        </div>
+        <div id="job-summary" class="summary empty">No job selected.</div>
+        <div class="download-actions">
+          <a id="download-csv" class="link-button disabled" href="#" target="_blank" rel="noreferrer">Download CSV</a>
+          <a id="download-json" class="link-button disabled" href="#" target="_blank" rel="noreferrer">View JSON</a>
+        </div>
+        <div id="job-items" class="table-shell empty">Upload a CSV to begin.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Recent Jobs</h2>
+        </div>
+        <div id="recent-jobs" class="table-shell empty">No jobs loaded.</div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
