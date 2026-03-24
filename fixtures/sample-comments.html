@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta property="og:type" content="article">
+    <title>Sample Comments</title>
+  </head>
+  <body>
+    <article>
+      <h1>Example Article</h1>
+      <p>Body copy before comments.</p>
+    </article>
+
+    <section id="comments">
+      <h2>3 comments</h2>
+      <div class="comment-list">
+        <article class="comment-card">
+          <img class="avatar" src="avatar-1.png" alt="avatar">
+          <a class="username" href="/user/alice">alice</a>
+          <time datetime="2026-03-20T12:00:00Z">2 days ago</time>
+          <p>This detector should recognize a repeated comment structure.</p>
+          <button>Reply</button>
+          <button aria-label="Like">12</button>
+        </article>
+        <article class="comment-card">
+          <img class="avatar" src="avatar-2.png" alt="avatar">
+          <a class="username" href="/user/bob">bob</a>
+          <time datetime="2026-03-21T08:00:00Z">1 day ago</time>
+          <p>The units contain an author, timestamp, text, and reply action.</p>
+          <button>Reply</button>
+          <button aria-label="Like">3</button>
+        </article>
+        <article class="comment-card">
+          <img class="avatar" src="avatar-3.png" alt="avatar">
+          <a class="username" href="/user/carol">carol</a>
+          <time datetime="2026-03-22T14:00:00Z">6 hours ago</time>
+          <p>There is also a composer below the thread for extra positive signal.</p>
+          <button>Reply</button>
+          <button aria-label="Like">7</button>
+        </article>
+      </div>
+
+      <form class="comment-form">
+        <label for="body">Add comment</label>
+        <textarea id="body" name="body"></textarea>
+        <button type="submit">Post comment</button>
+      </form>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "comment-data-collection",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Playwright-based UGC/comment region detector",
+  "scripts": {
+    "detect:ugc": "node src/detect-ugc.js",
+    "check": "node --check src/commentFeatures.js && node --check src/detect-ugc.js"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}
