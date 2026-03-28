@@ -21,6 +21,14 @@ Why:
 - `redis`
 - one static frontend build for `web/`
 
+The ready-to-use command-line deployment files on this branch are:
+
+- [docker-compose.digitalocean.yml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/docker-compose.digitalocean.yml)
+- [Dockerfile.api](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/Dockerfile.api)
+- [Dockerfile.ui](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/Dockerfile.ui)
+- [scripts/bootstrap-digitalocean.sh](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/scripts/bootstrap-digitalocean.sh)
+- [scripts/deploy-digitalocean.ps1](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/scripts/deploy-digitalocean.ps1)
+
 ### Values I need from you
 
 - the public frontend URL
@@ -30,6 +38,29 @@ Why:
 - whether Redis will be self-hosted on the droplet or use DigitalOcean Managed Redis
 - the disk path you want to use for artifacts, for example `/data/comment-data/artifacts`
 - the worker concurrency you want to start with
+
+### Where each value comes from
+
+- `public frontend URL`
+  - if you use a domain, this is the domain or subdomain you point at the UI service
+  - if you are starting with raw droplet ports, use `http://YOUR_DROPLET_IP:8080`
+- `public API URL`
+  - if you use a domain, this is the API domain or subdomain
+  - if you are starting with raw droplet ports, use `http://YOUR_DROPLET_IP:3000`
+- `one domain or separate UI/API subdomains`
+  - this is your choice, not a value DigitalOcean generates for you
+- `Postgres self-hosted or managed`
+  - your choice
+  - if managed, get the connection string from the database cluster's connection details page in DigitalOcean
+- `Redis self-hosted or managed`
+  - your choice
+  - if managed, get the connection string from the managed Redis or Valkey cluster connection details page in DigitalOcean
+- `artifact disk path`
+  - if you stay with this Docker Compose setup, keep `ARTIFACT_ROOT=/data/comment-data/artifacts`
+  - the Docker volume handles persistence for the container path
+- `worker concurrency`
+  - your choice
+  - start with `2` unless your droplet is very small
 
 ### Core environment variables
 
@@ -78,6 +109,40 @@ The extension should point to the deployed API URL:
 - `ACTION_SETTLE_MS=1250`
 - `INITIAL_QUEUE_FILL=4`
 - `QUEUE_REFILL_COUNT=2`
+
+### Fastest way to start on a droplet
+
+1. Create an Ubuntu droplet.
+2. SSH into it.
+3. Run [scripts/bootstrap-digitalocean.sh](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/scripts/bootstrap-digitalocean.sh) once.
+4. Clone this repo into `/opt/comment-data-collection`.
+5. Copy [.env.digitalocean.example](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/.env.digitalocean.example) to `.env.digitalocean` and edit the values.
+6. Run:
+
+```bash
+docker compose --env-file .env.digitalocean -f docker-compose.digitalocean.yml up -d --build
+```
+
+That will give you:
+
+- UI on port `8080`
+- API on port `3000`
+- worker running in the background
+
+### Windows command-line deploy
+
+From this machine you can deploy to the droplet with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-digitalocean.ps1 `
+  -Host YOUR_DROPLET_IP `
+  -User root `
+  -AppDir /opt/comment-data-collection `
+  -Branch digitalocean-master `
+  -Repository https://github.com/YOUR-USER/comment-data-collection.git
+```
+
+This script SSHes into the droplet, updates the repo, and runs Docker Compose there.
 
 ### Next step
 
