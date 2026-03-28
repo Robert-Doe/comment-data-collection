@@ -24,6 +24,7 @@ const {
 } = require('../shared/output');
 const { analyzeManualCapture } = require('../shared/manualCapture');
 const { buildHtmlSnapshotDot } = require('../shared/scanner');
+const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -209,11 +210,21 @@ function createApp(config = getConfig()) {
         return;
       }
 
+      const jobSettings = normalizeJobScanSettings({
+        scanDelayMs: req.body.scanDelayMs,
+        screenshotDelayMs: req.body.screenshotDelayMs,
+      }, {
+        scanDelayMs: config.postLoadDelayMs,
+        screenshotDelayMs: config.preScreenshotDelayMs,
+      });
+
       const job = await createJob({
         sourceFilename,
         sourceColumn: parsed.urlColumn,
         records,
         batchSize: config.ingestBatchSize,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
       }, config.databaseUrl);
 
       const queue = getSharedQueue(config.redisUrl);
@@ -228,6 +239,8 @@ function createApp(config = getConfig()) {
         jobId: job.id,
         totalUrls: job.totalUrls,
         sourceColumn: parsed.urlColumn,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
       });
     } catch (error) {
       next(error);

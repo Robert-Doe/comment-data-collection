@@ -98,6 +98,34 @@ h1 {
   align-items: end;
 }
 
+.config-block {
+  grid-column: 1 / 3;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel-soft);
+}
+
+.config-heading {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.config-heading strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .manual-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -839,6 +867,14 @@ img {
 
 @media (max-width: 860px) {
   .form {
+    grid-template-columns: 1fr;
+  }
+
+  .config-block {
+    grid-column: auto;
+  }
+
+  .config-grid {
     grid-template-columns: 1fr;
   }
 
