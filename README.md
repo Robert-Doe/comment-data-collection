@@ -106,6 +106,8 @@ The recommended deployment is:
 
 The blueprint is in `render.yaml`.
 
+If you need a zero-cost demo or supervisor review environment, this repo also includes a free single-service deployment path in [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml). That mode runs the local all-in-one app as one Docker web service. See [FREE_HOSTING.md](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/FREE_HOSTING.md).
+
 Current pacing safeguards:
 
 - URLs are inserted into the database in batches instead of one row at a time
@@ -132,6 +134,8 @@ What still needs to be addressed before a supervisor-facing production deploymen
 - in Render, `ugc-api` and `ugc-worker` are separate services, so they do not share that local disk
 
 That means the current Render blueprint is close, but screenshots, candidate images, and stored HTML snapshots need shared storage before production use. The practical fix is to move artifacts to shared object storage and keep the URLs in Postgres.
+
+For the free single-service mode in [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml), this shared-storage issue is less severe because the UI, scanner, and artifact-serving paths all run in one process. The tradeoff is that data is ephemeral and can be lost when the free instance restarts.
 
 ## Services
 

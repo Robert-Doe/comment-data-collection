@@ -174,7 +174,9 @@ function createLocalRuntime(options = {}) {
     ...getConfig(),
     ...options,
   };
-  const statePath = options.statePath || path.resolve(process.cwd(), 'output', 'local-dev-state.json');
+  const statePath = options.statePath
+    || process.env.LOCAL_STATE_PATH
+    || path.resolve(process.cwd(), 'output', 'local-dev-state.json');
   const state = readState(statePath);
   const queue = [];
   let activeCount = 0;

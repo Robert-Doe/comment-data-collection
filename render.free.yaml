@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: ugc-free
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.free
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: WORKER_CONCURRENCY
+        value: 1
+      - key: INITIAL_QUEUE_FILL
+        value: 1
+      - key: QUEUE_REFILL_COUNT
+        value: 1
+      - key: INGEST_BATCH_SIZE
+        value: 50
+      - key: API_RESULTS_PAGE_SIZE
+        value: 50
+      - key: POST_LOAD_DELAY_MS
+        value: 3000
+      - key: SCAN_TIMEOUT_MS
+        value: 45000
+      - key: LOCAL_STATE_PATH
+        value: /tmp/ugc-local-state.json
+      - key: ARTIFACT_ROOT
+        value: /tmp/ugc-artifacts
