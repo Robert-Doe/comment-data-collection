@@ -20,6 +20,8 @@ services:
         value: 50
       - key: POST_LOAD_DELAY_MS
         value: 6000
+      - key: PRE_SCREENSHOT_DELAY_MS
+        value: 1500
       - key: SCAN_TIMEOUT_MS
         value: 90000
       - key: NAVIGATION_RETRIES

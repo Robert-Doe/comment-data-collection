@@ -36,6 +36,8 @@ services:
         value: 90000
       - key: POST_LOAD_DELAY_MS
         value: 6000
+      - key: PRE_SCREENSHOT_DELAY_MS
+        value: 1500
       - key: NAVIGATION_RETRIES
         value: 2
       - key: LOAD_SETTLE_PASSES
@@ -64,6 +66,8 @@ services:
         value: 90000
       - key: POST_LOAD_DELAY_MS
         value: 6000
+      - key: PRE_SCREENSHOT_DELAY_MS
+        value: 1500
       - key: NAVIGATION_RETRIES
         value: 2
       - key: LOAD_SETTLE_PASSES
