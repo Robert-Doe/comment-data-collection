@@ -36,8 +36,42 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
 
 async function dismissConsentPrompts(page) {
   await page.evaluate(() => {
+    function deepQuerySelectorAll(selector) {
+      const results = [];
+      const seen = new Set();
+      const stack = [document];
+
+      while (stack.length) {
+        const root = stack.pop();
+        if (!root || !root.querySelectorAll) continue;
+        let matches = [];
+        let hosts = [];
+        try {
+          matches = Array.from(root.querySelectorAll(selector));
+          hosts = Array.from(root.querySelectorAll('*')).filter((el) => el && el.shadowRoot);
+        } catch (_) {
+          matches = [];
+          hosts = [];
+        }
+
+        matches.forEach((match) => {
+          if (!match || seen.has(match)) return;
+          seen.add(match);
+          results.push(match);
+        });
+
+        hosts.forEach((host) => {
+          if (host.shadowRoot) {
+            stack.push(host.shadowRoot);
+          }
+        });
+      }
+
+      return results;
+    }
+
     const pattern = /\b(accept|agree|allow all|got it|continue)\b/i;
-    const candidates = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'));
+    const candidates = deepQuerySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]');
     let clicked = 0;
 
     function isVisible(el) {
@@ -59,8 +93,42 @@ async function dismissConsentPrompts(page) {
 
 async function expandPotentialUgc(page) {
   await page.evaluate(() => {
+    function deepQuerySelectorAll(selector) {
+      const results = [];
+      const seen = new Set();
+      const stack = [document];
+
+      while (stack.length) {
+        const root = stack.pop();
+        if (!root || !root.querySelectorAll) continue;
+        let matches = [];
+        let hosts = [];
+        try {
+          matches = Array.from(root.querySelectorAll(selector));
+          hosts = Array.from(root.querySelectorAll('*')).filter((el) => el && el.shadowRoot);
+        } catch (_) {
+          matches = [];
+          hosts = [];
+        }
+
+        matches.forEach((match) => {
+          if (!match || seen.has(match)) return;
+          seen.add(match);
+          results.push(match);
+        });
+
+        hosts.forEach((host) => {
+          if (host.shadowRoot) {
+            stack.push(host.shadowRoot);
+          }
+        });
+      }
+
+      return results;
+    }
+
     const pattern = /\b(show comments|view comments|load comments|load more|show more|more comments|more replies|more reviews|show replies|view replies|replies|comments)\b/i;
-    const candidates = Array.from(document.querySelectorAll('button, [role="button"], summary, details summary'));
+    const candidates = deepQuerySelectorAll('button, [role="button"], summary, details summary');
     let clicked = 0;
 
     function isVisible(el) {
@@ -441,6 +509,40 @@ async function persistPageHtmlSnapshot(html, rawHtml, normalizedUrl, options = {
 async function detectPageAccess(page) {
   const frameUrls = page.frames().map((frame) => frame.url());
   const pageInfo = await page.evaluate(() => {
+    function deepQuerySelectorAll(selector) {
+      const results = [];
+      const seen = new Set();
+      const stack = [document];
+
+      while (stack.length) {
+        const root = stack.pop();
+        if (!root || !root.querySelectorAll) continue;
+        let matches = [];
+        let hosts = [];
+        try {
+          matches = Array.from(root.querySelectorAll(selector));
+          hosts = Array.from(root.querySelectorAll('*')).filter((el) => el && el.shadowRoot);
+        } catch (_) {
+          matches = [];
+          hosts = [];
+        }
+
+        matches.forEach((match) => {
+          if (!match || seen.has(match)) return;
+          seen.add(match);
+          results.push(match);
+        });
+
+        hosts.forEach((host) => {
+          if (host.shadowRoot) {
+            stack.push(host.shadowRoot);
+          }
+        });
+      }
+
+      return results;
+    }
+
     function isVisible(el) {
       if (!el) return false;
       const style = window.getComputedStyle(el);
@@ -451,12 +553,12 @@ async function detectPageAccess(page) {
     const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
     const title = (document.title || '').trim();
     const combined = `${title} ${text}`;
-    const captchaIframes = Array.from(document.querySelectorAll('iframe[src*="captcha"], iframe[src*="turnstile"], iframe[src*="challenge"], iframe[src*="recaptcha"]'));
+    const captchaIframes = deepQuerySelectorAll('iframe[src*="captcha"], iframe[src*="turnstile"], iframe[src*="challenge"], iframe[src*="recaptcha"]');
     const hasCloudflareText = /verify to continue|checking if the site connection is secure|review the security of your connection before proceeding|attention required/i.test(combined);
     const hasCaptchaText = /captcha|human verification|security check|are you a human|unusual traffic/i.test(combined);
     const hasLoginWallText = /\b(sign in|log in|join|create account|start trial|subscribe)\b/i.test(combined)
       && /\b(to continue|to view|to watch|to comment|to reply|to proceed)\b/i.test(combined);
-    const hasTurnstile = !!document.querySelector('[id^="cf-chl-widget"], .cf-turnstile, [name="cf-turnstile-response"]');
+    const hasTurnstile = deepQuerySelectorAll('[id^="cf-chl-widget"], .cf-turnstile, [name="cf-turnstile-response"]').length > 0;
     const hasCaptchaIframe = captchaIframes.some((iframe) => {
       const src = String(iframe.getAttribute('src') || '');
       const rect = iframe.getBoundingClientRect();
@@ -847,6 +949,126 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
       const nonContentTags = new Set(['body', 'defs', 'g', 'head', 'html', 'link', 'meta', 'path', 'script', 'style', 'title']);
       const metaTextPattern = /\b(\d+\s*(s|m|h|d|w|mo|yr)s?\b|ago|reply|replies|like|likes|share|shares|edited|pinned|follow|following)\b/i;
 
+      function getShadowRoot(root) {
+        if (!isElement(root) || !root.shadowRoot) return null;
+        return root.shadowRoot;
+      }
+
+      function composedParentElement(node) {
+        if (!node) return null;
+        if (node.parentElement) return node.parentElement;
+        if (node.getRootNode) {
+          const root = node.getRootNode();
+          if (root && root.host && root.host.nodeType === 1) {
+            return root.host;
+          }
+        }
+        return null;
+      }
+
+      function directChildren(root) {
+        if (!root) return [];
+        const seen = new Set();
+        const children = [];
+        function push(nodes) {
+          Array.from(nodes || []).forEach((node) => {
+            if (!isElement(node) || seen.has(node)) return;
+            seen.add(node);
+            children.push(node);
+          });
+        }
+
+        if (root.nodeType === 9 && root.documentElement) {
+          push([root.documentElement]);
+        } else {
+          push(root.children || []);
+        }
+
+        const shadowRoot = getShadowRoot(root);
+        if (shadowRoot) {
+          push(shadowRoot.children || []);
+        }
+
+        return children;
+      }
+
+      function allDescendants(root, includeRoot = false) {
+        const descendants = [];
+        const seen = new Set();
+        const stack = includeRoot ? [root] : directChildren(root).slice().reverse();
+
+        while (stack.length) {
+          const node = stack.pop();
+          if (!isElement(node) || seen.has(node)) continue;
+          seen.add(node);
+          descendants.push(node);
+          directChildren(node)
+            .slice()
+            .reverse()
+            .forEach((child) => stack.push(child));
+        }
+
+        return descendants;
+      }
+
+      function getNodeText(root) {
+        if (!root) return '';
+        const texts = [];
+        const stack = [root];
+
+        while (stack.length) {
+          const node = stack.pop();
+          if (!node) continue;
+          if (node.nodeType === 3) {
+            const value = normalizeSpace(node.nodeValue || '');
+            if (value) texts.push(value);
+            continue;
+          }
+          if (![1, 9, 11].includes(node.nodeType)) continue;
+
+          const shadowRoot = getShadowRoot(node);
+          if (shadowRoot) {
+            Array.from(shadowRoot.childNodes || [])
+              .slice()
+              .reverse()
+              .forEach((child) => stack.push(child));
+          }
+
+          Array.from(node.childNodes || [])
+            .slice()
+            .reverse()
+            .forEach((child) => stack.push(child));
+        }
+
+        return normalizeSpace(texts.join(' '));
+      }
+
+      function matchesSelector(el, selector) {
+        if (!isElement(el) || !selector) return false;
+        try {
+          return !!el.matches(selector);
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function deepQuerySelectorAll(root, selector, includeRoot = false) {
+        if (!root || !selector) return [];
+        const matches = [];
+        const candidates = includeRoot ? [root].concat(allDescendants(root)) : allDescendants(root);
+        candidates.forEach((candidate) => {
+          if (matchesSelector(candidate, selector)) {
+            matches.push(candidate);
+          }
+        });
+        return matches;
+      }
+
+      function deepQuerySelector(root, selector, includeRoot = false) {
+        const matches = deepQuerySelectorAll(root, selector, includeRoot);
+        return matches.length ? matches[0] : null;
+      }
+
       function getXPath(el) {
         if (!isElement(el)) return '';
         const parts = [];
@@ -860,7 +1082,18 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
           }
           const tag = node.tagName.toLowerCase();
           parts.unshift(index > 1 ? `${tag}[${index}]` : tag);
-          node = node.parentElement;
+          const parent = node.parentElement;
+          if (parent) {
+            node = parent;
+            continue;
+          }
+          const root = node.getRootNode ? node.getRootNode() : null;
+          if (root && root.host) {
+            parts.unshift('#shadow-root');
+            node = root.host;
+            continue;
+          }
+          node = null;
         }
         return `/${parts.join('/')}`;
       }
@@ -877,8 +1110,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
       function structuralSignature(el) {
         if (!isElement(el)) return 'unknown[]';
         const tag = tagNameOf(el);
-        const childTags = Array.from(el.children || [])
-          .filter(isElement)
+        const childTags = directChildren(el)
           .map((child) => tagNameOf(child))
           .filter(Boolean)
           .sort();
@@ -894,6 +1126,60 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         }
       }
 
+      function resolveCssPath(selector) {
+        if (!selector) return null;
+        const segments = String(selector)
+          .split('>>')
+          .map((segment) => segment.trim())
+          .filter(Boolean)
+          .map((segment) => segment.replace(/^css=/, '').trim())
+          .filter(Boolean);
+        if (!segments.length) return null;
+
+        let contexts = [document];
+        for (const segment of segments) {
+          const nextContexts = [];
+          const seen = new Set();
+
+          contexts.forEach((context) => {
+            const roots = [context];
+            if (isElement(context) && context.shadowRoot) {
+              roots.push(context.shadowRoot);
+            }
+
+            roots.forEach((root) => {
+              if (!root || !root.querySelectorAll) return;
+              let matches = [];
+              try {
+                matches = Array.from(root.querySelectorAll(segment));
+              } catch (_) {
+                matches = [];
+              }
+              matches.forEach((match) => {
+                if (!isElement(match) || seen.has(match)) return;
+                seen.add(match);
+                nextContexts.push(match);
+              });
+            });
+          });
+
+          if (!nextContexts.length) {
+            return null;
+          }
+          contexts = nextContexts;
+        }
+
+        return contexts.length ? contexts[0] : null;
+      }
+
+      function resolveCandidateRoot(candidate) {
+        if (!candidate) return null;
+        const cssResolved = resolveCssPath(candidate.css_path || '');
+        if (isElement(cssResolved)) return cssResolved;
+        const xpathResolved = resolveXPath(candidate.xpath || '');
+        return isElement(xpathResolved) ? xpathResolved : null;
+      }
+
       function shortLabel(el) {
         return tagNameOf(el);
       }
@@ -902,7 +1188,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         const tag = tagNameOf(el);
         if (nonContentTags.has(tag)) return null;
         const role = normalizeSpace(el.getAttribute ? el.getAttribute('role') : '').toLowerCase();
-        const text = normalizeSpace(el.textContent || '');
+        const text = getNodeText(el);
         const childTags = childElements.map((child) => tagNameOf(child));
         const childCount = childTags.length;
         const mostlyInlineChildren = childCount === 0 || childTags.every((childTag) => inlineTextTags.has(childTag));
@@ -961,7 +1247,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
       }
 
       function dominantChildGroup(root) {
-        const children = Array.from(root && root.children ? root.children : []).filter(isElement);
+        const children = directChildren(root);
         if (children.length < 2) return null;
 
         const xpathGroups = new Map();
@@ -1011,7 +1297,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
       const candidateClusters = [];
 
       candidateRows.forEach((candidate, index) => {
-        const root = resolveXPath(candidate.xpath || '');
+        const root = resolveCandidateRoot(candidate);
         if (!isElement(root)) return;
         const rank = index + 1;
         const dominantGroup = dominantChildGroup(root);
@@ -1054,7 +1340,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         let node = el;
         while (node && node.nodeType === 1 && depth <= maxDepth) {
           if (markedMap.has(node)) return depth;
-          node = node.parentElement;
+          node = composedParentElement(node);
           depth += 1;
         }
         return -1;
@@ -1079,9 +1365,9 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         const id = getId(el);
         const listMeta = candidateRootMeta.get(el);
         const repeatedBlock = blockMeta.get(el);
-        const children = Array.from(el.children || []).filter(isElement);
-        const insideBlock = ancestorDistance(el.parentElement, blockMeta, 6) >= 0;
-        const insideList = ancestorDistance(el.parentElement, candidateRootMeta, 8) >= 0;
+        const children = directChildren(el);
+        const insideBlock = ancestorDistance(composedParentElement(el), blockMeta, 6) >= 0;
+        const insideList = ancestorDistance(composedParentElement(el), candidateRootMeta, 8) >= 0;
         const feature = insideBlock || insideList
           ? classifyNodeFeature(el, children, { insideBlock, insideList })
           : null;
@@ -1141,7 +1427,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
           if (!isElement(el) || clusterSeen.has(el) || !seen.has(el)) continue;
           clusterSeen.add(el);
           clusterNodeIds.push(getId(el));
-          const children = Array.from(el.children || []).filter(isElement);
+          const children = directChildren(el);
           for (let i = children.length - 1; i >= 0; i -= 1) {
             clusterStack.push(children[i]);
           }

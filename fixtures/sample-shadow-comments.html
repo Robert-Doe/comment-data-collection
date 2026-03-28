@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Shadow Comment Fixture</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f4f6f8;
+      color: #20262d;
+    }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    .lead {
+      max-width: 68ch;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Shadow DOM Article</h1>
+    <p class="lead">
+      This fixture mounts the discussion thread inside an open shadow root after a short delay.
+      The scanner should wait, discover the repeated units, and still score it as UGC.
+    </p>
+    <shadow-comment-thread></shadow-comment-thread>
+  </main>
+
+  <script>
+    class ShadowCommentThread extends HTMLElement {
+      connectedCallback() {
+        const root = this.attachShadow({ mode: 'open' });
+        root.innerHTML = `
+          <style>
+            :host {
+              display: block;
+              margin-top: 32px;
+            }
+
+            section {
+              border: 1px solid #d8e0e8;
+              border-radius: 18px;
+              background: #ffffff;
+              box-shadow: 0 14px 30px rgba(28, 44, 64, 0.08);
+              overflow: hidden;
+            }
+
+            header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 18px 22px;
+              border-bottom: 1px solid #e6edf3;
+              background: linear-gradient(180deg, #fafcff 0%, #f4f7fb 100%);
+            }
+
+            h2 {
+              margin: 0;
+              font-size: 1.05rem;
+            }
+
+            .count {
+              font-size: 0.9rem;
+              color: #627080;
+            }
+
+            .list {
+              padding: 16px 20px 8px;
+            }
+
+            article {
+              display: grid;
+              grid-template-columns: 44px 1fr;
+              gap: 14px;
+              padding: 16px 0;
+              border-bottom: 1px solid #edf2f7;
+            }
+
+            article:last-of-type {
+              border-bottom: 0;
+            }
+
+            img {
+              width: 44px;
+              height: 44px;
+              border-radius: 999px;
+            }
+
+            .meta {
+              display: flex;
+              gap: 10px;
+              align-items: center;
+              flex-wrap: wrap;
+              font-size: 0.9rem;
+              color: #5c6674;
+            }
+
+            .author {
+              font-weight: 600;
+              color: #223040;
+            }
+
+            .body {
+              margin-top: 8px;
+              line-height: 1.55;
+            }
+
+            .actions {
+              display: flex;
+              gap: 10px;
+              margin-top: 10px;
+            }
+
+            button {
+              border: 0;
+              border-radius: 999px;
+              padding: 8px 12px;
+              background: #edf4ff;
+              color: #2b5fab;
+              cursor: pointer;
+              font: inherit;
+            }
+
+            .composer {
+              padding: 18px 20px 20px;
+              border-top: 1px solid #e6edf3;
+              background: #fbfdff;
+            }
+
+            textarea {
+              width: 100%;
+              min-height: 96px;
+              resize: vertical;
+              border: 1px solid #cdd8e4;
+              border-radius: 12px;
+              padding: 12px 14px;
+              font: inherit;
+              box-sizing: border-box;
+            }
+
+            .composer-actions {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 12px;
+              margin-top: 12px;
+            }
+
+            .helper {
+              font-size: 0.85rem;
+              color: #607084;
+            }
+          </style>
+          <div id="mount">Loading discussion…</div>
+        `;
+
+        window.setTimeout(() => {
+          const mount = root.getElementById('mount');
+          mount.innerHTML = `
+            <section class="comments-panel" aria-label="Comments">
+              <header>
+                <h2>12 Comments</h2>
+                <button type="button" aria-label="Show replies">Show replies</button>
+              </header>
+              <div class="list">
+                <article class="comment-card" itemtype="https://schema.org/Comment">
+                  <img class="avatar" alt="@nora" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Crect width='44' height='44' rx='22' fill='%2398b4ff'/%3E%3Ctext x='22' y='27' font-size='16' text-anchor='middle' fill='white'%3EN%3C/text%3E%3C/svg%3E">
+                  <div>
+                    <div class="meta">
+                      <span class="author" itemprop="author">Nora</span>
+                      <time datetime="2026-03-28T09:18:00Z">2 hours ago</time>
+                      <a href="/u/nora-dev">Profile</a>
+                    </div>
+                    <div class="body" itemprop="text">
+                      This shadow-root fixture mirrors the kind of delayed discussion widgets we see on modern sites.
+                    </div>
+                    <div class="actions">
+                      <button type="button">Reply</button>
+                      <button type="button">Like 14</button>
+                    </div>
+                  </div>
+                </article>
+                <article class="comment-card" itemtype="https://schema.org/Comment">
+                  <img class="avatar" alt="@leo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Crect width='44' height='44' rx='22' fill='%23ffb18c'/%3E%3Ctext x='22' y='27' font-size='16' text-anchor='middle' fill='white'%3EL%3C/text%3E%3C/svg%3E">
+                  <div>
+                    <div class="meta">
+                      <span class="author" itemprop="author">Leo</span>
+                      <time datetime="2026-03-28T10:02:00Z">76 minutes ago</time>
+                      <a href="/u/leo-ops">Profile</a>
+                    </div>
+                    <div class="body" itemprop="text">
+                      We should keep the extra wait because some comment widgets hydrate after the main content looks done.
+                    </div>
+                    <div class="actions">
+                      <button type="button">Reply</button>
+                      <button type="button">Like 9</button>
+                    </div>
+                  </div>
+                </article>
+                <article class="comment-card" itemtype="https://schema.org/Comment">
+                  <img class="avatar" alt="@maya" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Crect width='44' height='44' rx='22' fill='%2390d9c3'/%3E%3Ctext x='22' y='27' font-size='16' text-anchor='middle' fill='white'%3EM%3C/text%3E%3C/svg%3E">
+                  <div>
+                    <div class="meta">
+                      <span class="author" itemprop="author">Maya</span>
+                      <time datetime="2026-03-28T10:37:00Z">41 minutes ago</time>
+                      <a href="/u/maya-data">Profile</a>
+                    </div>
+                    <div class="body" itemprop="text">
+                      Open shadow DOM should still be fair game for extraction, screenshots, and later manual review.
+                    </div>
+                    <div class="actions">
+                      <button type="button">Reply</button>
+                      <button type="button">Like 6</button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div class="composer">
+                <textarea placeholder="Add a comment"></textarea>
+                <div class="composer-actions">
+                  <span class="helper">0 / 500</span>
+                  <button type="button">Post comment</button>
+                </div>
+              </div>
+            </section>
+          `;
+        }, 1200);
+      }
+    }
+
+    customElements.define('shadow-comment-thread', ShadowCommentThread);
+  </script>
+</body>
+</html>
