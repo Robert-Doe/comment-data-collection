@@ -94,23 +94,80 @@ function normalizeSpace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function escapeCssIdentifier(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+    return CSS.escape(text);
+  }
+  return text.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+}
+
+function getShadowRoot(root) {
+  if (!root || root.nodeType !== 1 || !root.shadowRoot) return null;
+  return root.shadowRoot;
+}
+
+function composedParentElement(node) {
+  if (!node) return null;
+  if (node.parentElement) return node.parentElement;
+  if (node.getRootNode) {
+    const root = node.getRootNode();
+    if (root && root.host && root.host.nodeType === 1) {
+      return root.host;
+    }
+  }
+  return null;
+}
+
 function directChildren(root) {
-  if (!root || !root.children) return [];
+  if (!root) return [];
   if (childCache.has(root)) return childCache.get(root);
-  const children = Array.from(root.children || []);
+  const seen = new Set();
+  const children = [];
+  function push(nodes) {
+    Array.from(nodes || []).forEach((node) => {
+      if (!node || node.nodeType !== 1 || seen.has(node)) return;
+      seen.add(node);
+      children.push(node);
+    });
+  }
+
+  if (root.nodeType === 9 && root.documentElement) {
+    push([root.documentElement]);
+  } else {
+    push(root.children || []);
+  }
+
+  const shadowRoot = getShadowRoot(root);
+  if (shadowRoot) {
+    push(shadowRoot.children || []);
+  }
   childCache.set(root, children);
   return children;
 }
 
 function allDescendants(root) {
-  if (!root || !root.querySelectorAll) return [];
+  if (!root) return [];
   if (descendantCache.has(root)) return descendantCache.get(root);
-  let descendants = [];
-  try {
-    descendants = Array.from(root.querySelectorAll('*'));
-  } catch (_) {
-    descendants = [];
+
+  const descendants = [];
+  const stack = [];
+  directChildren(root)
+    .slice()
+    .reverse()
+    .forEach((child) => stack.push(child));
+
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || node.nodeType !== 1) continue;
+    descendants.push(node);
+    directChildren(node)
+      .slice()
+      .reverse()
+      .forEach((child) => stack.push(child));
   }
+
   descendantCache.set(root, descendants);
   return descendants;
 }
@@ -118,31 +175,56 @@ function allDescendants(root) {
 function textOf(el) {
   if (!el) return '';
   if (textCache.has(el)) return textCache.get(el);
-  const value = normalizeSpace(el.textContent || '');
+  const value = normalizeSpace(allTextNodes(el).join(' '));
   textCache.set(el, value);
   return value;
 }
 
 function directTextOf(el) {
-  if (!el || !el.childNodes) return '';
+  if (!el) return '';
   let value = '';
-  Array.from(el.childNodes).forEach((node) => {
+  Array.from(el.childNodes || []).forEach((node) => {
     if (node && node.nodeType === 3) value += ` ${node.nodeValue || ''}`;
   });
+  const shadowRoot = getShadowRoot(el);
+  if (shadowRoot) {
+    Array.from(shadowRoot.childNodes || []).forEach((node) => {
+      if (node && node.nodeType === 3) value += ` ${node.nodeValue || ''}`;
+    });
+  }
   return normalizeSpace(value);
 }
 
 function allTextNodes(root) {
-  if (!root || !root.ownerDocument || !root.ownerDocument.createTreeWalker) {
-    return [textOf(root)];
-  }
-  const walker = root.ownerDocument.createTreeWalker(root, 4, null, false);
   const texts = [];
-  let node;
-  while ((node = walker.nextNode())) {
-    const value = normalizeSpace(node.nodeValue || '');
-    if (value) texts.push(value);
+  if (!root) return texts;
+  const stack = [root];
+
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (node.nodeType === 3) {
+      const value = normalizeSpace(node.nodeValue || '');
+      if (value) texts.push(value);
+      continue;
+    }
+
+    if (![1, 9, 11].includes(node.nodeType)) continue;
+
+    const shadowRoot = getShadowRoot(node);
+    if (shadowRoot) {
+      Array.from(shadowRoot.childNodes || [])
+        .slice()
+        .reverse()
+        .forEach((child) => stack.push(child));
+    }
+
+    Array.from(node.childNodes || [])
+      .slice()
+      .reverse()
+      .forEach((child) => stack.push(child));
   }
+
   return texts;
 }
 
@@ -190,7 +272,18 @@ function getXPath(el) {
     }
     const tag = node.tagName.toLowerCase();
     parts.unshift(index > 1 ? `${tag}[${index}]` : tag);
-    node = node.parentElement;
+    const parent = node.parentElement;
+    if (parent) {
+      node = parent;
+      continue;
+    }
+    const root = node.getRootNode ? node.getRootNode() : null;
+    if (root && root.host) {
+      parts.unshift('#shadow-root');
+      node = root.host;
+      continue;
+    }
+    node = null;
   }
   const value = `/${parts.join('/')}`;
   xpathCache.set(el, value);
@@ -210,32 +303,53 @@ function getCssPath(el) {
   if (!el || el.nodeType !== 1) return '';
   const parts = [];
   let node = el;
-  while (node && node.nodeType === 1 && node.tagName !== 'HTML') {
+  while (node && node.nodeType === 1) {
     let part = node.tagName.toLowerCase();
     if (node.id) {
-      part += `#${node.id}`;
+      part += `#${escapeCssIdentifier(node.id)}`;
       parts.unshift(part);
       break;
     }
 
-    const siblings = node.parentElement
-      ? Array.from(node.parentElement.children).filter((sibling) => sibling.tagName === node.tagName)
-      : [];
+    const parent = node.parentElement;
+    const root = node.getRootNode ? node.getRootNode() : null;
+    const siblings = parent
+      ? Array.from(parent.children).filter((sibling) => sibling.tagName === node.tagName)
+      : ((root && root.host && root.children)
+        ? Array.from(root.children).filter((sibling) => sibling.tagName === node.tagName)
+        : []);
     if (siblings.length > 1) {
       part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
     }
-    parts.unshift(part);
-    node = node.parentElement;
+    parts.unshift(`css=${part}`);
+
+    if (parent) {
+      node = parent;
+      continue;
+    }
+
+    if (root && root.host) {
+      node = root.host;
+      continue;
+    }
+
+    break;
   }
-  return parts.join(' > ');
+  if (!parts.length) return '';
+  if (!/^css=/.test(parts[0])) {
+    parts[0] = `css=${parts[0]}`;
+  }
+  return parts.join(' >> ');
 }
 
 function nodeDepth(el, stopAt) {
   let depth = 0;
   let node = el;
-  while (node && node.parentElement && node !== stopAt) {
+  while (node && node !== stopAt) {
+    const parent = composedParentElement(node);
+    if (!parent) break;
     depth += 1;
-    node = node.parentElement;
+    node = parent;
   }
   return depth;
 }
@@ -268,7 +382,7 @@ function treeDistance(a, b) {
   let distance = 0;
   while (node && node.nodeType === 1) {
     distances.set(node, distance);
-    node = node.parentElement;
+    node = composedParentElement(node);
     distance += 1;
   }
 
@@ -278,11 +392,39 @@ function treeDistance(a, b) {
     if (distances.has(node)) {
       return distance + distances.get(node);
     }
-    node = node.parentElement;
+    node = composedParentElement(node);
     distance += 1;
   }
 
   return Infinity;
+}
+
+function matchesSelector(el, selector) {
+  if (!el || el.nodeType !== 1 || !selector) return false;
+  try {
+    return !!el.matches(selector);
+  } catch (_) {
+    return false;
+  }
+}
+
+function deepQuerySelectorAll(root, selector, includeRoot = false) {
+  if (!root || !selector) return [];
+  const matches = [];
+  const candidates = includeRoot
+    ? [root].concat(allDescendants(root))
+    : allDescendants(root);
+  candidates.forEach((candidate) => {
+    if (matchesSelector(candidate, selector)) {
+      matches.push(candidate);
+    }
+  });
+  return matches;
+}
+
+function deepQuerySelector(root, selector, includeRoot = false) {
+  const matches = deepQuerySelectorAll(root, selector, includeRoot);
+  return matches.length ? matches[0] : null;
 }
 
 function groupBySigId(elements) {
@@ -439,9 +581,9 @@ function feat_text_statistics(root) {
 }
 
 function feat_ui_hints(root) {
-  const interactive = root.querySelectorAll('button, input, select, textarea, [role="button"], [tabindex]');
-  const forms = root.querySelectorAll('form');
-  const contentEditable = root.querySelectorAll('[contenteditable]');
+  const interactive = deepQuerySelectorAll(root, 'button, input, select, textarea, [role="button"], [tabindex]');
+  const forms = deepQuerySelectorAll(root, 'form');
+  const contentEditable = deepQuerySelectorAll(root, '[contenteditable]');
   return {
     ui_interactive_element_count: interactive.length,
     ui_form_count: forms.length,
@@ -566,7 +708,7 @@ function feat_internal_depth_filter(root) {
 
 function feat_comment_header_with_count(root) {
   const scope = root.parentElement || root;
-  const headings = Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6,[class*="header"],[class*="heading"]'));
+  const headings = deepQuerySelectorAll(scope, 'h1,h2,h3,h4,h5,h6,[class*="header"],[class*="heading"]');
   const match = headings
     .map((heading) => textOf(heading))
     .find((value) => hasCountableUgcKeyword(value)) || '';
@@ -597,7 +739,7 @@ function feat_attributes_contain_keywords(root) {
 function feat_has_action_buttons(root) {
   const buttons = allDescendants(root).filter((el) => el.tagName === 'BUTTON' || el.getAttribute('role') === 'button');
   const units = getDominantUnits(root);
-  const unitsWithButtons = units.filter((unit) => unit.querySelector('button, [role="button"]')).length;
+  const unitsWithButtons = units.filter((unit) => !!deepQuerySelector(unit, 'button, [role="button"]')).length;
   return {
     action_button_count: buttons.length,
     units_with_action_buttons: unitsWithButtons,
@@ -629,7 +771,7 @@ function feat_includes_author(root) {
 function feat_has_avatar(root) {
   const avatarClassPattern = /\b(avatar|user.?photo|profile.?pic|userpic|gravatar|author.?img|user.?image|member.?photo)\b/i;
   const avatarUrlPattern = /\/(avatar|gravatar|profile|user.?image|photo|avatars|userpic)s?\/|\/\d{4,}\.(jpg|jpeg|png|webp|gif)/i;
-  const avatars = Array.from(root.querySelectorAll('img')).filter((img) => {
+  const avatars = deepQuerySelectorAll(root, 'img').filter((img) => {
     const imageAttrs = `${attrText(img)} ${img.getAttribute('alt') || ''}`;
     const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
     return avatarClassPattern.test(imageAttrs) || avatarUrlPattern.test(src);
@@ -651,7 +793,7 @@ function feat_has_text_content(root) {
 }
 
 function feat_text_contains_links(root) {
-  const links = Array.from(root.querySelectorAll('a[href]'));
+  const links = deepQuerySelectorAll(root, 'a[href]');
   return {
     text_contains_links: links.length > 0,
     link_count: links.length,
@@ -660,7 +802,7 @@ function feat_text_contains_links(root) {
 
 function feat_link_density(root) {
   const totalText = textOf(root).length;
-  const linkText = Array.from(root.querySelectorAll('a[href]'))
+  const linkText = deepQuerySelectorAll(root, 'a[href]')
     .reduce((sum, link) => sum + textOf(link).length, 0);
   return {
     link_density: totalText ? Math.round((linkText / totalText) * 1000) / 1000 : 0,
@@ -702,7 +844,7 @@ function feat_has_relative_time(root) {
   const absoluteNumericPattern = /\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/](?:20\d{2}|\d{2}))\b/i;
   const monthNamePattern = /\b(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?(?:\s+\d{2,4})?|\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?),?(?:\s+\d{2,4})?)\b/i;
   const timestampAttrNamePattern = /^(datetime|data-time|data-date|data-timestamp|data-created|data-epoch|timeago)$/i;
-  const timeElements = Array.from(root.querySelectorAll('time[datetime]'));
+  const timeElements = deepQuerySelectorAll(root, 'time[datetime]');
   const textNodes = allTextNodes(root);
   const textMatches = textNodes.filter((text) => relativePattern.test(text));
   const absoluteMatches = textNodes.filter((text) => absoluteNumericPattern.test(text) || monthNamePattern.test(text));
@@ -716,7 +858,7 @@ function feat_has_relative_time(root) {
   const unitsWithTime = units.filter((unit) => {
     const unitText = textOf(unit);
     const attrHit = Array.from(unit.attributes || []).some((attr) => timestampAttrNamePattern.test(attr.name || ''));
-    return unit.querySelector('time[datetime]')
+    return deepQuerySelector(unit, 'time[datetime]')
       || attrHit
       || relativePattern.test(unitText)
       || absoluteNumericPattern.test(unitText)
@@ -833,8 +975,8 @@ function feat_comment_route_in_scripts(rawHTML = '') {
 }
 
 function feat_schema_org_comment(root) {
-  const itemtypes = Array.from(root.querySelectorAll('[itemtype]')).filter((el) => /schema\.org\/(Comment|UserComments)/i.test(el.getAttribute('itemtype') || ''));
-  const roleComment = Array.from(root.querySelectorAll('[role="comment"]'));
+  const itemtypes = deepQuerySelectorAll(root, '[itemtype]').filter((el) => /schema\.org\/(Comment|UserComments)/i.test(el.getAttribute('itemtype') || ''));
+  const roleComment = deepQuerySelectorAll(root, '[role="comment"]');
   return {
     schema_org_comment_itemtype: itemtypes.length > 0,
     schema_org_comment_count: itemtypes.length,
@@ -844,8 +986,8 @@ function feat_schema_org_comment(root) {
 }
 
 function feat_aria_role_feed(root) {
-  const feeds = Array.from(root.querySelectorAll('[role="feed"]'));
-  const feedWithArticles = feeds.filter((feed) => feed.querySelector('[role="article"]'));
+  const feeds = deepQuerySelectorAll(root, '[role="feed"]');
+  const feedWithArticles = feeds.filter((feed) => !!deepQuerySelector(feed, '[role="article"]'));
   return {
     aria_role_feed: feeds.length > 0 || root.getAttribute('role') === 'feed',
     aria_role_feed_with_articles: feedWithArticles.length > 0,
@@ -854,9 +996,9 @@ function feat_aria_role_feed(root) {
 }
 
 function feat_microdata_comment_props(root) {
-  const author = root.querySelectorAll('[itemprop="author"]').length;
-  const datePublished = root.querySelectorAll('[itemprop="datePublished"], [itemprop="dateCreated"]').length;
-  const text = root.querySelectorAll('[itemprop="text"], [itemprop="description"]').length;
+  const author = deepQuerySelectorAll(root, '[itemprop="author"]').length;
+  const datePublished = deepQuerySelectorAll(root, '[itemprop="datePublished"], [itemprop="dateCreated"]').length;
+  const text = deepQuerySelectorAll(root, '[itemprop="text"], [itemprop="description"]').length;
   return {
     microdata_itemprop_author: author > 0,
     microdata_itemprop_author_count: author,
@@ -872,9 +1014,9 @@ function feat_reply_button_per_unit(root) {
   const reportPattern = /\b(report|flag|spam|abuse|inappropriate|block\s+user|hide)\b/i;
   const units = getDominantUnits(root);
 
-  const replyCount = units.filter((unit) => Array.from(unit.querySelectorAll('button, [role="button"], a'))
+  const replyCount = units.filter((unit) => deepQuerySelectorAll(unit, 'button, [role="button"], a')
     .some((button) => replyPattern.test(button.getAttribute('aria-label') || '') || replyPattern.test(textOf(button)))).length;
-  const reportCount = units.filter((unit) => Array.from(unit.querySelectorAll('button, [role="button"], a'))
+  const reportCount = units.filter((unit) => deepQuerySelectorAll(unit, 'button, [role="button"], a')
     .some((button) => reportPattern.test(button.getAttribute('aria-label') || '') || reportPattern.test(textOf(button)))).length;
 
   return {
@@ -894,11 +1036,11 @@ function feat_author_avatar_colocation(root) {
   const units = getDominantUnits(root);
 
   const unitsWithBoth = units.filter((unit) => {
-    const hasAvatar = Array.from(unit.querySelectorAll('img')).some((img) => {
+    const hasAvatar = deepQuerySelectorAll(unit, 'img').some((img) => {
       const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
       return avatarPattern.test(attrText(img)) || avatarUrlPattern.test(src);
     });
-    const hasUsername = Array.from(unit.querySelectorAll('*')).some((el) => usernamePattern.test(attrText(el)));
+    const hasUsername = allDescendants(unit).some((el) => usernamePattern.test(attrText(el)));
     return hasAvatar && hasUsername;
   }).length;
 
@@ -927,8 +1069,8 @@ function feat_sig_id_recursive_nesting(root) {
 }
 
 function feat_textarea_tree_proximity(root) {
-  const textareas = Array.from(document.querySelectorAll('textarea'));
-  const contentEditables = Array.from(document.querySelectorAll('[contenteditable="true"], [contenteditable=""], [contenteditable]'));
+  const textareas = deepQuerySelectorAll(document, 'textarea');
+  const contentEditables = deepQuerySelectorAll(document, '[contenteditable="true"], [contenteditable=""], [contenteditable]');
   let nearestTextarea = Infinity;
   let nearestEditable = Infinity;
 
@@ -957,7 +1099,7 @@ function feat_reaction_count_per_unit(root) {
   const reactionPattern = /\b(like|upvote|heart|clap|helpful|thumb|vote|react)\b/i;
   const units = getDominantUnits(root);
 
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('button, [role="button"], [class*="like"], [class*="vote"], [class*="react"]'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, 'button, [role="button"], [class*="like"], [class*="vote"], [class*="react"]')
     .some((button) => {
       const label = `${button.getAttribute('aria-label') || ''} ${textOf(button)}`;
       if (!reactionPattern.test(label) && !reactionPattern.test(classString(button))) return false;
@@ -976,7 +1118,7 @@ function feat_edit_delete_per_unit(root) {
   const pattern = /\b(edit|delete|remove|trash|discard)\b/i;
   const units = getDominantUnits(root);
 
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('button, [role="button"], a'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, 'button, [role="button"], a')
     .some((button) => pattern.test(textOf(button)) || pattern.test(button.getAttribute('aria-label') || ''))).length;
 
   return {
@@ -990,7 +1132,7 @@ function feat_user_profile_link_per_unit(root) {
   const pattern = /\/(?:user|profile|u|member|people|users?)\/|\/@[\w.-]+|^@[\w.-]+$/i;
   const units = getDominantUnits(root);
 
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('a[href]'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, 'a[href]')
     .some((anchor) => pattern.test(anchor.getAttribute('href') || ''))).length;
 
   return {
@@ -1085,7 +1227,7 @@ function feat_char_counter_near_textarea(root) {
 
 function feat_submit_button_label(root) {
   const pattern = /\b(post|submit|comment|reply|respond|send|publish|add\s+comment|add\s+review)\b/i;
-  const buttons = Array.from((root.parentElement || root).querySelectorAll('button, input[type="submit"], [role="button"]'))
+  const buttons = deepQuerySelectorAll(root.parentElement || root, 'button, input[type="submit"], [role="button"]')
     .filter((button) => pattern.test(textOf(button)) || pattern.test(button.getAttribute('value') || '') || pattern.test(button.getAttribute('aria-label') || ''));
   const labels = buttons.slice(0, 3).map((button) => textOf(button).slice(0, 40) || (button.getAttribute('value') || '').slice(0, 40));
   const combinedLabels = labels.join(' | ');
@@ -1185,7 +1327,7 @@ function feat_add_to_cart_present(root) {
 }
 
 function feat_high_external_link_density(root) {
-  const links = Array.from(root.querySelectorAll('a[href]'));
+  const links = deepQuerySelectorAll(root, 'a[href]');
   if (!links.length) {
     return {
       high_external_link_density: false,
@@ -1242,9 +1384,9 @@ function feat_author_timestamp_colocated(root) {
   const units = getDominantUnits(root);
 
   const matches = units.filter((unit) => {
-    const hasAvatar = Array.from(unit.querySelectorAll('img')).some((img) => avatarPattern.test(attrText(img)));
-    const hasUsername = Array.from(unit.querySelectorAll('*')).some((el) => usernamePattern.test(attrText(el)));
-    const hasTime = !!unit.querySelector('time[datetime]') || timePattern.test(textOf(unit));
+    const hasAvatar = deepQuerySelectorAll(unit, 'img').some((img) => avatarPattern.test(attrText(img)));
+    const hasUsername = allDescendants(unit).some((el) => usernamePattern.test(attrText(el)));
+    const hasTime = !!deepQuerySelector(unit, 'time[datetime]') || timePattern.test(textOf(unit));
     return hasAvatar && hasUsername && hasTime;
   }).length;
 
@@ -1270,7 +1412,7 @@ function feat_indent_margin_pattern(root) {
 function feat_share_button_per_unit(root) {
   const pattern = /\b(share|retweet|repost|forward|copy\s+link)\b/i;
   const units = getDominantUnits(root);
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('button, [role="button"], a'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, 'button, [role="button"], a')
     .some((button) => pattern.test(textOf(button)) || pattern.test(button.getAttribute('aria-label') || ''))).length;
   return {
     share_button_per_unit: matches > 0,
@@ -1284,7 +1426,7 @@ function feat_upvote_downvote_pair(root) {
   const downPattern = /\b(downvote|down-vote|thumbs.?down|dislike|disagree)\b/i;
   const units = getDominantUnits(root);
   const matches = units.filter((unit) => {
-    const labels = Array.from(unit.querySelectorAll('button, [role="button"]'))
+    const labels = deepQuerySelectorAll(unit, 'button, [role="button"]')
       .map((button) => `${button.getAttribute('aria-label') || ''} ${textOf(button)}`);
     return labels.some((label) => upPattern.test(label)) && labels.some((label) => downPattern.test(label));
   }).length;
@@ -1297,7 +1439,7 @@ function feat_upvote_downvote_pair(root) {
 function feat_permalink_per_unit(root) {
   const pattern = /\b(permalink|link\s+to|#comment-|#reply-|#post-)\b/i;
   const units = getDominantUnits(root);
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('a[href]'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, 'a[href]')
     .some((anchor) => {
       const href = anchor.getAttribute('href') || '';
       const label = `${anchor.getAttribute('aria-label') || ''} ${textOf(anchor)}`;
@@ -1321,7 +1463,7 @@ function feat_deleted_placeholder(root) {
 
 function feat_quote_block_per_unit(root) {
   const units = getDominantUnits(root);
-  const matches = units.filter((unit) => !!unit.querySelector('blockquote')).length;
+  const matches = units.filter((unit) => !!deepQuerySelector(unit, 'blockquote')).length;
   return {
     quote_block_per_unit: matches > 0,
     units_with_blockquote: matches,
@@ -1399,7 +1541,7 @@ function feat_interaction_counter_schema(rawHTML = '') {
 function feat_like_count_pattern(root) {
   const pattern = /\b(like|upvote|heart|helpful|agree)\b/i;
   const units = getDominantUnits(root);
-  const matches = units.filter((unit) => Array.from(unit.querySelectorAll('[class*="like"], [class*="vote"], [class*="count"], [class*="react"], button, [role="button"]'))
+  const matches = units.filter((unit) => deepQuerySelectorAll(unit, '[class*="like"], [class*="vote"], [class*="count"], [class*="react"], button, [role="button"]')
     .some((el) => {
       const value = textOf(el);
       const label = `${attrText(el)} ${el.parentElement ? attrText(el.parentElement) : ''}`;
@@ -1824,8 +1966,8 @@ function quickCandidateScore(el) {
   if (repeated >= 3) score += 3;
   if (repeated >= 8) score += 2;
   if (homogeneity >= 0.6) score += 2;
-  if (el.querySelector('time[datetime]')) score += 1;
-  if (el.querySelector('textarea, [contenteditable]')) score += 1;
+  if (deepQuerySelector(el, 'time[datetime]')) score += 1;
+  if (deepQuerySelector(el, 'textarea, [contenteditable]')) score += 1;
   if (textLength >= 200) score += 1;
 
   return score;
@@ -1839,7 +1981,7 @@ function pathIsAncestor(ancestorPath, descendantPath) {
 function discoverCandidateRoots(options = {}) {
   const maxCandidates = Math.max(1, options.maxCandidates || 25);
   const scope = document.body || document.documentElement;
-  const nodes = Array.from(scope.querySelectorAll('main, section, article, div, ul, ol, aside, [role], [itemtype]'));
+  const nodes = deepQuerySelectorAll(scope, 'main, section, article, div, ul, ol, aside, [role], [itemtype]', true);
   const candidates = [];
 
   nodes.forEach((node) => {
