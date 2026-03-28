@@ -96,7 +96,20 @@ Then follow the instructions in [extension/manual-capture/README.md](C:/Users/bo
 
 ## Render Architecture
 
-The recommended deployment is:
+On this `free-single-service` branch, the default Render blueprint is the free single-service deployment in [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml).
+
+It runs:
+
+- one Docker web service
+- the frontend UI
+- the API
+- in-process queueing
+- Playwright scans
+- manual review uploads
+
+If you want the original paid multi-service architecture, use [render.paid.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.paid.yaml).
+
+That paid layout is:
 
 - `ugc-ui` as a Render `Static Site`
 - `ugc-api` as a Render `Web Service`
@@ -104,9 +117,7 @@ The recommended deployment is:
 - `ugc-queue` as Render `Key Value`
 - `ugc-db` as Render `Postgres`
 
-The blueprint is in `render.yaml`.
-
-If you need a zero-cost demo or supervisor review environment, this repo also includes a free single-service deployment path in [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml). That mode runs the local all-in-one app as one Docker web service. See [FREE_HOSTING.md](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/FREE_HOSTING.md).
+The free-hosting notes are in [FREE_HOSTING.md](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/FREE_HOSTING.md). The alternate free blueprint is also kept at [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml), but on this branch it is intentionally the same deployment shape as [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml) so Render can use the default blueprint path without manual edits.
 
 Current pacing safeguards:
 
@@ -121,7 +132,8 @@ Current pacing safeguards:
 
 What is ready now:
 
-- `render.yaml` already defines the API, worker, UI, Redis, and Postgres services
+- `render.yaml` on this branch already defines the free single-service deployment
+- `render.paid.yaml` keeps the original API, worker, UI, Redis, and Postgres services
 - the web UI can upload CSVs, track jobs, review candidates, and download both detailed and summary CSV exports
 - the web UI can also download the unpacked extension as a ZIP and the sample labeled CSV used for demo uploads
 - the extension/manual-review flow can upload human-captured snapshots back into the same job rows
@@ -135,7 +147,7 @@ What still needs to be addressed before a supervisor-facing production deploymen
 
 That means the current Render blueprint is close, but screenshots, candidate images, and stored HTML snapshots need shared storage before production use. The practical fix is to move artifacts to shared object storage and keep the URLs in Postgres.
 
-For the free single-service mode in [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml), this shared-storage issue is less severe because the UI, scanner, and artifact-serving paths all run in one process. The tradeoff is that data is ephemeral and can be lost when the free instance restarts.
+For the free single-service mode in [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml), this shared-storage issue is less severe because the UI, scanner, and artifact-serving paths all run in one process. The tradeoff is that data is ephemeral and can be lost when the free instance restarts.
 
 ## Services
 

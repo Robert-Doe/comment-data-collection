@@ -4,7 +4,7 @@ This branch adds a true free-mode deployment path for demos and low-volume testi
 
 ## Best Free Option In This Repo
 
-Use [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml).
+On this branch, use [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml).
 
 It deploys the whole app as one Docker web service:
 
@@ -18,7 +18,7 @@ It reuses [src/local/dev-server.js](C:/Users/bobcumulus/IdeaProjects/comment-dat
 
 ## Why This Exists
 
-The main [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml) is a proper multi-service architecture:
+The original paid multi-service architecture is preserved in [render.paid.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.paid.yaml):
 
 - static site
 - API
@@ -44,7 +44,7 @@ This mode is for testing, demos, and small review sessions only.
 1. Push this branch to GitHub.
 2. In Render, click `New` > `Blueprint`.
 3. Point Render at this repo and this branch.
-4. Use `render.free.yaml` as the blueprint file.
+4. Leave the blueprint file as the default `render.yaml`.
 5. Deploy.
 
 The result is a single free web service.
@@ -65,6 +65,6 @@ These can work better than Render free if you want a single container with Playw
 
 ## Recommendation
 
-- If you want the easiest zero-cost demo: use [render.free.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.free.yaml)
+- If you want the easiest zero-cost demo: use [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml)
 - If you want the best actual free host for the whole app: use Oracle Cloud Always Free VM
-- If you want the real durable architecture: use the main [render.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.yaml) and pay for the worker stack
+- If you want the real durable architecture: use [render.paid.yaml](C:/Users/bobcumulus/IdeaProjects/comment-data-collection/render.paid.yaml) and pay for the worker stack

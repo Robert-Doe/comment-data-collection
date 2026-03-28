@@ -1,81 +1,28 @@
 services:
-  - type: keyvalue
-    name: ugc-queue
-    maxmemoryPolicy: noeviction
-
   - type: web
-    name: ugc-api
-    runtime: node
-    plan: starter
-    buildCommand: npm install
-    startCommand: npm run start:api
+    name: ugc-free
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.free
+    autoDeploy: false
     envVars:
       - key: NODE_VERSION
         value: 22
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ugc-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ugc-queue
-          property: connectionString
-      - key: FRONTEND_ORIGIN
-        fromService:
-          type: web
-          name: ugc-ui
-          property: url
-      - key: INGEST_BATCH_SIZE
-        value: 100
-      - key: INITIAL_QUEUE_FILL
-        value: 2
-      - key: API_RESULTS_PAGE_SIZE
-        value: 50
-
-  - type: worker
-    name: ugc-worker
-    runtime: docker
-    plan: starter
-    dockerfilePath: ./Dockerfile.worker
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ugc-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ugc-queue
-          property: connectionString
-      - key: SCAN_TIMEOUT_MS
-        value: 45000
-      - key: POST_LOAD_DELAY_MS
-        value: 3000
       - key: WORKER_CONCURRENCY
         value: 1
       - key: INITIAL_QUEUE_FILL
-        value: 2
+        value: 1
       - key: QUEUE_REFILL_COUNT
         value: 1
       - key: INGEST_BATCH_SIZE
-        value: 100
-
-  - type: web
-    name: ugc-ui
-    runtime: static
-    buildCommand: npm install && npm run build:ui
-    staticPublishPath: ./web
-    envVars:
-      - key: API_BASE_URL
-        fromService:
-          type: web
-          name: ugc-api
-          property: url
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-databases:
-  - name: ugc-db
+        value: 50
+      - key: API_RESULTS_PAGE_SIZE
+        value: 50
+      - key: POST_LOAD_DELAY_MS
+        value: 3000
+      - key: SCAN_TIMEOUT_MS
+        value: 45000
+      - key: LOCAL_STATE_PATH
+        value: /tmp/ugc-local-state.json
+      - key: ARTIFACT_ROOT
+        value: /tmp/ugc-artifacts
