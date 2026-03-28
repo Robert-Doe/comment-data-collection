@@ -5,6 +5,8 @@
   const form = document.getElementById('upload-form');
   const fileInput = document.getElementById('csv-file');
   const urlColumnInput = document.getElementById('url-column');
+  const scanDelayInput = document.getElementById('scan-delay-ms');
+  const screenshotDelayInput = document.getElementById('screenshot-delay-ms');
   const formMessage = document.getElementById('form-message');
   const jobSummary = document.getElementById('job-summary');
   const jobItems = document.getElementById('job-items');
@@ -195,6 +197,8 @@
       `<div><strong>Failed:</strong> ${escapeHtml(job.failed_count)}</div>`,
       `<div><strong>Detected:</strong> ${escapeHtml(job.detected_count)}</div>`,
       `<div><strong>Total:</strong> ${escapeHtml(job.total_urls)}</div>`,
+      `<div><strong>Scan Delay:</strong> ${escapeHtml(job.scan_delay_ms ?? '')} ms</div>`,
+      `<div><strong>Screenshot Delay:</strong> ${escapeHtml(job.screenshot_delay_ms ?? '')} ms</div>`,
     ].join('');
   }
 
@@ -1179,6 +1183,12 @@
     if (urlColumnInput.value.trim()) {
       formData.append('urlColumn', urlColumnInput.value.trim());
     }
+    if (scanDelayInput && scanDelayInput.value.trim()) {
+      formData.append('scanDelayMs', scanDelayInput.value.trim());
+    }
+    if (screenshotDelayInput && screenshotDelayInput.value.trim()) {
+      formData.append('screenshotDelayMs', screenshotDelayInput.value.trim());
+    }
 
     const response = await fetch(apiUrl('/api/jobs'), {
       method: 'POST',
@@ -1191,7 +1201,10 @@
       return;
     }
 
-    setMessage(`Job ${body.jobId} created.`, false);
+    setMessage(
+      `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
+      false,
+    );
     await refreshJobs();
     currentOffset = 0;
     await refreshJob(body.jobId);

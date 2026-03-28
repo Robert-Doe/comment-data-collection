@@ -25,6 +25,22 @@
             <span>URL Column</span>
             <input id="url-column" name="urlColumn" type="text" placeholder="url">
           </label>
+          <div class="config-block">
+            <div class="config-heading">
+              <strong>Load Delay</strong>
+              <span>Recommended: start with 6000 ms scan delay and 1500 ms screenshot delay. For very JS-heavy pages, try 10000 ms and 2500 ms.</span>
+            </div>
+            <div class="config-grid">
+              <label class="field">
+                <span>Scan Delay (ms)</span>
+                <input id="scan-delay-ms" name="scanDelayMs" type="number" min="0" step="500" value="6000">
+              </label>
+              <label class="field">
+                <span>Screenshot Delay (ms)</span>
+                <input id="screenshot-delay-ms" name="screenshotDelayMs" type="number" min="0" step="500" value="1500">
+              </label>
+            </div>
+          </div>
           <button class="primary" type="submit">Start Job</button>
         </form>
         <p id="form-message" class="message"></p>

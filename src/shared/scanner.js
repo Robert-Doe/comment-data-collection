@@ -136,8 +136,8 @@ async function settlePageForDetection(page, options = {}) {
 }
 
 async function loadPageWithRetries(page, normalizedUrl, options = {}) {
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs || 45000));
-  const navigationRetries = Math.max(1, Number(options.navigationRetries || 2));
+  const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? 45000));
+  const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
   const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
   let lastError = null;
 
@@ -655,12 +655,13 @@ async function createContext() {
 async function scanUrl(normalizedUrl, options = {}) {
   const context = await createContext();
   const page = await context.newPage();
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs || 90000));
-  const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 6000));
-  const navigationRetries = Math.max(1, Number(options.navigationRetries || 2));
-  const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
-  const negativeRetrySettlePasses = Math.max(1, Number(options.negativeRetrySettlePasses || 2));
-  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
+  const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? 90000));
+  const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs ?? 6000));
+  const preScreenshotDelayMs = Math.max(0, Number(options.preScreenshotDelayMs ?? 1500));
+  const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
+  const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses ?? 2));
+  const negativeRetrySettlePasses = Math.max(1, Number(options.negativeRetrySettlePasses ?? 2));
+  const actionSettleMs = Math.max(0, Number(options.actionSettleMs ?? 1250));
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -688,6 +689,8 @@ async function scanUrl(normalizedUrl, options = {}) {
     navigation_attempts: 0,
     settle_passes_applied: 0,
     negative_retry_applied: false,
+    scan_delay_ms_applied: postLoadDelayMs,
+    screenshot_delay_ms_applied: preScreenshotDelayMs,
   };
 
   try {
@@ -730,6 +733,12 @@ async function scanUrl(normalizedUrl, options = {}) {
       candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
       bestCandidate = candidates[0] || null;
       ugcDetected = !!(bestCandidate && bestCandidate.detected);
+    }
+
+    await waitForDocumentComplete(page, 5000);
+    await safeWait(page, 'networkidle', 2500);
+    if (preScreenshotDelayMs > 0) {
+      await page.waitForTimeout(preScreenshotDelayMs);
     }
 
     try {
@@ -791,11 +800,11 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
 
   const context = await createContext();
   const page = await context.newPage();
-  const timeoutMs = options.timeoutMs || 20000;
-  const postLoadDelayMs = options.postLoadDelayMs || 0;
-  const maxResults = Math.max(1, Number(options.maxResults || 5));
-  const maxCandidates = Math.max(maxResults, Number(options.maxCandidates || 25));
-  const maxNodes = Math.max(200, Number(options.maxDotNodes || 1500));
+  const timeoutMs = Number(options.timeoutMs ?? 20000);
+  const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
+  const maxResults = Math.max(1, Number(options.maxResults ?? 5));
+  const maxCandidates = Math.max(maxResults, Number(options.maxCandidates ?? 25));
+  const maxNodes = Math.max(200, Number(options.maxDotNodes ?? 1500));
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -1208,8 +1217,8 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
 
   const context = await createContext();
   const page = await context.newPage();
-  const timeoutMs = options.timeoutMs || 20000;
-  const postLoadDelayMs = options.postLoadDelayMs || 0;
+  const timeoutMs = Number(options.timeoutMs ?? 20000);
+  const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 

@@ -17,13 +17,21 @@ async function main() {
   const worker = new Worker(
     SCAN_QUEUE_NAME,
     async (job) => {
-      const { jobId, itemId, rowNumber, normalizedUrl } = job.data;
+      const {
+        jobId,
+        itemId,
+        rowNumber,
+        normalizedUrl,
+        scanDelayMs,
+        screenshotDelayMs,
+      } = job.data;
       await markItemRunning(itemId, config.databaseUrl);
       await recomputeJob(jobId, config.databaseUrl);
 
       const scanResult = await scanUrl(normalizedUrl, {
         timeoutMs: config.scanTimeoutMs,
-        postLoadDelayMs: config.postLoadDelayMs,
+        postLoadDelayMs: scanDelayMs ?? config.postLoadDelayMs,
+        preScreenshotDelayMs: screenshotDelayMs ?? config.preScreenshotDelayMs,
         navigationRetries: config.navigationRetries,
         loadSettlePasses: config.loadSettlePasses,
         negativeRetrySettlePasses: config.negativeRetrySettlePasses,
