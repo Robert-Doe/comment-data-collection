@@ -32,6 +32,18 @@ services:
         value: 2
       - key: API_RESULTS_PAGE_SIZE
         value: 50
+      - key: SCAN_TIMEOUT_MS
+        value: 90000
+      - key: POST_LOAD_DELAY_MS
+        value: 6000
+      - key: NAVIGATION_RETRIES
+        value: 2
+      - key: LOAD_SETTLE_PASSES
+        value: 2
+      - key: NEGATIVE_RETRY_SETTLE_PASSES
+        value: 2
+      - key: ACTION_SETTLE_MS
+        value: 1250
 
   - type: worker
     name: ugc-worker
@@ -49,9 +61,17 @@ services:
           name: ugc-queue
           property: connectionString
       - key: SCAN_TIMEOUT_MS
-        value: 45000
+        value: 90000
       - key: POST_LOAD_DELAY_MS
-        value: 3000
+        value: 6000
+      - key: NAVIGATION_RETRIES
+        value: 2
+      - key: LOAD_SETTLE_PASSES
+        value: 2
+      - key: NEGATIVE_RETRY_SETTLE_PASSES
+        value: 2
+      - key: ACTION_SETTLE_MS
+        value: 1250
       - key: WORKER_CONCURRENCY
         value: 1
       - key: INITIAL_QUEUE_FILL

@@ -282,6 +282,10 @@ function createLocalRuntime(options = {}) {
     const result = await scanUrl(task.normalizedUrl, {
       timeoutMs: config.scanTimeoutMs,
       postLoadDelayMs: config.postLoadDelayMs,
+      navigationRetries: config.navigationRetries,
+      loadSettlePasses: config.loadSettlePasses,
+      negativeRetrySettlePasses: config.negativeRetrySettlePasses,
+      actionSettleMs: config.actionSettleMs,
       maxCandidates: config.maxCandidates,
       maxResults: config.maxResults,
       captureScreenshots: config.captureScreenshots,

@@ -26,6 +26,14 @@ async function safeWait(page, state, timeoutMs) {
   }
 }
 
+async function safeWaitForFunction(page, expression, timeoutMs) {
+  try {
+    await page.waitForFunction(expression, { timeout: timeoutMs });
+  } catch (_) {
+    return;
+  }
+}
+
 async function dismissConsentPrompts(page) {
   await page.evaluate(() => {
     const pattern = /\b(accept|agree|allow all|got it|continue)\b/i;
@@ -72,17 +80,93 @@ async function expandPotentialUgc(page) {
   }).catch(() => {});
 }
 
-async function autoScroll(page) {
-  await page.evaluate(async () => {
+async function autoScroll(page, options = {}) {
+  const steps = Math.max(1, Number(options.steps || 5));
+  const stepDelayMs = Math.max(0, Number(options.stepDelayMs || 500));
+  await page.evaluate(async ({ steps, stepDelayMs }) => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const steps = 5;
     const maxHeight = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
     for (let i = 1; i <= steps; i += 1) {
       window.scrollTo(0, Math.round((maxHeight * i) / steps));
-      await sleep(500);
+      await sleep(stepDelayMs);
     }
     window.scrollTo(0, 0);
-  }).catch(() => {});
+  }, { steps, stepDelayMs }).catch(() => {});
+}
+
+async function waitForDocumentComplete(page, timeoutMs) {
+  await safeWaitForFunction(page, () => document.readyState === 'complete', timeoutMs);
+}
+
+async function settlePageForDetection(page, options = {}) {
+  const loadWaitMs = Math.max(1000, Number(options.loadWaitMs || 15000));
+  const networkIdleWaitMs = Math.max(1000, Number(options.networkIdleWaitMs || 8000));
+  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
+  const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 0));
+  const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
+
+  await waitForDocumentComplete(page, loadWaitMs);
+  await safeWait(page, 'load', loadWaitMs);
+  await safeWait(page, 'networkidle', networkIdleWaitMs);
+
+  for (let pass = 0; pass < loadSettlePasses; pass += 1) {
+    await dismissConsentPrompts(page);
+    if (actionSettleMs > 0) {
+      await page.waitForTimeout(actionSettleMs);
+    }
+    await expandPotentialUgc(page);
+    if (actionSettleMs > 0) {
+      await page.waitForTimeout(actionSettleMs);
+    }
+    await autoScroll(page, {
+      steps: 6,
+      stepDelayMs: 600,
+    });
+    await safeWait(page, 'load', Math.min(loadWaitMs, 8000));
+    await safeWait(page, 'networkidle', networkIdleWaitMs);
+    await waitForDocumentComplete(page, Math.min(loadWaitMs, 8000));
+    if (actionSettleMs > 0) {
+      await page.waitForTimeout(actionSettleMs);
+    }
+  }
+
+  if (postLoadDelayMs > 0) {
+    await page.waitForTimeout(postLoadDelayMs);
+  }
+}
+
+async function loadPageWithRetries(page, normalizedUrl, options = {}) {
+  const timeoutMs = Math.max(1000, Number(options.timeoutMs || 45000));
+  const navigationRetries = Math.max(1, Number(options.navigationRetries || 2));
+  const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= navigationRetries; attempt += 1) {
+    try {
+      const response = await page.goto(normalizedUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: timeoutMs,
+      });
+      const status = response ? Number(response.status()) : 0;
+      if (status && retryableStatuses.has(status) && attempt < navigationRetries) {
+        lastError = new Error(`Navigation returned retryable status ${status}`);
+      } else {
+        return {
+          response,
+          attemptCount: attempt,
+        };
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt >= navigationRetries) {
+        throw error;
+      }
+    }
+
+    await page.waitForTimeout(Math.min(2500 * attempt, 8000));
+  }
+
+  throw lastError || new Error(`Unable to load ${normalizedUrl}`);
 }
 
 function summarizePageAccessSignals(access) {
@@ -571,8 +655,12 @@ async function createContext() {
 async function scanUrl(normalizedUrl, options = {}) {
   const context = await createContext();
   const page = await context.newPage();
-  const timeoutMs = options.timeoutMs || 45000;
-  const postLoadDelayMs = options.postLoadDelayMs || 3000;
+  const timeoutMs = Math.max(1000, Number(options.timeoutMs || 90000));
+  const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 6000));
+  const navigationRetries = Math.max(1, Number(options.navigationRetries || 2));
+  const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
+  const negativeRetrySettlePasses = Math.max(1, Number(options.negativeRetrySettlePasses || 2));
+  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -597,21 +685,51 @@ async function scanUrl(normalizedUrl, options = {}) {
     manual_html_url: '',
     manual_raw_html_path: '',
     manual_raw_html_url: '',
+    navigation_attempts: 0,
+    settle_passes_applied: 0,
+    negative_retry_applied: false,
   };
 
   try {
-    const response = await page.goto(normalizedUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: timeoutMs,
+    const navigation = await loadPageWithRetries(page, normalizedUrl, {
+      timeoutMs,
+      navigationRetries,
     });
+    const response = navigation.response;
+    result.navigation_attempts = navigation.attemptCount;
 
-    await safeWait(page, 'networkidle', 7000);
-    await dismissConsentPrompts(page);
-    await expandPotentialUgc(page);
-    await autoScroll(page);
-    await safeWait(page, 'networkidle', 4000);
-    if (postLoadDelayMs > 0) {
-      await page.waitForTimeout(postLoadDelayMs);
+    await settlePageForDetection(page, {
+      timeoutMs,
+      postLoadDelayMs,
+      loadSettlePasses,
+      actionSettleMs,
+    });
+    result.settle_passes_applied = loadSettlePasses;
+
+    const responseText = response ? await response.text().catch(() => '') : '';
+    const responseHeaders = response ? response.headers() : {};
+    let currentHtml = await page.content().catch(() => '');
+    let rawHtml = currentHtml || responseText;
+    let access = await detectPageAccess(page);
+    let candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
+    let bestCandidate = candidates[0] || null;
+    let ugcDetected = !!(bestCandidate && bestCandidate.detected);
+
+    if (!access.blocked && !ugcDetected) {
+      result.negative_retry_applied = true;
+      await settlePageForDetection(page, {
+        timeoutMs,
+        postLoadDelayMs,
+        loadSettlePasses: negativeRetrySettlePasses,
+        actionSettleMs,
+      });
+      result.settle_passes_applied += negativeRetrySettlePasses;
+      currentHtml = await page.content().catch(() => '');
+      rawHtml = currentHtml || responseText;
+      access = await detectPageAccess(page);
+      candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
+      bestCandidate = candidates[0] || null;
+      ugcDetected = !!(bestCandidate && bestCandidate.detected);
     }
 
     try {
@@ -622,7 +740,6 @@ async function scanUrl(normalizedUrl, options = {}) {
       result.screenshot_error = error && error.message ? error.message : String(error);
     }
 
-    const access = await detectPageAccess(page);
     result.final_url = page.url();
     result.title = await page.title().catch(() => access.title || '');
     result.blocked_by_interstitial = access.blocked;
@@ -631,15 +748,10 @@ async function scanUrl(normalizedUrl, options = {}) {
     result.page_text_sample = access.pageTextSample;
     result.frame_count = access.frameCount;
 
-    const responseText = response ? await response.text().catch(() => '') : '';
-    const currentHtml = await page.content().catch(() => '');
-    const rawHtml = currentHtml || responseText;
     Object.assign(result, await persistPageHtmlSnapshot(currentHtml || rawHtml, responseText || rawHtml, page.url() || normalizedUrl, options));
-    const responseHeaders = response ? response.headers() : {};
-    const candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
     result.candidates = candidates;
-    result.best_candidate = candidates[0] || null;
-    result.ugc_detected = !!(result.best_candidate && result.best_candidate.detected);
+    result.best_candidate = bestCandidate;
+    result.ugc_detected = ugcDetected;
   } catch (error) {
     result.error = error && error.message ? error.message : String(error);
   } finally {

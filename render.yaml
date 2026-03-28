@@ -19,9 +19,17 @@ services:
       - key: API_RESULTS_PAGE_SIZE
         value: 50
       - key: POST_LOAD_DELAY_MS
-        value: 3000
+        value: 6000
       - key: SCAN_TIMEOUT_MS
-        value: 45000
+        value: 90000
+      - key: NAVIGATION_RETRIES
+        value: 2
+      - key: LOAD_SETTLE_PASSES
+        value: 2
+      - key: NEGATIVE_RETRY_SETTLE_PASSES
+        value: 2
+      - key: ACTION_SETTLE_MS
+        value: 1250
       - key: LOCAL_STATE_PATH
         value: /tmp/ugc-local-state.json
       - key: ARTIFACT_ROOT
