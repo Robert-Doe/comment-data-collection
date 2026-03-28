@@ -27,6 +27,8 @@ async function ensureSchema(databaseUrl) {
       id TEXT PRIMARY KEY,
       source_filename TEXT,
       source_column TEXT,
+      scan_delay_ms INTEGER NOT NULL DEFAULT 6000,
+      screenshot_delay_ms INTEGER NOT NULL DEFAULT 1500,
       status TEXT NOT NULL DEFAULT 'queued',
       total_urls INTEGER NOT NULL DEFAULT 0,
       pending_count INTEGER NOT NULL DEFAULT 0,
@@ -101,6 +103,12 @@ async function ensureSchema(databaseUrl) {
     ALTER TABLE jobs
     ADD COLUMN IF NOT EXISTS pending_count INTEGER NOT NULL DEFAULT 0;
 
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS scan_delay_ms INTEGER NOT NULL DEFAULT 6000;
+
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS screenshot_delay_ms INTEGER NOT NULL DEFAULT 1500;
+
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS scan_result JSONB;
 
@@ -167,7 +175,14 @@ function buildInsertBatch(jobId, records) {
   return { values, placeholders };
 }
 
-async function createJob({ sourceFilename, sourceColumn, records, batchSize = 250 }, databaseUrl) {
+async function createJob({
+  sourceFilename,
+  sourceColumn,
+  records,
+  batchSize = 250,
+  scanDelayMs = 6000,
+  screenshotDelayMs = 1500,
+}, databaseUrl) {
   const db = getPool(databaseUrl);
   const client = await db.connect();
   const jobId = crypto.randomUUID();
@@ -177,9 +192,9 @@ async function createJob({ sourceFilename, sourceColumn, records, batchSize = 25
 
     await client.query(
       `INSERT INTO jobs (
-        id, source_filename, source_column, status, total_urls, pending_count, queued_count
-      ) VALUES ($1, $2, $3, 'queued', $4, $4, 0)`,
-      [jobId, sourceFilename || '', sourceColumn || '', records.length],
+        id, source_filename, source_column, scan_delay_ms, screenshot_delay_ms, status, total_urls, pending_count, queued_count
+      ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $6, 0)`,
+      [jobId, sourceFilename || '', sourceColumn || '', scanDelayMs, screenshotDelayMs, records.length],
     );
 
     for (let offset = 0; offset < records.length; offset += batchSize) {
@@ -197,6 +212,8 @@ async function createJob({ sourceFilename, sourceColumn, records, batchSize = 25
     return {
       id: jobId,
       totalUrls: records.length,
+      scanDelayMs,
+      screenshotDelayMs,
     };
   } catch (error) {
     await client.query('ROLLBACK');

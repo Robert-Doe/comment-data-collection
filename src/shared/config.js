@@ -30,6 +30,7 @@ function getConfig() {
     frontendOrigin: process.env.FRONTEND_ORIGIN || '*',
     scanTimeoutMs: numberFromEnv('SCAN_TIMEOUT_MS', 90000),
     postLoadDelayMs: numberFromEnv('POST_LOAD_DELAY_MS', 6000),
+    preScreenshotDelayMs: numberFromEnv('PRE_SCREENSHOT_DELAY_MS', 1500),
     navigationRetries: numberFromEnv('NAVIGATION_RETRIES', 2),
     loadSettlePasses: numberFromEnv('LOAD_SETTLE_PASSES', 2),
     negativeRetrySettlePasses: numberFromEnv('NEGATIVE_RETRY_SETTLE_PASSES', 2),

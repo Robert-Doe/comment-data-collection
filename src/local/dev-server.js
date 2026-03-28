@@ -11,6 +11,7 @@ const { getConfig } = require('../shared/config');
 const { parseCsvText } = require('../shared/csv');
 const { resolveProjectPath, sendFileDownload, streamDirectoryZip } = require('../shared/downloads');
 const { findManualReviewMatches } = require('../shared/manualReviewLookup');
+const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const {
   expectedManualCaptureUrl,
   buildManualReviewTarget,
@@ -255,6 +256,7 @@ function createLocalRuntime(options = {}) {
   }
 
   function refillQueue(jobId, count) {
+    const job = getJob(jobId);
     const claimed = claimPendingItems(jobId, count);
     claimed.forEach((item) => {
       queue.push({
@@ -262,6 +264,8 @@ function createLocalRuntime(options = {}) {
         itemId: item.id,
         rowNumber: item.row_number,
         normalizedUrl: item.normalized_url,
+        scanDelayMs: job && job.scan_delay_ms !== undefined ? job.scan_delay_ms : config.postLoadDelayMs,
+        screenshotDelayMs: job && job.screenshot_delay_ms !== undefined ? job.screenshot_delay_ms : config.preScreenshotDelayMs,
       });
     });
     processQueue();
@@ -281,7 +285,8 @@ function createLocalRuntime(options = {}) {
 
     const result = await scanUrl(task.normalizedUrl, {
       timeoutMs: config.scanTimeoutMs,
-      postLoadDelayMs: config.postLoadDelayMs,
+      postLoadDelayMs: task.scanDelayMs ?? config.postLoadDelayMs,
+      preScreenshotDelayMs: task.screenshotDelayMs ?? config.preScreenshotDelayMs,
       navigationRetries: config.navigationRetries,
       loadSettlePasses: config.loadSettlePasses,
       negativeRetrySettlePasses: config.negativeRetrySettlePasses,
@@ -367,13 +372,15 @@ function createLocalRuntime(options = {}) {
     }
   }
 
-  function createJobFromRecords({ sourceFilename, sourceColumn, records }) {
+  function createJobFromRecords({ sourceFilename, sourceColumn, records, scanDelayMs, screenshotDelayMs }) {
     const jobId = crypto.randomUUID();
     const now = new Date().toISOString();
     const job = {
       id: jobId,
       source_filename: sourceFilename || '',
       source_column: sourceColumn || '',
+      scan_delay_ms: scanDelayMs,
+      screenshot_delay_ms: screenshotDelayMs,
       status: 'pending',
       total_urls: records.length,
       pending_count: records.length,
@@ -620,16 +627,28 @@ function createLocalApp(options = {}) {
       return;
     }
 
+    const jobSettings = normalizeJobScanSettings({
+      scanDelayMs: req.body.scanDelayMs,
+      screenshotDelayMs: req.body.screenshotDelayMs,
+    }, {
+      scanDelayMs: runtime.config.postLoadDelayMs,
+      screenshotDelayMs: runtime.config.preScreenshotDelayMs,
+    });
+
     const job = runtime.createJobFromRecords({
       sourceFilename,
       sourceColumn: parsed.urlColumn,
       records,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
     });
 
     res.status(202).json({
       jobId: job.id,
       totalUrls: job.total_urls,
       sourceColumn: parsed.urlColumn,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
     });
   });
 
