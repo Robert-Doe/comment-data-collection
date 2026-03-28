@@ -38,6 +38,7 @@ function getConfig() {
     queueRefillCount: numberFromEnv('QUEUE_REFILL_COUNT', 1),
     apiResultsPageSize: numberFromEnv('API_RESULTS_PAGE_SIZE', 100),
     captureScreenshots: booleanFromEnv('CAPTURE_SCREENSHOTS', true),
+    captureHtmlSnapshots: booleanFromEnv('CAPTURE_HTML_SNAPSHOTS', true),
     artifactRoot: path.resolve(process.cwd(), process.env.ARTIFACT_ROOT || path.join('output', 'artifacts')),
     artifactUrlBasePath: normalizeBasePath(process.env.ARTIFACT_URL_BASE_PATH, '/artifacts'),
     publicBaseUrl: String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),

@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const crypto = require('crypto');
+const { upsertCandidateReview: upsertCandidateReviewArray } = require('./candidateReviews');
 
 let pool;
 
@@ -59,6 +60,19 @@ async function ensureSchema(databaseUrl) {
       best_sample_text TEXT,
       screenshot_path TEXT,
       screenshot_url TEXT,
+      analysis_source TEXT NOT NULL DEFAULT 'automated',
+      manual_capture_required BOOLEAN NOT NULL DEFAULT FALSE,
+      manual_capture_reason TEXT,
+      manual_capture_mode TEXT,
+      manual_html_path TEXT,
+      manual_html_url TEXT,
+      manual_raw_html_path TEXT,
+      manual_raw_html_url TEXT,
+      manual_capture_url TEXT,
+      manual_capture_title TEXT,
+      manual_capture_notes TEXT,
+      manual_captured_at TIMESTAMPTZ,
+      candidate_reviews JSONB NOT NULL DEFAULT '[]'::jsonb,
       best_candidate JSONB,
       candidates JSONB,
       scan_result JSONB,
@@ -67,6 +81,16 @@ async function ensureSchema(databaseUrl) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       started_at TIMESTAMPTZ,
       completed_at TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS manual_review_targets (
+      selection_key TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      item_id TEXT NOT NULL REFERENCES job_items(id) ON DELETE CASCADE,
+      capture_url TEXT,
+      title TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE INDEX IF NOT EXISTS idx_job_items_job_id ON job_items(job_id);
@@ -85,6 +109,45 @@ async function ensureSchema(databaseUrl) {
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS screenshot_url TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS analysis_source TEXT NOT NULL DEFAULT 'automated';
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_required BOOLEAN NOT NULL DEFAULT FALSE;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_reason TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_mode TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_html_path TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_html_url TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_raw_html_path TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_raw_html_url TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_url TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_title TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_capture_notes TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_captured_at TIMESTAMPTZ;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS candidate_reviews JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 }
 
@@ -164,6 +227,18 @@ async function getJob(jobId, databaseUrl) {
   return result.rows[0] || null;
 }
 
+async function getJobItem(jobId, itemId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     WHERE job_id = $1
+       AND id = $2`,
+    [jobId, itemId],
+  );
+  return result.rows[0] || null;
+}
+
 async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
     ? optionsOrDatabaseUrl
@@ -185,6 +260,63 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
     ],
   );
   return result.rows;
+}
+
+async function listManualReviewCandidates(limit = 500, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     WHERE manual_capture_required IS TRUE
+        OR analysis_source = 'manual_snapshot'
+     ORDER BY
+       CASE WHEN manual_capture_required IS TRUE THEN 0 ELSE 1 END,
+       COALESCE(manual_captured_at, completed_at, updated_at, created_at) DESC,
+       row_number ASC
+     LIMIT $1`,
+    [Math.max(1, Number(limit) || 500)],
+  );
+  return result.rows;
+}
+
+async function setManualReviewTarget(target, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `INSERT INTO manual_review_targets (
+       selection_key,
+       job_id,
+       item_id,
+       capture_url,
+       title,
+       created_at,
+       updated_at
+     ) VALUES ('latest', $1, $2, $3, $4, NOW(), NOW())
+     ON CONFLICT (selection_key)
+     DO UPDATE SET
+       job_id = EXCLUDED.job_id,
+       item_id = EXCLUDED.item_id,
+       capture_url = EXCLUDED.capture_url,
+       title = EXCLUDED.title,
+       updated_at = NOW()
+     RETURNING *`,
+    [
+      String(target && target.job_id || ''),
+      String(target && target.item_id || ''),
+      String(target && target.capture_url || ''),
+      String(target && target.title || ''),
+    ],
+  );
+  return result.rows[0] || null;
+}
+
+async function getManualReviewTarget(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM manual_review_targets
+     WHERE selection_key = 'latest'`,
+  );
+  return result.rows[0] || null;
 }
 
 async function claimPendingItems(jobId, limit, databaseUrl) {
@@ -249,7 +381,15 @@ async function markItemRunning(itemId, databaseUrl) {
 async function markItemCompleted(itemId, scanResult, databaseUrl) {
   const db = getPool(databaseUrl);
   const best = scanResult.best_candidate || {};
-  const completionMessage = String(scanResult.access_reason || '');
+  const completionMessage = scanResult.ugc_detected ? '' : String(scanResult.access_reason || '');
+  const analysisSource = scanResult.analysis_source || 'automated';
+  const manualCaptureRequired = !!scanResult.manual_capture_required;
+  const manualCaptureReason = scanResult.manual_capture_reason || '';
+  const hasManualCapture = analysisSource === 'manual_snapshot';
+  const hasStoredHtml = !!(scanResult.manual_html_path || scanResult.manual_raw_html_path);
+  const manualCaptureMode = hasManualCapture
+    ? (scanResult.manual_capture_mode || 'dom_html')
+    : (hasStoredHtml ? 'automated_page_html' : null);
   await db.query(
     `UPDATE job_items
      SET status = 'completed',
@@ -264,10 +404,22 @@ async function markItemCompleted(itemId, scanResult, databaseUrl) {
          best_sample_text = $10,
          screenshot_path = $11,
          screenshot_url = $12,
-         best_candidate = $13::jsonb,
-         candidates = $14::jsonb,
-         scan_result = $15::jsonb,
-         error_message = $16,
+         analysis_source = $13,
+         manual_capture_required = $14,
+         manual_capture_reason = $15,
+         manual_capture_mode = $16,
+         manual_html_path = $17,
+         manual_html_url = $18,
+         manual_raw_html_path = $19,
+         manual_raw_html_url = $20,
+         manual_capture_url = $21,
+         manual_capture_title = $22,
+         manual_capture_notes = $23,
+         manual_captured_at = CASE WHEN $13 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
+         best_candidate = $24::jsonb,
+         candidates = $25::jsonb,
+         scan_result = $26::jsonb,
+         error_message = $27,
          completed_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
@@ -284,6 +436,17 @@ async function markItemCompleted(itemId, scanResult, databaseUrl) {
       best.sample_text || null,
       scanResult.screenshot_path || null,
       scanResult.screenshot_url || null,
+      analysisSource,
+      manualCaptureRequired,
+      manualCaptureReason,
+      manualCaptureMode,
+      hasStoredHtml ? (scanResult.manual_html_path || null) : null,
+      hasStoredHtml ? (scanResult.manual_html_url || null) : null,
+      hasStoredHtml ? (scanResult.manual_raw_html_path || null) : null,
+      hasStoredHtml ? (scanResult.manual_raw_html_url || null) : null,
+      hasManualCapture ? (scanResult.manual_capture_url || null) : null,
+      hasManualCapture ? (scanResult.manual_capture_title || null) : null,
+      hasManualCapture ? (scanResult.manual_capture_notes || null) : null,
       JSON.stringify(best),
       JSON.stringify(scanResult.candidates || []),
       JSON.stringify(scanResult),
@@ -300,13 +463,27 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
   const errorMessage = scanResult
     ? scanResult.error || scanResult.access_reason || 'Scan failed'
     : String(errorOrResult || '');
+  const analysisSource = scanResult && scanResult.analysis_source ? scanResult.analysis_source : 'automated';
+  const hasStoredHtml = !!(scanResult && (scanResult.manual_html_path || scanResult.manual_raw_html_path));
   await db.query(
     `UPDATE job_items
      SET status = 'failed',
          error_message = $2,
          screenshot_path = $3,
          screenshot_url = $4,
-         scan_result = $5::jsonb,
+         analysis_source = $5,
+         manual_capture_required = $6,
+         manual_capture_reason = $7,
+         manual_capture_mode = $8,
+         manual_html_path = $9,
+         manual_html_url = $10,
+         manual_raw_html_path = $11,
+         manual_raw_html_url = $12,
+         manual_capture_url = $13,
+         manual_capture_title = $14,
+         manual_capture_notes = $15,
+         manual_captured_at = CASE WHEN $5 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
+         scan_result = $16::jsonb,
          completed_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
@@ -315,9 +492,44 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
       String(errorMessage || ''),
       scanResult ? (scanResult.screenshot_path || null) : null,
       scanResult ? (scanResult.screenshot_url || null) : null,
+      analysisSource,
+      scanResult ? !!scanResult.manual_capture_required : true,
+      scanResult ? (scanResult.manual_capture_reason || errorMessage) : errorMessage,
+      scanResult ? (scanResult.manual_capture_mode || (hasStoredHtml ? 'automated_page_html' : 'dom_html')) : null,
+      hasStoredHtml ? (scanResult.manual_html_path || null) : null,
+      hasStoredHtml ? (scanResult.manual_html_url || null) : null,
+      hasStoredHtml ? (scanResult.manual_raw_html_path || null) : null,
+      hasStoredHtml ? (scanResult.manual_raw_html_url || null) : null,
+      scanResult ? (scanResult.manual_capture_url || null) : null,
+      scanResult ? (scanResult.manual_capture_title || null) : null,
+      scanResult ? (scanResult.manual_capture_notes || null) : null,
       scanResult ? JSON.stringify(scanResult) : null,
     ],
   );
+}
+
+async function upsertCandidateReview(jobId, itemId, review, databaseUrl) {
+  const existingItem = await getJobItem(jobId, itemId, databaseUrl);
+  if (!existingItem) {
+    return null;
+  }
+
+  const nextReviews = upsertCandidateReviewArray(existingItem.candidate_reviews || [], review);
+  const db = getPool(databaseUrl);
+  await db.query(
+    `UPDATE job_items
+     SET candidate_reviews = $2::jsonb,
+         updated_at = NOW()
+     WHERE job_id = $1
+       AND id = $3`,
+    [
+      jobId,
+      JSON.stringify(nextReviews),
+      itemId,
+    ],
+  );
+
+  return nextReviews;
 }
 
 async function recomputeJob(jobId, databaseUrl) {
@@ -370,11 +582,16 @@ module.exports = {
   createJob,
   listJobs,
   getJob,
+  getJobItem,
   getJobItems,
+  listManualReviewCandidates,
+  setManualReviewTarget,
+  getManualReviewTarget,
   claimPendingItems,
   releaseQueuedItems,
   markItemRunning,
   markItemCompleted,
   markItemFailed,
+  upsertCandidateReview,
   recomputeJob,
 };

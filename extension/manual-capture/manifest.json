@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "UGC Manual Capture",
+  "version": "0.1.0",
+  "description": "Capture a post-interaction page snapshot and upload it to the UGC scanner.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "UGC Manual Capture",
+    "default_popup": "popup.html"
+  }
+}

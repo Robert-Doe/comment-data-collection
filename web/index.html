@@ -28,6 +28,10 @@
           <button class="primary" type="submit">Start Job</button>
         </form>
         <p id="form-message" class="message"></p>
+        <div class="resource-links">
+          <a id="download-sample-csv" class="link-button compact" href="#" download>Download Sample Labeled CSV</a>
+          <a id="download-extension-zip" class="link-button compact" href="#" download>Download Extension ZIP</a>
+        </div>
       </section>
 
       <section class="panel">
@@ -37,10 +41,87 @@
         </div>
         <div id="job-summary" class="summary empty">No job selected.</div>
         <div class="download-actions">
-          <a id="download-csv" class="link-button disabled" href="#" target="_blank" rel="noreferrer">Download CSV</a>
+          <a id="download-report-xlsx" class="link-button disabled" href="#" download>Download Excel Report</a>
+          <a id="download-summary-csv" class="link-button disabled" href="#" download>Download Summary CSV</a>
+          <a id="download-features-csv" class="link-button disabled" href="#" download>Download Feature CSV</a>
+          <a id="download-candidates-csv" class="link-button disabled" href="#" download>Download Candidates CSV</a>
+          <a id="download-csv" class="link-button disabled" href="#" download>Download CSV</a>
           <a id="download-json" class="link-button disabled" href="#" target="_blank" rel="noreferrer">View JSON</a>
         </div>
-        <div id="job-items" class="table-shell empty">Upload a CSV to begin.</div>
+        <div class="workspace-shell">
+          <div class="tab-strip" role="tablist" aria-label="Review workspace">
+            <button class="tab-button active" type="button" role="tab" aria-selected="true" data-workspace-tab="queue">Rows</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manual">Manual</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates">Candidates</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring">Scoring</button>
+          </div>
+          <div id="workspace-selection" class="workspace-selection empty">Select a row from the table to open the manual or candidate review workspace.</div>
+          <section id="workspace-panel-queue" class="workspace-panel active" data-workspace-panel="queue">
+            <div id="job-items" class="table-shell empty">Upload a CSV to begin.</div>
+          </section>
+          <section id="workspace-panel-manual" class="workspace-panel" data-workspace-panel="manual">
+            <div class="panel-header compact-header">
+              <h3>Manual Review</h3>
+              <button id="manual-copy-config" class="secondary compact" type="button" disabled>Copy Fallback Config</button>
+            </div>
+            <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, and let the extension auto-match the current page and upload the snapshot. The fallback config button is only there if auto-match still fails.</p>
+            <div id="manual-context" class="summary empty">Select a row from Job Status to prepare a manual capture.</div>
+            <form id="manual-upload-form" class="manual-form">
+              <label class="field">
+                <span>Job ID</span>
+                <input id="manual-job-id" type="text" readonly>
+              </label>
+              <label class="field">
+                <span>Item ID</span>
+                <input id="manual-item-id" type="text" readonly>
+              </label>
+              <label class="field manual-wide">
+                <span>Capture URL</span>
+                <input id="manual-capture-url" name="captureUrl" type="text" placeholder="https://example.com/post">
+              </label>
+              <label class="field manual-wide">
+                <span>Capture Title</span>
+                <input id="manual-capture-title" name="title" type="text" placeholder="Visible page title">
+              </label>
+              <label class="field manual-wide">
+                <span>Notes</span>
+                <textarea id="manual-notes" name="notes" rows="3" placeholder="What action did you take before capturing?"></textarea>
+              </label>
+              <label class="field">
+                <span>HTML Snapshot</span>
+                <input id="manual-html-file" name="snapshot" type="file" accept=".html,text/html" required>
+              </label>
+              <label class="field">
+                <span>Screenshot</span>
+                <input id="manual-screenshot-file" name="screenshot" type="file" accept="image/*">
+              </label>
+              <button class="primary" type="submit">Upload Snapshot</button>
+            </form>
+            <p id="manual-message" class="message"></p>
+          </section>
+          <section id="workspace-panel-candidates" class="workspace-panel" data-workspace-panel="candidates">
+            <div class="panel-header compact-header">
+              <h3>Candidate Review</h3>
+              <div class="panel-actions">
+                <a id="view-svg-graph" class="link-button compact disabled" href="#" target="_blank" rel="noreferrer">View SVG</a>
+                <a id="download-svg-graph" class="link-button compact disabled" href="#" rel="noreferrer">Download SVG</a>
+                <a id="download-dot-graph" class="link-button compact disabled" href="#" rel="noreferrer">Download DOT Graph</a>
+                <button id="download-candidate-json" class="secondary compact" type="button" disabled>Download Candidate JSON</button>
+                <button id="download-candidate-csv" class="secondary compact" type="button" disabled>Download Candidate CSV</button>
+              </div>
+            </div>
+            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
+            <div id="candidate-review" class="candidate-review empty">Select a row from Job Status to inspect and label candidate regions.</div>
+            <p id="candidate-message" class="message"></p>
+          </section>
+          <section id="workspace-panel-scoring" class="workspace-panel" data-workspace-panel="scoring">
+            <div class="panel-header compact-header">
+              <h3>Scoring Breakdown</h3>
+            </div>
+            <p class="lede manual-lede">Inspect why the selected row scored the way it did. This view surfaces the best candidate, its matched signals, penalty signals, and a feature truth table so a reviewer can understand the decision without reading raw JSON.</p>
+            <div id="scoring-breakdown" class="candidate-review empty">Select a row from Job Status to inspect the scoring breakdown.</div>
+          </section>
+        </div>
       </section>
 
       <section class="panel">

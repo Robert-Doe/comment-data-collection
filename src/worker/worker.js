@@ -6,7 +6,7 @@ const { getConfig } = require('../shared/config');
 const { ensureSchema, markItemRunning, markItemCompleted, markItemFailed, recomputeJob } = require('../shared/store');
 const { SCAN_QUEUE_NAME, createRedisConnection, getSharedQueue } = require('../shared/queue');
 const { fillQueueForJob } = require('../shared/jobQueue');
-const { scanUrl, closeBrowser } = require('../shared/scanner');
+const { scanUrl, deriveManualCaptureState, closeBrowser } = require('../shared/scanner');
 
 async function main() {
   const config = getConfig();
@@ -27,6 +27,7 @@ async function main() {
         maxCandidates: config.maxCandidates,
         maxResults: config.maxResults,
         captureScreenshots: config.captureScreenshots,
+        captureHtmlSnapshots: config.captureHtmlSnapshots,
         artifactRoot: config.artifactRoot,
         artifactUrlBasePath: config.artifactUrlBasePath,
         publicBaseUrl: config.publicBaseUrl,
@@ -34,6 +35,10 @@ async function main() {
         itemId,
         rowNumber,
       });
+      const manualState = deriveManualCaptureState(scanResult, 'automated');
+      scanResult.analysis_source = 'automated';
+      scanResult.manual_capture_required = manualState.required;
+      scanResult.manual_capture_reason = manualState.reason;
 
       if (scanResult.error) {
         await markItemFailed(itemId, scanResult, config.databaseUrl);

@@ -7,6 +7,51 @@ const signatureCache = new WeakMap();
 const sigIdCache = new WeakMap();
 const xpathCache = new WeakMap();
 const dominantGroupCache = new WeakMap();
+const dominantXPathGroupCache = new WeakMap();
+const dominantUnitGroupCache = new WeakMap();
+const HIGH_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(comment|comments|commenter|reply|replies|discussion|discussions|review|reviews|feedback|thread|threads|answer|answers|question|questions|forum|forums|qa|qa_answers|komentarz|komentarze|komentarzy|odpowiedz|odpowiedzi|comentario|comentarios|commentaire|commentaires|kommentar|kommentare|antwort|antworten|resposta|respostas|respuesta|respuestas|reponse|reponses)\b|\bq\s*(?:&|\/)\s*a\b/;
+const MEDIUM_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(post|posts|message|messages|response|responses|conversation|conversations|community|communities)\b/;
+const LOW_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(item|card|entry|block|unit|feed|list)\b/;
+const COUNTABLE_UGC_KEYWORD_PATTERN = /\b(\d+)\s*(comment|reply|response|review|discussion|answer|question|post|komentarz|komentarze|odpowiedz|odpowiedzi|comentario|comentarios|commentaire|commentaires|kommentar|kommentare|antwort|antworten|resposta|respostas|respuesta|respuestas|reponse|reponses)s?\b/;
+const QA_UGC_KEYWORD_PATTERN = /\b(answer|answers|question|questions|qa|qa_answers|odpowiedz|odpowiedzi|respuesta|respuestas|resposta|respostas|antwort|antworten|reponse|reponses)\b|\bq\s*(?:&|\/)\s*a\b/;
+const THREAD_UGC_KEYWORD_PATTERN = /\b(forum|forums|thread|threads|discussion|discussions|post|posts)\b/;
+const KEYWORD_TEXT_MAX_LENGTH = 12000;
+const COMBINING_MARKS_PATTERN = /[\u0300-\u036f]/g;
+
+function normalizeKeywordText(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  return text
+    .normalize('NFKD')
+    .replace(COMBINING_MARKS_PATTERN, '')
+    .toLowerCase();
+}
+
+function keywordTest(pattern, value) {
+  return pattern.test(normalizeKeywordText(value));
+}
+
+function hasHighConfidenceUgcKeyword(value) {
+  return keywordTest(HIGH_CONFIDENCE_UGC_KEYWORD_PATTERN, value);
+}
+
+function hasMediumConfidenceUgcKeyword(value) {
+  return keywordTest(MEDIUM_CONFIDENCE_UGC_KEYWORD_PATTERN, value);
+}
+
+function hasLowConfidenceUgcKeyword(value) {
+  return keywordTest(LOW_CONFIDENCE_UGC_KEYWORD_PATTERN, value);
+}
+
+function hasCountableUgcKeyword(value) {
+  return keywordTest(COUNTABLE_UGC_KEYWORD_PATTERN, value);
+}
+
+function trimKeywordScanText(value) {
+  const text = normalizeSpace(value);
+  if (!text) return '';
+  return text.length > KEYWORD_TEXT_MAX_LENGTH ? text.slice(0, KEYWORD_TEXT_MAX_LENGTH) : text;
+}
 
 function classString(el) {
   if (!el || !('className' in el)) return '';
@@ -28,6 +73,21 @@ function attrText(el) {
     .filter(Boolean)
     .join(' ')
     .trim();
+}
+
+function fullAttrText(el) {
+  if (!el || el.nodeType !== 1) return '';
+  const attrs = Array.from(el.attributes || []);
+  const parts = [
+    el.tagName ? el.tagName.toLowerCase() : '',
+    attrText(el),
+  ];
+  attrs.forEach((attr) => {
+    parts.push(attr.name || '');
+    parts.push(attr.value || '');
+    parts.push(`${attr.name || ''}=${attr.value || ''}`);
+  });
+  return normalizeSpace(parts.filter(Boolean).join(' '));
 }
 
 function normalizeSpace(value) {
@@ -61,6 +121,15 @@ function textOf(el) {
   const value = normalizeSpace(el.textContent || '');
   textCache.set(el, value);
   return value;
+}
+
+function directTextOf(el) {
+  if (!el || !el.childNodes) return '';
+  let value = '';
+  Array.from(el.childNodes).forEach((node) => {
+    if (node && node.nodeType === 3) value += ` ${node.nodeValue || ''}`;
+  });
+  return normalizeSpace(value);
 }
 
 function allTextNodes(root) {
@@ -126,6 +195,15 @@ function getXPath(el) {
   const value = `/${parts.join('/')}`;
   xpathCache.set(el, value);
   return value;
+}
+
+function getXPathStar(el) {
+  const value = getXPath(el);
+  if (!value) return '';
+  if (/\[\d+\]$/.test(value)) {
+    return value.replace(/\[\d+\]$/, '[*]');
+  }
+  return `${value}[*]`;
 }
 
 function getCssPath(el) {
@@ -217,6 +295,17 @@ function groupBySigId(elements) {
   return groups;
 }
 
+function groupByXPathStar(elements) {
+  const groups = new Map();
+  elements.forEach((el) => {
+    const xpathStar = getXPathStar(el);
+    if (!xpathStar) return;
+    if (!groups.has(xpathStar)) groups.set(xpathStar, []);
+    groups.get(xpathStar).push(el);
+  });
+  return groups;
+}
+
 function dominantChildGroup(root) {
   if (!root || root.nodeType !== 1) return null;
   if (dominantGroupCache.has(root)) return dominantGroupCache.get(root);
@@ -239,8 +328,60 @@ function dominantChildGroup(root) {
   return best;
 }
 
+function dominantXPathChildGroup(root) {
+  if (!root || root.nodeType !== 1) return null;
+  if (dominantXPathGroupCache.has(root)) return dominantXPathGroupCache.get(root);
+
+  const children = directChildren(root);
+  if (!children.length) {
+    dominantXPathGroupCache.set(root, null);
+    return null;
+  }
+
+  const groups = groupByXPathStar(children);
+  let best = null;
+  groups.forEach((elements, xpathStar) => {
+    if (!best || elements.length > best.elements.length) {
+      best = { xpathStar, elements };
+    }
+  });
+
+  dominantXPathGroupCache.set(root, best);
+  return best;
+}
+
+function dominantUnitGroup(root) {
+  if (!root || root.nodeType !== 1) return null;
+  if (dominantUnitGroupCache.has(root)) return dominantUnitGroupCache.get(root);
+
+  const sigGroup = dominantChildGroup(root);
+  const xpathGroup = dominantXPathChildGroup(root);
+  let best = null;
+
+  if (sigGroup) {
+    best = {
+      strategy: 'sig_id',
+      sigId: sigGroup.sigId,
+      xpathStar: sigGroup.elements.length ? getXPathStar(sigGroup.elements[0]) : '',
+      elements: sigGroup.elements,
+    };
+  }
+
+  if (xpathGroup && (!best || xpathGroup.elements.length > best.elements.length)) {
+    best = {
+      strategy: 'xpath_star',
+      sigId: '',
+      xpathStar: xpathGroup.xpathStar,
+      elements: xpathGroup.elements,
+    };
+  }
+
+  dominantUnitGroupCache.set(root, best);
+  return best;
+}
+
 function getDominantUnits(root) {
-  return dominantChildGroup(root)?.elements || [];
+  return dominantUnitGroup(root)?.elements || [];
 }
 
 function ratio(numerator, denominator) {
@@ -378,16 +519,21 @@ function feat_node_id(root) {
 }
 
 function feat_repeating_group_count(root) {
-  const group = dominantChildGroup(root);
+  const group = dominantUnitGroup(root);
+  const xpathGroup = dominantXPathChildGroup(root);
   return {
     repeating_group_count: group ? group.elements.length : 0,
     repeating_group_sig_id: group ? group.sigId : '',
+    repeating_group_xpath_star: group ? (group.xpathStar || '') : '',
+    dominant_group_strategy: group ? (group.strategy || '') : '',
     child_sig_id_group_count: groupBySigId(directChildren(root)).size,
+    child_xpath_star_group_count: groupByXPathStar(directChildren(root)).size,
+    xpath_star_group_count: xpathGroup ? xpathGroup.elements.length : 0,
   };
 }
 
 function feat_min_k_threshold_pass(root) {
-  const count = dominantChildGroup(root)?.elements.length || 0;
+  const count = dominantUnitGroup(root)?.elements.length || 0;
   return {
     min_k_threshold_pass_3: count >= 3,
     min_k_threshold_pass_5: count >= 5,
@@ -398,12 +544,12 @@ function feat_min_k_threshold_pass(root) {
 }
 
 function feat_wildcard_xpath_template(root) {
-  const group = dominantChildGroup(root);
+  const group = dominantUnitGroup(root);
   if (!group || !group.elements.length) {
     return { wildcard_xpath_template: '', has_template: false };
   }
 
-  const template = getXPath(group.elements[0]).replace(/\[\d+\]$/, '[*]');
+  const template = group.xpathStar || getXPathStar(group.elements[0]);
   return {
     wildcard_xpath_template: template,
     has_template: true,
@@ -421,10 +567,9 @@ function feat_internal_depth_filter(root) {
 function feat_comment_header_with_count(root) {
   const scope = root.parentElement || root;
   const headings = Array.from(scope.querySelectorAll('h1,h2,h3,h4,h5,h6,[class*="header"],[class*="heading"]'));
-  const pattern = /\b(\d+)\s*(comment|reply|response|review|discussion|answer)s?\b/i;
   const match = headings
     .map((heading) => textOf(heading))
-    .find((value) => pattern.test(value)) || '';
+    .find((value) => hasCountableUgcKeyword(value)) || '';
   const countMatch = match.match(/\d+/);
 
   return {
@@ -434,9 +579,18 @@ function feat_comment_header_with_count(root) {
 }
 
 function feat_attributes_contain_keywords(root) {
-  const keywordPattern = /\b(comment|reply|repl(?:y|ies)|discussion|review|feedback|thread|answer|answers|forum)\b/i;
+  const attrs = Array.from(root.attributes || []);
+  const directText = directTextOf(root);
+  const subtreeText = trimKeywordScanText(textOf(root));
+  const tagName = root.tagName ? root.tagName.toLowerCase() : '';
   return {
-    attributes_contain_keywords: keywordPattern.test(attrText(root)),
+    attributes_contain_keywords: hasHighConfidenceUgcKeyword(fullAttrText(root)),
+    keyword_attr_name_high: attrs.some((attr) => hasHighConfidenceUgcKeyword(attr.name || '')),
+    keyword_attr_value_high: attrs.some((attr) => hasHighConfidenceUgcKeyword(attr.value || '')),
+    keyword_tag_name_high: hasHighConfidenceUgcKeyword(tagName),
+    keyword_direct_text_high: directText.length <= 80 && hasHighConfidenceUgcKeyword(directText),
+    keyword_text_high: hasHighConfidenceUgcKeyword(subtreeText),
+    keyword_text_med: hasMediumConfidenceUgcKeyword(subtreeText),
   };
 }
 
@@ -544,11 +698,30 @@ function feat_text_question_mark_count(root) {
 }
 
 function feat_has_relative_time(root) {
-  const relativePattern = /\b(\d+\s*(second|minute|hour|day|week|month|year)s?\s*ago|just\s*now|yesterday|\d+[smhdwy]\b)\b/i;
+  const relativePattern = /\b(\d+\s*(?:s(?:ec(?:ond)?s?)?|m(?:in(?:ute)?s?)?|h(?:r|our|ours)?|d(?:ay|days?)?|w(?:eek|weeks?)?|mo(?:nth|nths?)?|y(?:r|ear|ears)?)\s*ago|just\s*now|today|yesterday|\d+\s*(?:s|m|h|d|w|mo|y)\b)\b/i;
+  const absoluteNumericPattern = /\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/](?:20\d{2}|\d{2}))\b/i;
+  const monthNamePattern = /\b(?:(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?(?:\s+\d{2,4})?|\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?),?(?:\s+\d{2,4})?)\b/i;
+  const timestampAttrNamePattern = /^(datetime|data-time|data-date|data-timestamp|data-created|data-epoch|timeago)$/i;
   const timeElements = Array.from(root.querySelectorAll('time[datetime]'));
-  const textMatches = allTextNodes(root).filter((text) => relativePattern.test(text));
+  const textNodes = allTextNodes(root);
+  const textMatches = textNodes.filter((text) => relativePattern.test(text));
+  const absoluteMatches = textNodes.filter((text) => absoluteNumericPattern.test(text) || monthNamePattern.test(text));
+  const timestampAttrs = [root].concat(allDescendants(root)).filter((el) => Array.from(el.attributes || []).some((attr) => {
+    const name = attr.name || '';
+    const value = attr.value || '';
+    return timestampAttrNamePattern.test(name)
+      || ((/^(title|aria-label)$/i.test(name)) && (relativePattern.test(value) || absoluteNumericPattern.test(value) || monthNamePattern.test(value)));
+  }));
   const units = getDominantUnits(root);
-  const unitsWithTime = units.filter((unit) => unit.querySelector('time[datetime]') || relativePattern.test(textOf(unit))).length;
+  const unitsWithTime = units.filter((unit) => {
+    const unitText = textOf(unit);
+    const attrHit = Array.from(unit.attributes || []).some((attr) => timestampAttrNamePattern.test(attr.name || ''));
+    return unit.querySelector('time[datetime]')
+      || attrHit
+      || relativePattern.test(unitText)
+      || absoluteNumericPattern.test(unitText)
+      || monthNamePattern.test(unitText);
+  }).length;
 
   return {
     has_time_datetime_element: timeElements.length > 0,
@@ -556,9 +729,16 @@ function feat_has_relative_time(root) {
     has_relative_time_text: textMatches.length > 0,
     relative_time_text_count: textMatches.length,
     relative_time_text_pattern: textMatches.length > 0,
+    has_absolute_date_text: absoluteMatches.length > 0,
+    absolute_date_text_count: absoluteMatches.length,
+    has_timestamp_attribute: timestampAttrs.length > 0,
+    timestamp_attribute_count: timestampAttrs.length,
     units_with_relative_time: unitsWithTime,
+    units_with_time_signal: unitsWithTime,
     has_relative_time: timeElements.length > 0 || textMatches.length > 0,
     time_datetime_per_unit: ratio(unitsWithTime, units.length),
+    time_signal_coverage: ratio(unitsWithTime, units.length),
+    timestamp_signal_count: timeElements.length + textMatches.length + absoluteMatches.length + timestampAttrs.length,
   };
 }
 
@@ -834,25 +1014,26 @@ function feat_reply_nesting_depth(root) {
 }
 
 function feat_keyword_in_attributes(root) {
-  const highKeywords = /\b(comment|reply|replies|thread|discussion|feedback|testimonial|review|answer|answers|forum)\b/i;
-  const mediumKeywords = /\b(post|message|response|conversation|community)\b/i;
-  const lowKeywords = /\b(item|card|entry|block|unit|feed|list)\b/i;
   const units = getDominantUnits(root);
-  const containerText = attrText(root);
-  const highUnitCount = units.filter((unit) => highKeywords.test(attrText(unit))).length;
+  const attrs = Array.from(root.attributes || []);
+  const containerText = fullAttrText(root);
+  const highUnitCount = units.filter((unit) => hasHighConfidenceUgcKeyword(fullAttrText(unit))).length;
 
   return {
-    keyword_container_high: highKeywords.test(containerText),
-    keyword_container_med: mediumKeywords.test(containerText),
-    keyword_container_low: lowKeywords.test(containerText),
+    keyword_container_high: hasHighConfidenceUgcKeyword(containerText),
+    keyword_container_med: hasMediumConfidenceUgcKeyword(containerText),
+    keyword_container_low: hasLowConfidenceUgcKeyword(containerText),
     keyword_unit_high: highUnitCount > 0,
     keyword_unit_high_coverage: ratio(highUnitCount, units.length),
+    keyword_attr_name_high: attrs.some((attr) => hasHighConfidenceUgcKeyword(attr.name || '')),
+    keyword_attr_value_high: attrs.some((attr) => hasHighConfidenceUgcKeyword(attr.value || '')),
+    keyword_direct_text_high: hasHighConfidenceUgcKeyword(directTextOf(root)),
     keyword_container_raw: containerText.toLowerCase().slice(0, 160),
   };
 }
 
 function feat_sig_id_count_graduated(root) {
-  const count = dominantChildGroup(root)?.elements.length || 0;
+  const count = dominantUnitGroup(root)?.elements.length || 0;
   return {
     sig_id_count: count,
     sig_id_count_weak: count >= 3,
@@ -906,9 +1087,13 @@ function feat_submit_button_label(root) {
   const pattern = /\b(post|submit|comment|reply|respond|send|publish|add\s+comment|add\s+review)\b/i;
   const buttons = Array.from((root.parentElement || root).querySelectorAll('button, input[type="submit"], [role="button"]'))
     .filter((button) => pattern.test(textOf(button)) || pattern.test(button.getAttribute('value') || '') || pattern.test(button.getAttribute('aria-label') || ''));
+  const labels = buttons.slice(0, 3).map((button) => textOf(button).slice(0, 40) || (button.getAttribute('value') || '').slice(0, 40));
+  const combinedLabels = labels.join(' | ');
   return {
     submit_button_present: buttons.length > 0,
-    submit_button_labels: buttons.slice(0, 3).map((button) => textOf(button).slice(0, 40) || (button.getAttribute('value') || '').slice(0, 40)),
+    submit_button_labels: labels,
+    submit_button_keyword_high: hasHighConfidenceUgcKeyword(combinedLabels),
+    submit_button_keyword_med: hasMediumConfidenceUgcKeyword(combinedLabels),
   };
 }
 
@@ -918,18 +1103,25 @@ function feat_sibling_homogeneity_score(root) {
     return {
       sibling_homogeneity_score: 0,
       dominant_sig_proportion: 0,
+      dominant_xpath_star_proportion: 0,
     };
   }
-  const counts = {};
+  const sigCounts = {};
+  const xpathCounts = {};
   children.forEach((child) => {
-    const key = sigId(child);
-    counts[key] = (counts[key] || 0) + 1;
+    const sigKey = sigId(child);
+    const xpathKey = getXPathStar(child);
+    sigCounts[sigKey] = (sigCounts[sigKey] || 0) + 1;
+    xpathCounts[xpathKey] = (xpathCounts[xpathKey] || 0) + 1;
   });
-  const maxCount = Math.max(...Object.values(counts));
+  const maxSigCount = Math.max(...Object.values(sigCounts));
+  const maxXPathCount = Math.max(...Object.values(xpathCounts));
+  const maxCount = Math.max(maxSigCount, maxXPathCount);
   const score = ratio(maxCount, children.length);
   return {
     sibling_homogeneity_score: score,
-    dominant_sig_proportion: score,
+    dominant_sig_proportion: ratio(maxSigCount, children.length),
+    dominant_xpath_star_proportion: ratio(maxXPathCount, children.length),
   };
 }
 
@@ -1341,7 +1533,7 @@ function inferUgcType(features) {
     return 'social_feed';
   }
   if (
-    /answer/.test(features.keyword_container_raw || '')
+    QA_UGC_KEYWORD_PATTERN.test(features.keyword_container_raw || '')
   ) {
     return 'qa_answers';
   }
@@ -1357,7 +1549,7 @@ function inferUgcType(features) {
     || features.reply_nesting_depth > 0
     || features.sig_id_recursive_nesting
     || features.thread_depth_indicator
-    || /forum|thread/.test(features.keyword_container_raw || '')
+    || THREAD_UGC_KEYWORD_PATTERN.test(features.keyword_container_raw || '')
   ) {
     return 'forum_thread';
   }
@@ -1395,6 +1587,8 @@ function scoreFeatures(features) {
   add(features.comment_header_with_count, 5, 'comment_header_with_count');
   add(features.attributes_contain_keywords, 3, 'attributes_contain_keywords');
   add(features.keyword_container_high, 3, 'keyword_container_high');
+  add(features.keyword_text_high, 3, 'keyword_text_high');
+  add(features.submit_button_keyword_high, 2, 'submit_button_keyword_high');
   add(features.keyword_unit_high_coverage >= 0.4, 2, 'keyword_unit_high_coverage');
   add(features.sig_id_count_weak, 2, 'sig_id_count_weak');
   add(features.sig_id_count_medium, 3, 'sig_id_count_medium');
@@ -1438,8 +1632,133 @@ function scoreFeatures(features) {
   subtract(features.price_currency_in_unit && inferUgcType(features) !== 'product_review', 4, 'price_currency_in_unit');
   subtract(features.link_density > 0.75, 2, 'link_density_too_high');
 
+  const explicitKeywordSignals = [];
+  const supportingKeywordSignals = [];
+  const mediumKeywordSignals = [];
+  const semanticSupportCount = [
+    features.schema_org_comment_itemtype,
+    features.aria_role_comment,
+    features.aria_role_feed_with_articles,
+    features.microdata_itemprop_text,
+    features.microdata_itemprop_author,
+    features.microdata_itemprop_date_published,
+  ].filter(Boolean).length;
+  const structuralSupportCount = [
+    features.sig_id_count_medium,
+    features.sig_id_count_strong,
+    features.sibling_homogeneity_score >= 0.65,
+    features.depth_and_variety_pass,
+    features.author_timestamp_colocated,
+    features.time_datetime_per_unit >= 0.5,
+    features.author_avatar_coverage >= 0.4,
+    features.profile_link_coverage >= 0.4,
+    features.reply_button_unit_coverage >= 0.4,
+    features.sig_id_recursive_nesting,
+    features.reply_nesting_depth > 0,
+    features.upvote_downvote_pair,
+  ].filter(Boolean).length;
+  const interactionSupportCount = [
+    features.reply_button_unit_coverage >= 0.4,
+    features.report_flag_unit_coverage >= 0.15,
+    features.permalink_per_unit,
+    features.reaction_coverage >= 0.25,
+    features.edit_delete_coverage >= 0.15,
+    features.collapse_expand_control,
+    features.pagination_load_more_adjacent,
+    features.has_nearby_textarea,
+  ].filter(Boolean).length;
+  const repeatedStructureSupport = !!(
+    features.sig_id_count_medium
+    || features.sig_id_count_strong
+    || features.sibling_homogeneity_score >= 0.65
+    || features.depth_and_variety_pass
+  );
+
+  function collectKeywordSignal(condition, label, bucket) {
+    if (!condition) return;
+    bucket.push(label);
+  }
+
+  collectKeywordSignal(features.comment_header_with_count, 'comment_header_with_count', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_container_high, 'keyword_container_high', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_unit_high_coverage >= 0.25, 'keyword_unit_high_coverage', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_attr_name_high, 'keyword_attr_name_high', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_attr_value_high, 'keyword_attr_value_high', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_direct_text_high, 'keyword_direct_text_high', explicitKeywordSignals);
+  collectKeywordSignal(features.keyword_text_high, 'keyword_text_high', explicitKeywordSignals);
+  collectKeywordSignal(features.submit_button_keyword_high, 'submit_button_keyword_high', explicitKeywordSignals);
+
+  collectKeywordSignal(features.attributes_contain_keywords, 'attributes_contain_keywords', supportingKeywordSignals);
+  collectKeywordSignal(features.keyword_unit_high, 'keyword_unit_high', supportingKeywordSignals);
+  collectKeywordSignal(features.keyword_tag_name_high, 'keyword_tag_name_high', supportingKeywordSignals);
+  collectKeywordSignal(features.keyword_text_med, 'keyword_text_med', mediumKeywordSignals);
+  collectKeywordSignal(features.submit_button_keyword_med, 'submit_button_keyword_med', mediumKeywordSignals);
+  collectKeywordSignal(features.keyword_container_med, 'keyword_container_med', mediumKeywordSignals);
+
+  const explicitKeywordEvidence = explicitKeywordSignals.length > 0;
+  const supportingKeywordEvidence = supportingKeywordSignals.length >= 2;
+  const strongKeywordEvidence = explicitKeywordEvidence || supportingKeywordEvidence;
+  const mediumKeywordEvidence = mediumKeywordSignals.length > 0;
+  const mediumKeywordAssurance = !strongKeywordEvidence
+    && mediumKeywordEvidence
+    && repeatedStructureSupport
+    && structuralSupportCount >= 3
+    && interactionSupportCount >= 1
+    && score >= 18;
+  const highAssuranceWithoutKeywords = !strongKeywordEvidence
+    && !mediumKeywordEvidence
+    && semanticSupportCount >= 2
+    && repeatedStructureSupport
+    && structuralSupportCount >= 5
+    && interactionSupportCount >= 3
+    && !features.table_row_structure
+    && !features.add_to_cart_present
+    && !features.nav_header_ancestor
+    && score >= 26;
+  const keywordEvidencePresent = strongKeywordEvidence || mediumKeywordAssurance;
+  const acceptanceGatePassed = keywordEvidencePresent || highAssuranceWithoutKeywords;
+  const baseDetected = score >= 12 || ((features.schema_org_comment_itemtype || features.aria_role_comment) && score >= 8);
+  const keywordEvidenceSignals = Array.from(new Set(
+    explicitKeywordSignals
+      .concat(supportingKeywordEvidence ? supportingKeywordSignals : [])
+      .concat(mediumKeywordAssurance ? mediumKeywordSignals : [])
+  ));
+  const keywordGateTier = strongKeywordEvidence
+    ? (explicitKeywordEvidence ? 'strong_keywords' : 'reinforced_keywords')
+    : (mediumKeywordAssurance
+      ? 'medium_keywords_plus_structure'
+      : (highAssuranceWithoutKeywords ? 'high_assurance_override' : 'rejected_missing_keywords'));
+
+  if (explicitKeywordEvidence) {
+    matchedSignals.push('keyword_gate_explicit_keywords');
+  } else if (supportingKeywordEvidence) {
+    matchedSignals.push('keyword_gate_reinforced_keywords');
+  } else if (mediumKeywordAssurance) {
+    matchedSignals.push('keyword_gate_medium_keywords_plus_structure');
+  } else if (highAssuranceWithoutKeywords) {
+    matchedSignals.push('keyword_gate_high_assurance_override');
+  } else {
+    penaltySignals.push('keyword_gate_missing');
+  }
+
   const confidence = score >= 24 ? 'high' : score >= 16 ? 'medium' : score >= 10 ? 'low' : 'unlikely';
-  const detected = score >= 12 || ((features.schema_org_comment_itemtype || features.aria_role_comment) && score >= 8);
+  const detected = baseDetected && acceptanceGatePassed;
+  const keywordEvidenceStrength = strongKeywordEvidence
+    ? 'strong'
+    : (mediumKeywordAssurance
+      ? 'medium'
+      : (highAssuranceWithoutKeywords ? 'override' : 'none'));
+  const acceptanceGateReason = explicitKeywordEvidence
+    ? 'Accepted because explicit UGC keywords like comment, review, forum, question, or answer were attached to the candidate.'
+    : (supportingKeywordEvidence
+      ? 'Accepted because multiple keyword cues reinforced the candidate beyond repeated structure alone.'
+      : (mediumKeywordAssurance
+        ? 'Accepted because post/message-style keywords were backed by strong repeated sibling structure and interaction cues.'
+        : (highAssuranceWithoutKeywords
+          ? 'Accepted without keywords only because semantic markup, repeated sibling structure, and interaction evidence were all unusually strong.'
+          : (baseDetected
+            ? 'Raw score cleared threshold, but the keyword gate rejected the candidate because explicit UGC keywords were missing or too weak.'
+            : 'Raw score stayed below threshold, and keyword evidence was not strong enough to rescue the candidate.'))));
 
   return {
     score,
@@ -1448,20 +1767,39 @@ function scoreFeatures(features) {
     ugc_type: inferUgcType(features),
     matched_signals: matchedSignals,
     penalty_signals: penaltySignals,
+    base_detected: baseDetected,
+    keyword_evidence_present: keywordEvidencePresent,
+    keyword_evidence_strength: keywordEvidenceStrength,
+    keyword_evidence_signals: keywordEvidenceSignals,
+    keyword_gate_tier: keywordGateTier,
+    explicit_keyword_signal_count: explicitKeywordSignals.length,
+    supporting_keyword_signal_count: supportingKeywordSignals.length,
+    strong_keyword_signal_count: explicitKeywordSignals.length + supportingKeywordSignals.length,
+    medium_keyword_signal_count: mediumKeywordSignals.length,
+    semantic_support_count: semanticSupportCount,
+    structural_support_count: structuralSupportCount,
+    interaction_support_count: interactionSupportCount,
+    repeated_structure_support: repeatedStructureSupport,
+    high_assurance_without_keywords: highAssuranceWithoutKeywords,
+    acceptance_gate_passed: acceptanceGatePassed,
+    acceptance_gate_reason: acceptanceGateReason,
   };
 }
 
 function looksLikeContainer(el) {
   if (!el || el.nodeType !== 1) return false;
   const tag = el.tagName ? el.tagName.toLowerCase() : '';
-  const semantic = /\b(comment|reply|discussion|review|feedback|thread|forum|answer|feed)\b/i.test(attrText(el));
+  const attrSummary = fullAttrText(el);
+  const semantic = hasHighConfidenceUgcKeyword(attrSummary)
+    || hasMediumConfidenceUgcKeyword(attrSummary)
+    || /\bfeed\b/i.test(attrSummary);
   if (!semantic && !['section', 'article', 'div', 'ul', 'ol', 'main', 'aside'].includes(tag)) {
     return false;
   }
 
   const childCount = directChildren(el).length;
   const textLength = textOf(el).length;
-  const repeated = dominantChildGroup(el)?.elements.length || 0;
+  const repeated = dominantUnitGroup(el)?.elements.length || 0;
   const homogeneity = childCount > 1 ? ratio(repeated, childCount) : 0;
   const hasRoleOrMicrodata = el.matches('[role="feed"], [role="comment"], [itemtype*="Comment"], [itemtype*="Review"]');
 
@@ -1474,11 +1812,11 @@ function looksLikeContainer(el) {
 
 function quickCandidateScore(el) {
   let score = 0;
-  const repeated = dominantChildGroup(el)?.elements.length || 0;
+  const repeated = dominantUnitGroup(el)?.elements.length || 0;
   const childCount = directChildren(el).length;
   const homogeneity = childCount > 1 ? repeated / childCount : 0;
   const textLength = textOf(el).length;
-  const attrs = attrText(el);
+  const attrs = fullAttrText(el);
 
   if (el.matches('[role="feed"], [role="comment"]')) score += 5;
   if (el.matches('[itemtype*="Comment"], [itemtype*="Review"]')) score += 5;

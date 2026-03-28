@@ -1,0 +1,159 @@
+:root {
+  --bg: #f5efe2;
+  --panel: rgba(255, 250, 240, 0.96);
+  --line: rgba(49, 41, 28, 0.18);
+  --text: #2c2418;
+  --muted: #6d614f;
+  --accent: #1d6b57;
+  --accent-strong: #145343;
+  --danger: #8a2d2d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.shell {
+  width: 380px;
+  padding: 16px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+.lede {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.field.hidden {
+  display: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.primary {
+  background: var(--accent);
+  color: #f8f6ef;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.secondary {
+  background: rgba(40, 74, 63, 0.08);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.compact {
+  padding: 8px 12px;
+}
+
+.summary-card {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.advanced {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.advanced summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.advanced-copy {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.status {
+  min-height: 1.4rem;
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--danger);
+}
