@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$Host,
+  [string]$ServerHost,
 
   [string]$User = "root",
   [string]$AppDir = "/opt/comment-data-collection",
@@ -143,4 +143,4 @@ docker compose --env-file "$EnvFile" -f "$ComposeFile" ps
 curl -fsS http://127.0.0.1:3000/api/health
 '@
 
-$remoteScript | ssh "$User@$Host" "bash -s"
+$remoteScript | ssh "$User@$ServerHost" "bash -s"

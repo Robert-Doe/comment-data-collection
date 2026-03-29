@@ -151,7 +151,7 @@ From this machine you can deploy to the droplet with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy-digitalocean.ps1 `
-  -Host YOUR_DROPLET_IP `
+  -ServerHost YOUR_DROPLET_IP `
   -User root `
   -AppDir /opt/comment-data-collection `
   -Branch fix/worker-recovery-parallelism `
