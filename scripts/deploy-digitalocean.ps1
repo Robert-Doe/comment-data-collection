@@ -10,7 +10,23 @@ param(
   [string]$EnvFile = ".env.digitalocean"
 )
 
-$remoteScript = @'
+function Quote-BashValue {
+  param(
+    [string]$Value
+  )
+
+  return "'" + ($Value -replace "'", '''"''"''') + "'"
+}
+
+$remoteVars = @"
+AppDir=$(Quote-BashValue $AppDir)
+Branch=$(Quote-BashValue $Branch)
+Repository=$(Quote-BashValue $Repository)
+ComposeFile=$(Quote-BashValue $ComposeFile)
+EnvFile=$(Quote-BashValue $EnvFile)
+"@
+
+$remoteScript = $remoteVars + @'
 set -euo pipefail
 
 get_last_env_value() {
