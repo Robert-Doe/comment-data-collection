@@ -33,7 +33,7 @@ get_last_env_value() {
 
 ensure_clean_worktree() {
   local status
-  status="$(git status --porcelain)"
+  status="$(git status --porcelain --untracked-files=all | grep -vE '^\?\? (\.env\.digitalocean|\.env\.digitalocean\.bak\.[^[:space:]]+)$' || true)"
   if [ -n "$status" ]; then
     echo "Remote git worktree is dirty. Refusing to deploy inconsistent code."
     printf '%s\n' "$status"
