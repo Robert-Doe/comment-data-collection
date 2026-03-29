@@ -146,9 +146,10 @@ curl -fsS http://127.0.0.1:3000/api/health
 $localTempPath = [System.IO.Path]::GetTempFileName()
 $remoteTempPath = "/tmp/comment-data-collection-deploy.sh"
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$remoteScriptUnix = $remoteScript -replace "`r`n", "`n"
 
 try {
-  [System.IO.File]::WriteAllText($localTempPath, $remoteScript, $utf8NoBom)
+  [System.IO.File]::WriteAllText($localTempPath, $remoteScriptUnix, $utf8NoBom)
 
   & scp $localTempPath "${User}@${ServerHost}:${remoteTempPath}"
   if ($LASTEXITCODE -ne 0) {
