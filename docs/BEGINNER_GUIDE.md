@@ -27,8 +27,8 @@ The normal path is:
 4. the worker pulls rows from Redis and scans them with Playwright
 5. the worker writes row results back to Postgres
 6. the API serves those results back to the UI
-7. if a site needs human help, the manual-capture extension can upload a frozen HTML snapshot and screenshot
-8. the API re-analyzes that stored snapshot and updates the same row
+7. if a site needs human help, the manual-capture extension can upload a frozen HTML snapshot, a raw DOM snapshot, and a viewport screenshot
+8. the API re-renders that stored snapshot, saves its own rendered screenshot, re-analyzes the row, and updates the same item
 
 ## Why there is an API and a worker
 
@@ -177,6 +177,20 @@ The UI now downloads SVG and DOT exports by:
 4. triggering a normal browser download
 
 That keeps the frontend and API on separate ports while still making downloads reliable.
+
+## How manual snapshot screenshots now work
+
+There are three different image types in the manual-review flow:
+
+- `Uploaded Screenshot`: the visible browser viewport captured by the extension
+- `Rendered Snapshot`: a server-generated screenshot after Playwright re-renders the stored HTML snapshot
+- `Candidate Screenshots`: cropped list/container regions generated from the server-side analysis
+
+Why this matters:
+
+- if the extension screenshot missed the comments because they were off-screen, the uploaded screenshot will still miss them
+- if the DOM snapshot contains the opened comment section, the server-rendered snapshot and candidate crops can still show it after refresh
+- this gives you a better labeling trail because you can compare what the browser captured against what the server reconstructed
 
 ## Beginner-safe deployment checklist
 

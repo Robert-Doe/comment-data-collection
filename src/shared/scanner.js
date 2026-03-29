@@ -1497,6 +1497,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
 
 async function analyzeHtmlSnapshot(snapshot, options = {}) {
   const html = String(snapshot && snapshot.html ? snapshot.html : '');
+  const rawHtml = String(snapshot && snapshot.raw_html ? snapshot.raw_html : '');
   if (!html.trim()) {
     throw new Error('HTML snapshot is required');
   }
@@ -1523,9 +1524,11 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     access_reason: '',
     page_text_sample: '',
     frame_count: 0,
-    screenshot_path: snapshot.screenshot_path || '',
-    screenshot_url: snapshot.screenshot_url || '',
+    screenshot_path: '',
+    screenshot_url: '',
     screenshot_error: '',
+    manual_uploaded_screenshot_path: snapshot.manual_uploaded_screenshot_path || '',
+    manual_uploaded_screenshot_url: snapshot.manual_uploaded_screenshot_url || '',
     analysis_source: 'manual_snapshot',
     manual_capture_required: false,
     manual_capture_reason: '',
@@ -1547,7 +1550,7 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
       await page.waitForTimeout(postLoadDelayMs);
     }
 
-    if (!result.screenshot_path && !result.screenshot_url && options.captureScreenshots) {
+    if (options.captureScreenshots) {
       try {
         const screenshot = await capturePageScreenshot(page, normalizedUrl, {
           ...options,
@@ -1571,8 +1574,8 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     result.page_text_sample = access.pageTextSample;
     result.frame_count = access.frameCount;
 
-    const rawHtml = html || await page.content().catch(() => '');
-    const candidates = await collectCandidatesFromPage(page, rawHtml, snapshot.response_headers || {}, options);
+    const candidateSourceHtml = rawHtml.trim() || html || await page.content().catch(() => '');
+    const candidates = await collectCandidatesFromPage(page, candidateSourceHtml, snapshot.response_headers || {}, options);
     result.candidates = candidates;
     result.best_candidate = candidates[0] || null;
     result.ugc_detected = !!(result.best_candidate && result.best_candidate.detected);

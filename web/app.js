@@ -259,14 +259,22 @@
     if (!item) return emptyText;
 
     const links = [];
+    const hasSeparateUploadedScreenshot = !!item.manual_uploaded_screenshot_url;
+
+    if (item.manual_uploaded_screenshot_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_uploaded_screenshot_url))}" target="_blank" rel="noreferrer">Uploaded Screenshot</a>`);
+    }
     if (item.screenshot_url) {
-      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.screenshot_url))}" target="_blank" rel="noreferrer">Uploaded Screenshot</a>`);
+      const screenshotLabel = item.analysis_source === 'manual_snapshot'
+        ? (hasSeparateUploadedScreenshot ? 'Rendered Snapshot' : 'Screenshot')
+        : 'Screenshot';
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.screenshot_url))}" target="_blank" rel="noreferrer">${screenshotLabel}</a>`);
     }
     if (item.manual_html_url) {
-      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_html_url))}" target="_blank" rel="noreferrer">Snapshot HTML</a>`);
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_html_url))}" target="_blank" rel="noreferrer">Styled Snapshot HTML</a>`);
     }
     if (item.manual_raw_html_url) {
-      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_raw_html_url))}" target="_blank" rel="noreferrer">Raw HTML</a>`);
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_raw_html_url))}" target="_blank" rel="noreferrer">Raw DOM HTML</a>`);
     }
 
     if (!links.length) {

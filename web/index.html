@@ -80,7 +80,7 @@
               <h3>Manual Review</h3>
               <button id="manual-copy-config" class="secondary compact" type="button" disabled>Copy Fallback Config</button>
             </div>
-            <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, make sure the comment panel is actually visible in the browser viewport, and let the extension auto-match the current page and upload the snapshot. If this job was already completed, click <strong>Refresh</strong> in this web app after the extension upload so the latest manual artifacts are pulled in. The fallback config button is only there if auto-match still fails.</p>
+            <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, make sure the comment panel is actually visible in the browser viewport, and let the extension auto-match the current page and upload the snapshot. The extension sends both the visible-tab screenshot and the page DOM/HTML state. The server then re-renders that stored snapshot, saves its own rendered screenshot, and regenerates candidate crops from it. If this job was already completed, click <strong>Refresh</strong> in this web app after the extension upload so the latest manual artifacts are pulled in. The fallback config button is only there if auto-match still fails.</p>
             <div id="manual-context" class="summary empty">Select a row from Job Status to prepare a manual capture.</div>
             <form id="manual-upload-form" class="manual-form">
               <label class="field">
@@ -126,7 +126,7 @@
                 <button id="download-candidate-csv" class="secondary compact" type="button" disabled>Download Candidate CSV</button>
               </div>
             </div>
-            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
+            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. For manual uploads you can now compare the browser-uploaded screenshot, the server-rendered snapshot screenshot, and the candidate crops together. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
             <div id="candidate-review" class="candidate-review empty">Select a row from Job Status to inspect and label candidate regions.</div>
             <p id="candidate-message" class="message"></p>
           </section>

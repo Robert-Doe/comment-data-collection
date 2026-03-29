@@ -111,6 +111,7 @@ function materializeItem(item, req) {
     candidate_reviews: candidateReviews,
     candidate_review_summary: summarizeCandidateReviews(candidateReviews),
     screenshot_url: versionedAssetUrl(req, item.screenshot_url || '', assetVersion),
+    manual_uploaded_screenshot_url: versionedAssetUrl(req, item.manual_uploaded_screenshot_url || '', assetVersion),
     manual_html_url: versionedAssetUrl(req, item.manual_html_url || '', assetVersion),
     manual_raw_html_url: versionedAssetUrl(req, item.manual_raw_html_url || '', assetVersion),
   };

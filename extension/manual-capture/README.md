@@ -25,13 +25,14 @@ The extension uploads:
 
 - a raw DOM snapshot for analysis
 - an optional frozen-styles HTML snapshot for offline review
-- the visible screenshot
+- the visible screenshot from the current browser viewport
 - the current URL and page title
 - optional reviewer notes
 
-The server then re-analyzes that snapshot and updates the item.
+The server then re-renders that stored snapshot, saves its own rendered screenshot, re-analyzes the DOM state, and updates the item.
 
 Notes:
 
 - `Frozen Styles Snapshot` is the recommended mode for manual labeling and visual review.
-- The server analyzes the raw DOM when available, so the detector is not skewed by the freeze attributes added to the rendered snapshot.
+- The server uses the frozen/styled snapshot for screenshot rendering when available, so the saved rendered image is closer to what you saw in the browser.
+- The server still uses the raw DOM for structural candidate detection when available, so the detector is less skewed by the freeze attributes added to the rendered snapshot.
