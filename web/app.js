@@ -255,6 +255,27 @@
     return chips.join(' ');
   }
 
+  function renderManualArtifactLinks(item, emptyText = '') {
+    if (!item) return emptyText;
+
+    const links = [];
+    if (item.screenshot_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.screenshot_url))}" target="_blank" rel="noreferrer">Uploaded Screenshot</a>`);
+    }
+    if (item.manual_html_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_html_url))}" target="_blank" rel="noreferrer">Snapshot HTML</a>`);
+    }
+    if (item.manual_raw_html_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_raw_html_url))}" target="_blank" rel="noreferrer">Raw HTML</a>`);
+    }
+
+    if (!links.length) {
+      return emptyText;
+    }
+
+    return `<div class="action-stack">${links.join('')}</div>`;
+  }
+
   function humanLabelText(label) {
     if (label === 'comment_region') return 'human: comment region';
     if (label === 'not_comment_region') return 'human: not comment';
@@ -660,6 +681,8 @@
       </div>
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
+      <p class="candidate-copy"><strong>Screenshot note:</strong> the images below are candidate-region crops from analysis, not the raw page screenshot uploaded by the extension.</p>
+      ${renderManualArtifactLinks(item, '')}
       <div class="candidate-toolbar">
         <span class="candidate-page-copy">Reviewing candidate ${escapeHtml(startIndex + 1)} of ${escapeHtml(candidates.length)}</span>
         <div class="candidate-pager">
@@ -1083,6 +1106,7 @@
       `<div><strong>Candidate Reviews:</strong> ${escapeHtml(item.candidate_review_summary ? item.candidate_review_summary.total : 0)}</div>`,
       `<div><strong>URL:</strong> ${escapeHtml(item.final_url || item.normalized_url || '')}</div>`,
       `<div><strong>Reason:</strong> ${escapeHtml(item.manual_capture_reason || item.error_message || '')}</div>`,
+      `<div><strong>Artifacts:</strong>${renderManualArtifactLinks(item, '<p class="candidate-copy">No stored manual artifacts yet.</p>')}</div>`,
     ].join('');
     renderCandidateReview(item);
     renderScoringBreakdown(item);
