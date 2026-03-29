@@ -60,6 +60,42 @@ function mapQueueStateToItemStatus(queueState) {
   }
 }
 
+function timestampToMs(value) {
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function hasQueueJobLock(queue, jobId) {
+  const client = await queue.client;
+  const exists = await client.exists(`${queue.toKey(jobId)}:lock`);
+  return exists > 0;
+}
+
+async function reclaimStaleActiveJob(queue, item, activeStaleAfterMs, nowMs) {
+  const staleAfterMs = Math.max(0, Number(activeStaleAfterMs) || 0);
+  if (!staleAfterMs) {
+    return false;
+  }
+
+  const updatedAtMs = timestampToMs(item.updated_at);
+  if (!updatedAtMs || nowMs - updatedAtMs < staleAfterMs) {
+    return false;
+  }
+
+  const hasLock = await hasQueueJobLock(queue, item.id);
+  if (hasLock) {
+    return false;
+  }
+
+  try {
+    await queue.remove(item.id);
+    return true;
+  } catch (error) {
+    console.warn(`queue stale active cleanup failed for item ${item.id}: ${error && error.message ? error.message : error}`);
+    return false;
+  }
+}
+
 async function reconcileQueueState(databaseUrl, queue, options = {}) {
   const items = await listJobItemsByStatuses(
     ['queued', 'running'],
@@ -76,6 +112,8 @@ async function reconcileQueueState(databaseUrl, queue, options = {}) {
 
   const touchedJobIds = new Set();
   let updatedCount = 0;
+  let staleActiveRecoveredCount = 0;
+  const activeStaleAfterMs = Math.max(0, Number(options.activeStaleAfterMs) || 0);
 
   for (const item of items) {
     let nextStatus = 'pending';
@@ -84,7 +122,17 @@ async function reconcileQueueState(databaseUrl, queue, options = {}) {
       const queueJob = await queue.getJob(item.id);
       if (queueJob) {
         const queueState = await queueJob.getState();
-        nextStatus = mapQueueStateToItemStatus(queueState);
+        if (queueState === 'active') {
+          const reclaimed = await reclaimStaleActiveJob(queue, item, activeStaleAfterMs, Date.now());
+          if (reclaimed) {
+            nextStatus = 'pending';
+            staleActiveRecoveredCount += 1;
+          } else {
+            nextStatus = 'running';
+          }
+        } else {
+          nextStatus = mapQueueStateToItemStatus(queueState);
+        }
       }
     } catch (error) {
       console.error(`queue reconciliation failed for item ${item.id}: ${error && error.message ? error.message : error}`);
@@ -107,6 +155,7 @@ async function reconcileQueueState(databaseUrl, queue, options = {}) {
   return {
     scannedCount: items.length,
     updatedCount,
+    staleActiveRecoveredCount,
     jobIds: Array.from(touchedJobIds),
   };
 }
@@ -138,6 +187,7 @@ async function refillIncompleteJobs(databaseUrl, queue, targetInFlightPerJob) {
 async function recoverIncompleteJobs(databaseUrl, queue, options = {}) {
   const reconciled = await reconcileQueueState(databaseUrl, queue, {
     limit: options.reconcileLimit,
+    activeStaleAfterMs: options.activeStaleAfterMs,
   });
   const refilled = await refillIncompleteJobs(
     databaseUrl,

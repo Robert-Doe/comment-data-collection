@@ -130,6 +130,7 @@ Parallelism notes:
 - if Redis or the worker restarts, `QUEUE_RECOVERY_INTERVAL_MS` controls how quickly in-flight rows are reconciled and resumed
 - the runtime now raises undersized queue settings and caps unsafe worker concurrency based on host CPU and memory
 - BullMQ lock timing is now derived from the scan pacing settings so long Playwright scans are less likely to lose their job locks mid-run
+- queue recovery also reclaims orphaned Redis `active` entries when the job lock is gone and the row has gone stale
 
 ## Deployment Status
 

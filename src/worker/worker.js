@@ -30,12 +30,23 @@ async function main() {
     const summary = await recoverIncompleteJobs(config.databaseUrl, queue, {
       reconcileLimit: Math.max(1000, config.initialQueueFill * 250),
       targetInFlightPerJob: config.initialQueueFill,
+      activeStaleAfterMs: Math.max(
+        300000,
+        config.workerLockDurationMs + config.workerStalledIntervalMs,
+      ),
     });
     const reconciledCount = Number(summary && summary.reconciled ? summary.reconciled.updatedCount : 0);
+    const staleRecoveredCount = Number(
+      summary && summary.reconciled ? summary.reconciled.staleActiveRecoveredCount : 0,
+    );
     const refilledCount = Number(summary && summary.refilled ? summary.refilled.claimedCount : 0);
 
-    if (reason !== 'interval' || reconciledCount > 0 || refilledCount > 0) {
-      console.log(`queue recovery (${reason}) reconciled=${reconciledCount} refilled=${refilledCount}`);
+    if (reason !== 'interval' || reconciledCount > 0 || refilledCount > 0 || staleRecoveredCount > 0) {
+      console.log(
+        `queue recovery (${reason}) reconciled=${reconciledCount}` +
+        ` staleRecovered=${staleRecoveredCount}` +
+        ` refilled=${refilledCount}`,
+      );
     }
   }
 

@@ -66,6 +66,7 @@ The current branch fixes both:
 - rows go back to `queued` when BullMQ will retry them and to `failed` on the final attempt
 - the worker listens for `stalled` events and syncs the database
 - BullMQ lock timing is derived from the scan timeout and wait settings so slower scans are less likely to lose their lock
+- if Redis still says a row is `active` but the BullMQ lock is gone and the row has been stale for too long, recovery now reclaims it instead of trusting that orphaned `active` entry forever
 
 ## Why it sometimes looked like one site at a time
 
