@@ -121,6 +121,7 @@ Parallelism notes:
 - the worker can process multiple URLs at once; `WORKER_CONCURRENCY` controls that
 - `QUEUE_REFILL_COUNT` should usually be at least the worker concurrency so the queue stays warm
 - if Redis or the worker restarts, `QUEUE_RECOVERY_INTERVAL_MS` controls how quickly in-flight rows are reconciled and resumed
+- the runtime now raises undersized queue settings and caps unsafe worker concurrency based on host CPU and memory
 
 ## Deployment Status
 

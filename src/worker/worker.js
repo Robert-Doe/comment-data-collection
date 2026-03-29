@@ -183,6 +183,18 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
+  if (config.requestedWorkerConcurrency !== config.workerConcurrency) {
+    console.warn(
+      `requested WORKER_CONCURRENCY=${config.requestedWorkerConcurrency} was reduced to ${config.workerConcurrency}` +
+      ` for a host with ${config.runtimeProfile.cpuCount} CPU(s) and ${config.runtimeProfile.totalMemoryMb} MiB RAM`,
+    );
+  }
+  if (config.requestedInitialQueueFill !== config.initialQueueFill) {
+    console.warn(`INITIAL_QUEUE_FILL was raised to ${config.initialQueueFill} to keep the worker queue warm`);
+  }
+  if (config.requestedQueueRefillCount !== config.queueRefillCount) {
+    console.warn(`QUEUE_REFILL_COUNT was adjusted to ${config.queueRefillCount} to match worker parallelism`);
+  }
   console.log(`ugc-worker listening with concurrency=${config.workerConcurrency}`);
 }
 

@@ -109,6 +109,15 @@ The extension should point to the deployed API URL:
 - `ACTION_SETTLE_MS=1250`
 - `INITIAL_QUEUE_FILL=4`
 - `QUEUE_REFILL_COUNT=2`
+- `QUEUE_RECOVERY_INTERVAL_MS=30000`
+
+For a `2 vCPU / 2 GB RAM` droplet, start with:
+
+- `WORKER_CONCURRENCY=2`
+- `INITIAL_QUEUE_FILL=4`
+- `QUEUE_REFILL_COUNT=2`
+
+Only raise those after watching `docker stats` during a real batch.
 
 ### Fastest way to start on a droplet
 
@@ -143,6 +152,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-digitalocean.ps1 `
 ```
 
 This script SSHes into the droplet, updates the repo, and runs Docker Compose there.
+
+It now refuses to deploy if:
+
+- the remote git worktree is dirty
+- `.env.digitalocean` has duplicate keys
+- queue sizing values are obviously inconsistent
 
 ### Next step
 
