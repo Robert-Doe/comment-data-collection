@@ -111,9 +111,16 @@ Current pacing safeguards:
 - URLs are inserted into the database in batches instead of one row at a time
 - uploaded jobs start with a small initial queue fill instead of enqueueing the full CSV immediately
 - the worker refills the queue gradually as items finish
+- the worker periodically reconciles Postgres job state against BullMQ so interrupted runs can resume
 - result APIs are paginated
 - the worker waits after page load before feature extraction
 - Render defaults are conservative for the free tier (`WORKER_CONCURRENCY=1`, `INITIAL_QUEUE_FILL=2`)
+
+Parallelism notes:
+
+- the worker can process multiple URLs at once; `WORKER_CONCURRENCY` controls that
+- `QUEUE_REFILL_COUNT` should usually be at least the worker concurrency so the queue stays warm
+- if Redis or the worker restarts, `QUEUE_RECOVERY_INTERVAL_MS` controls how quickly in-flight rows are reconciled and resumed
 
 ## Deployment Status
 
@@ -185,6 +192,8 @@ Required environment variables:
 - `DATABASE_URL`
 - `REDIS_URL`
 - `WORKER_CONCURRENCY` optional
+- `QUEUE_REFILL_COUNT` optional
+- `QUEUE_RECOVERY_INTERVAL_MS` optional
 - `SCAN_TIMEOUT_MS` optional
 - `MAX_CANDIDATES` optional
 - `MAX_RESULTS` optional

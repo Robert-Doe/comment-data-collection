@@ -235,6 +235,19 @@ async function listJobs(limit = 25, databaseUrl) {
   return result.rows;
 }
 
+async function listIncompleteJobs(limit = 100, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM jobs
+     WHERE status NOT IN ('completed', 'completed_with_errors', 'failed')
+     ORDER BY created_at ASC
+     LIMIT $1`,
+    [Math.max(1, Number(limit) || 100)],
+  );
+  return result.rows;
+}
+
 async function getJob(jobId, databaseUrl) {
   const db = getPool(databaseUrl);
   const result = await db.query(
@@ -274,6 +287,35 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
       jobId,
       Math.max(1, Number(options.limit) || 100),
       Math.max(0, Number(options.offset) || 0),
+    ],
+  );
+  return result.rows;
+}
+
+async function listJobItemsByStatuses(statuses, optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const normalizedStatuses = Array.isArray(statuses)
+    ? statuses.map((status) => String(status || '').trim()).filter(Boolean)
+    : [];
+  if (!normalizedStatuses.length) {
+    return [];
+  }
+
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     WHERE status = ANY($1::text[])
+     ORDER BY updated_at ASC, row_number ASC
+     LIMIT $2`,
+    [
+      normalizedStatuses,
+      Math.max(1, Number(options.limit) || 1000),
     ],
   );
   return result.rows;
@@ -379,6 +421,26 @@ async function releaseQueuedItems(itemIds, databaseUrl) {
          updated_at = NOW()
      WHERE id = ANY($1::text[])`,
     [itemIds],
+  );
+}
+
+async function setItemStatus(itemId, status, databaseUrl) {
+  const nextStatus = String(status || '').trim();
+  if (!nextStatus) {
+    throw new Error('Item status is required');
+  }
+
+  const db = getPool(databaseUrl);
+  await db.query(
+    `UPDATE job_items
+     SET status = $2,
+         completed_at = CASE
+           WHEN $2 IN ('pending', 'queued', 'running') THEN NULL
+           ELSE completed_at
+         END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [itemId, nextStatus],
   );
 }
 
@@ -598,14 +660,17 @@ module.exports = {
   ensureSchema,
   createJob,
   listJobs,
+  listIncompleteJobs,
   getJob,
   getJobItem,
   getJobItems,
+  listJobItemsByStatuses,
   listManualReviewCandidates,
   setManualReviewTarget,
   getManualReviewTarget,
   claimPendingItems,
   releaseQueuedItems,
+  setItemStatus,
   markItemRunning,
   markItemCompleted,
   markItemFailed,
