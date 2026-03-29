@@ -35,11 +35,11 @@ async function main() {
         config.workerLockRenewTimeMs,
       ),
     });
-    const reconciledCount = Number(summary && summary.reconciled ? summary.reconciled.updatedCount : 0);
+    const reconciledCount = Number(summary && summary.reconciled ? (summary.reconciled.updatedCount ?? 0) : 0);
     const staleRecoveredCount = Number(
-      summary && summary.reconciled ? summary.reconciled.staleActiveRecoveredCount : 0,
+      summary && summary.reconciled ? (summary.reconciled.staleActiveRecoveredCount ?? 0) : 0,
     );
-    const refilledCount = Number(summary && summary.refilled ? summary.refilled.claimedCount : 0);
+    const refilledCount = Number(summary && summary.refilled ? (summary.refilled.claimedCount ?? 0) : 0);
 
     if (reason !== 'interval' || reconciledCount > 0 || refilledCount > 0 || staleRecoveredCount > 0) {
       console.log(

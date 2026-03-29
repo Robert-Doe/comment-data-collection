@@ -106,6 +106,7 @@ async function reconcileQueueState(databaseUrl, queue, options = {}) {
     return {
       scannedCount: 0,
       updatedCount: 0,
+      staleActiveRecoveredCount: 0,
       jobIds: [],
     };
   }
