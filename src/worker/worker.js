@@ -31,8 +31,8 @@ async function main() {
       reconcileLimit: Math.max(1000, config.initialQueueFill * 250),
       targetInFlightPerJob: config.initialQueueFill,
       activeStaleAfterMs: Math.max(
-        300000,
-        config.workerLockDurationMs + config.workerStalledIntervalMs,
+        60000,
+        config.workerLockRenewTimeMs,
       ),
     });
     const reconciledCount = Number(summary && summary.reconciled ? summary.reconciled.updatedCount : 0);
