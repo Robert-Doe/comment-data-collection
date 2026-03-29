@@ -112,6 +112,10 @@ async function main() {
     {
       connection,
       concurrency: config.workerConcurrency,
+      lockDuration: config.workerLockDurationMs,
+      lockRenewTime: config.workerLockRenewTimeMs,
+      stalledInterval: config.workerStalledIntervalMs,
+      maxStalledCount: config.workerMaxStalledCount,
     },
   );
 
@@ -195,7 +199,12 @@ async function main() {
   if (config.requestedQueueRefillCount !== config.queueRefillCount) {
     console.warn(`QUEUE_REFILL_COUNT was adjusted to ${config.queueRefillCount} to match worker parallelism`);
   }
-  console.log(`ugc-worker listening with concurrency=${config.workerConcurrency}`);
+  console.log(
+    `ugc-worker listening with concurrency=${config.workerConcurrency}` +
+    ` lockDuration=${config.workerLockDurationMs}ms` +
+    ` renew=${config.workerLockRenewTimeMs}ms` +
+    ` stalledInterval=${config.workerStalledIntervalMs}ms`,
+  );
 }
 
 if (require.main === module) {

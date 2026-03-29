@@ -67,6 +67,7 @@ const manualCaptureUpload = multer({
 
 function createCorsOptions(config) {
   return {
+    exposedHeaders: ['Content-Disposition', 'Content-Type'],
     origin(origin, callback) {
       if (!origin || config.frontendOrigin === '*' || origin === config.frontendOrigin) {
         callback(null, true);

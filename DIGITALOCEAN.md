@@ -80,6 +80,11 @@ The ready-to-use command-line deployment files on this branch are:
 - `ACTION_SETTLE_MS`
 - `INITIAL_QUEUE_FILL`
 - `QUEUE_REFILL_COUNT`
+- `QUEUE_RECOVERY_INTERVAL_MS`
+- `WORKER_LOCK_DURATION_MS` optional
+- `WORKER_LOCK_RENEW_TIME_MS` optional
+- `WORKER_STALLED_INTERVAL_MS` optional
+- `WORKER_MAX_STALLED_COUNT` optional
 - `INGEST_BATCH_SIZE`
 - `API_RESULTS_PAGE_SIZE`
 - `CAPTURE_SCREENSHOTS`
@@ -110,6 +115,8 @@ The extension should point to the deployed API URL:
 - `INITIAL_QUEUE_FILL=4`
 - `QUEUE_REFILL_COUNT=2`
 - `QUEUE_RECOVERY_INTERVAL_MS=30000`
+
+The worker now derives sane lock timings from those scan values. In most cases you should leave the advanced lock variables unset unless you are deliberately tuning BullMQ behavior.
 
 For a `2 vCPU / 2 GB RAM` droplet, start with:
 
@@ -147,11 +154,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-digitalocean.ps1 `
   -Host YOUR_DROPLET_IP `
   -User root `
   -AppDir /opt/comment-data-collection `
-  -Branch digitalocean-master `
+  -Branch fix/worker-recovery-parallelism `
   -Repository https://github.com/YOUR-USER/comment-data-collection.git
 ```
 
 This script SSHes into the droplet, updates the repo, and runs Docker Compose there.
+
+Recommended flow for consistency:
+
+1. commit the intended local changes on one branch
+2. push that same branch to GitHub
+3. deploy that exact branch to the droplet
+4. verify the droplet repo `git rev-parse HEAD` matches your local `git rev-parse HEAD`
 
 It now refuses to deploy if:
 

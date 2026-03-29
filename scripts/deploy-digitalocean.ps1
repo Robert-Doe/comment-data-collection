@@ -10,7 +10,7 @@ param(
   [string]$EnvFile = ".env.digitalocean"
 )
 
-$remoteScript = @"
+$remoteScript = @'
 set -euo pipefail
 
 get_last_env_value() {
@@ -104,10 +104,14 @@ if [ ! -d "$AppDir/.git" ]; then
 fi
 
 cd "$AppDir"
-ensure_clean_worktree
 git fetch origin
-git checkout "$Branch"
+if git show-ref --verify --quiet "refs/heads/$Branch"; then
+  git checkout "$Branch"
+else
+  git checkout -b "$Branch" "origin/$Branch"
+fi
 git pull --ff-only origin "$Branch"
+ensure_clean_worktree
 
 if [ ! -f "$EnvFile" ]; then
   echo "$EnvFile was not found in $AppDir."
@@ -121,6 +125,6 @@ echo "Deploying branch $Branch at commit $(git rev-parse HEAD)"
 docker compose --env-file "$EnvFile" -f "$ComposeFile" up -d --build
 docker compose --env-file "$EnvFile" -f "$ComposeFile" ps
 curl -fsS http://127.0.0.1:3000/api/health
-"@
+'@
 
 $remoteScript | ssh "$User@$Host" "bash -s"

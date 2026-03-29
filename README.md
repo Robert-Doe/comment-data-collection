@@ -7,6 +7,13 @@ Playwright-based UGC/comment region detection with:
 - a Render-ready background worker
 - a static frontend for CSV uploads and result downloads
 
+## Start Here
+
+If you are new to this repo, read:
+
+- [docs/BEGINNER_GUIDE.md](docs/BEGINNER_GUIDE.md) for a beginner-friendly explanation of the codebase, branches, deployment flow, and why the system is split into API, worker, Redis, and Postgres
+- [docs/paper/000_INDEX.md](docs/paper/000_INDEX.md) for the longer paper-style notes and project record
+
 ## Local CLI
 
 Install dependencies:
@@ -122,6 +129,7 @@ Parallelism notes:
 - `QUEUE_REFILL_COUNT` should usually be at least the worker concurrency so the queue stays warm
 - if Redis or the worker restarts, `QUEUE_RECOVERY_INTERVAL_MS` controls how quickly in-flight rows are reconciled and resumed
 - the runtime now raises undersized queue settings and caps unsafe worker concurrency based on host CPU and memory
+- BullMQ lock timing is now derived from the scan pacing settings so long Playwright scans are less likely to lose their job locks mid-run
 
 ## Deployment Status
 
@@ -195,6 +203,10 @@ Required environment variables:
 - `WORKER_CONCURRENCY` optional
 - `QUEUE_REFILL_COUNT` optional
 - `QUEUE_RECOVERY_INTERVAL_MS` optional
+- `WORKER_LOCK_DURATION_MS` optional
+- `WORKER_LOCK_RENEW_TIME_MS` optional
+- `WORKER_STALLED_INTERVAL_MS` optional
+- `WORKER_MAX_STALLED_COUNT` optional
 - `SCAN_TIMEOUT_MS` optional
 - `MAX_CANDIDATES` optional
 - `MAX_RESULTS` optional
@@ -212,6 +224,8 @@ Set `API_BASE_URL` during the Render static-site build so the UI knows where the
 ## Worker Runtime
 
 The worker uses `Dockerfile.worker`, based on the official Playwright container image, so Chromium and its Linux dependencies are available in Render.
+
+The API uses `Dockerfile.api`, also based on the Playwright image, because manual-capture analysis and stored HTML graph building both depend on the same scanner/runtime.
 
 ## Verification
 

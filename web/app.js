@@ -83,6 +83,35 @@
       .replace(/'/g, '&#39;');
   }
 
+  async function copyText(value) {
+    const text = String(value ?? '');
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.setAttribute('readonly', 'readonly');
+    input.style.position = 'fixed';
+    input.style.top = '-9999px';
+    input.style.left = '-9999px';
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } finally {
+      input.remove();
+    }
+
+    if (!copied) {
+      throw new Error('Copy failed. Use HTTPS or copy the text manually.');
+    }
+  }
+
   function setMessage(text, isError) {
     formMessage.textContent = text || '';
     formMessage.className = isError ? 'message error' : 'message';
@@ -373,6 +402,10 @@
 
   function triggerDownload(filename, content, type) {
     const blob = new Blob([content], { type });
+    triggerBlobDownload(filename, blob);
+  }
+
+  function triggerBlobDownload(filename, blob) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -381,6 +414,74 @@
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function extractFilenameFromDisposition(disposition, fallbackFilename) {
+    const value = String(disposition || '');
+    const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+      try {
+        return decodeURIComponent(utf8Match[1].trim());
+      } catch (_) {
+        return utf8Match[1].trim();
+      }
+    }
+
+    const plainMatch = value.match(/filename="?([^"]+)"?/i);
+    if (plainMatch && plainMatch[1]) {
+      return plainMatch[1].trim();
+    }
+
+    return fallbackFilename;
+  }
+
+  function buildGraphDownloadFilename(item, extension) {
+    const rowSegment = toFileSafeSegment(item && item.row_number, 'item');
+    const urlSource = item && (item.final_url || item.manual_capture_url || item.normalized_url || '');
+    let hostSegment = 'graph';
+    try {
+      hostSegment = toFileSafeSegment(new URL(urlSource).hostname, 'graph');
+    } catch (_) {
+      hostSegment = toFileSafeSegment(urlSource, 'graph');
+    }
+    return `${hostSegment}-${rowSegment}.${extension}`;
+  }
+
+  async function downloadRemoteFile(url, fallbackFilename) {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'omit',
+    });
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const filename = extractFilenameFromDisposition(
+      response.headers.get('Content-Disposition'),
+      fallbackFilename,
+    );
+    triggerBlobDownload(filename, blob);
+  }
+
+  async function handleGraphDownload(event, link, extension, successText) {
+    event.preventDefault();
+    if (!link || link.classList.contains('disabled')) {
+      return;
+    }
+
+    const href = String(link.getAttribute('href') || '').trim();
+    if (!href || href === '#') {
+      return;
+    }
+
+    const item = selectedItem();
+    try {
+      await downloadRemoteFile(href, buildGraphDownloadFilename(item, extension));
+      setCandidateMessage(successText, false);
+    } catch (error) {
+      setCandidateMessage(error && error.message ? error.message : String(error), true);
+    }
   }
 
   function normalizeCandidateExportValue(value) {
@@ -1284,7 +1385,7 @@
       snapshotMode: 'frozen_styles',
     };
 
-    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    await copyText(JSON.stringify(payload, null, 2));
     setManualMessage('Fallback extension config copied to clipboard.', false);
   }
 
@@ -1463,6 +1564,14 @@
 
   downloadCandidateCsvButton.addEventListener('click', () => {
     downloadCandidateCsv(selectedItem());
+  });
+
+  downloadSvgGraphLink.addEventListener('click', (event) => {
+    handleGraphDownload(event, downloadSvgGraphLink, 'svg', 'SVG graph downloaded.');
+  });
+
+  downloadDotGraphLink.addEventListener('click', (event) => {
+    handleGraphDownload(event, downloadDotGraphLink, 'dot', 'DOT graph downloaded.');
   });
 
   setResourceDownloads();

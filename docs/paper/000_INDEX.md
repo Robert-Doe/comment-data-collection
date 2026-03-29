@@ -15,6 +15,7 @@ Current sequence:
 3. `003_methodology_and_system_design.md`
 4. `004_experiments_and_evaluation_plan.md`
 5. `005_latest_research_writing_backlog.md`
+6. `006_complete_process_and_operational_record.md`
 
 Naming rule:
 

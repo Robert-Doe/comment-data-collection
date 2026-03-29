@@ -59,15 +59,37 @@ function getConfig() {
   const requestedQueueRefillCount = Math.max(1, integerFromEnv('QUEUE_REFILL_COUNT', workerConcurrency));
   const queueRefillCount = clamp(requestedQueueRefillCount, workerConcurrency, initialQueueFill);
   const queueRecoveryIntervalMs = clamp(integerFromEnv('QUEUE_RECOVERY_INTERVAL_MS', 30000), 10000, 300000);
+  const scanTimeoutMs = numberFromEnv('SCAN_TIMEOUT_MS', 90000);
+  const postLoadDelayMs = numberFromEnv('POST_LOAD_DELAY_MS', 6000);
+  const preScreenshotDelayMs = numberFromEnv('PRE_SCREENSHOT_DELAY_MS', 1500);
+  const workerLockDurationMs = clamp(
+    integerFromEnv(
+      'WORKER_LOCK_DURATION_MS',
+      Math.max(180000, scanTimeoutMs + postLoadDelayMs + preScreenshotDelayMs + 45000),
+    ),
+    60000,
+    600000,
+  );
+  const workerLockRenewTimeMs = clamp(
+    integerFromEnv('WORKER_LOCK_RENEW_TIME_MS', Math.floor(workerLockDurationMs / 2)),
+    15000,
+    Math.max(15000, workerLockDurationMs - 5000),
+  );
+  const workerStalledIntervalMs = clamp(
+    integerFromEnv('WORKER_STALLED_INTERVAL_MS', Math.max(30000, Math.floor(workerLockDurationMs / 2))),
+    30000,
+    workerLockDurationMs,
+  );
+  const workerMaxStalledCount = clamp(integerFromEnv('WORKER_MAX_STALLED_COUNT', 2), 1, 5);
 
   return {
     port: numberFromEnv('PORT', 3000),
     databaseUrl: process.env.DATABASE_URL || '',
     redisUrl: process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL || '',
     frontendOrigin: process.env.FRONTEND_ORIGIN || '*',
-    scanTimeoutMs: numberFromEnv('SCAN_TIMEOUT_MS', 90000),
-    postLoadDelayMs: numberFromEnv('POST_LOAD_DELAY_MS', 6000),
-    preScreenshotDelayMs: numberFromEnv('PRE_SCREENSHOT_DELAY_MS', 1500),
+    scanTimeoutMs,
+    postLoadDelayMs,
+    preScreenshotDelayMs,
     navigationRetries: numberFromEnv('NAVIGATION_RETRIES', 2),
     loadSettlePasses: numberFromEnv('LOAD_SETTLE_PASSES', 2),
     negativeRetrySettlePasses: numberFromEnv('NEGATIVE_RETRY_SETTLE_PASSES', 2),
@@ -83,6 +105,10 @@ function getConfig() {
     queueRefillCount,
     requestedQueueRefillCount,
     queueRecoveryIntervalMs,
+    workerLockDurationMs,
+    workerLockRenewTimeMs,
+    workerStalledIntervalMs,
+    workerMaxStalledCount,
     apiResultsPageSize: numberFromEnv('API_RESULTS_PAGE_SIZE', 100),
     captureScreenshots: booleanFromEnv('CAPTURE_SCREENSHOTS', true),
     captureHtmlSnapshots: booleanFromEnv('CAPTURE_HTML_SNAPSHOTS', true),
