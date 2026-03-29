@@ -143,4 +143,22 @@ docker compose --env-file "$EnvFile" -f "$ComposeFile" ps
 curl -fsS http://127.0.0.1:3000/api/health
 '@
 
-$remoteScript | ssh "$User@$ServerHost" "bash -s"
+$localTempPath = [System.IO.Path]::GetTempFileName()
+$remoteTempPath = "/tmp/comment-data-collection-deploy.sh"
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+try {
+  [System.IO.File]::WriteAllText($localTempPath, $remoteScript, $utf8NoBom)
+
+  & scp $localTempPath "${User}@${ServerHost}:${remoteTempPath}"
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+
+  & ssh "$User@$ServerHost" "bash $remoteTempPath; status=`$?; rm -f $remoteTempPath; exit `$status"
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+} finally {
+  Remove-Item $localTempPath -ErrorAction SilentlyContinue
+}
