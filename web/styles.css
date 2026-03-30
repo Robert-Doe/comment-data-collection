@@ -534,6 +534,16 @@ button,
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+.feature-doc-sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.feature-doc-sections.empty {
+  color: var(--muted);
+}
+
 .model-card,
 .docs-card,
 .feature-doc-card {

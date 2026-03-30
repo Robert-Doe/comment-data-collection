@@ -105,12 +105,12 @@
       .filter((family) => family.features.length > 0);
 
     if (!sections.length) {
-      featureGlossary.className = 'feature-doc-grid empty';
+      featureGlossary.className = 'feature-doc-sections empty';
       featureGlossary.textContent = 'No features matched the current filter.';
       return;
     }
 
-    featureGlossary.className = 'feature-doc-grid';
+    featureGlossary.className = 'feature-doc-sections';
     featureGlossary.innerHTML = sections.map((family) => `
       <section class="docs-section">
         <div class="panel-header compact-header">
@@ -149,7 +149,7 @@
       renderGlossary();
     })
     .catch((error) => {
-      featureGlossary.className = 'feature-doc-grid empty';
+      featureGlossary.className = 'feature-doc-sections empty';
       featureGlossary.textContent = error.message || String(error);
       variantDocs.className = 'docs-card-grid empty';
       variantDocs.textContent = error.message || String(error);
