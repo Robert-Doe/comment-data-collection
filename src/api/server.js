@@ -23,7 +23,7 @@ const {
   buildJobReportWorkbook,
 } = require('../shared/output');
 const { analyzeManualCapture } = require('../shared/manualCapture');
-const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot } = require('../shared/scanner');
+const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
@@ -570,21 +570,66 @@ function createApp(config = getConfig()) {
       }
 
       const html = await readSnapshotHtmlForItem(item);
-      const markup = await hydrateCandidateMarkupFromSnapshot({
+      const snapshot = {
         html,
         raw_html: html,
         normalized_url: item.final_url || item.manual_capture_url || item.normalized_url || 'about:blank',
         final_url: item.final_url || item.normalized_url || '',
         capture_url: item.manual_capture_url || item.final_url || item.normalized_url || '',
         title: item.manual_capture_title || item.title || '',
-      }, candidate, {
-        timeoutMs: config.scanTimeoutMs,
-      });
+      };
+
+      let markup = null;
+      let markupSource = 'snapshot_backfill';
+      try {
+        markup = await hydrateCandidateMarkupFromSnapshot(snapshot, candidate, {
+          timeoutMs: config.scanTimeoutMs,
+        });
+      } catch (directError) {
+        const fallbackResult = await analyzeHtmlSnapshot(snapshot, {
+          timeoutMs: config.scanTimeoutMs,
+          postLoadDelayMs: 0,
+          captureScreenshots: false,
+          maxCandidates: Math.max(config.maxCandidates, 25),
+          maxResults: Math.max(config.maxResults, 25),
+        });
+        const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
+        const matched = fallbackCandidates.find((entry) => (
+          (candidate.candidate_key && entry.candidate_key && entry.candidate_key === candidate.candidate_key)
+          || (
+            entry.xpath === candidate.xpath
+            && entry.css_path === candidate.css_path
+          )
+          || (
+            entry.node_id
+            && candidate.node_id
+            && entry.node_id === candidate.node_id
+            && entry.structural_signature === candidate.structural_signature
+          )
+        ));
+
+        if (!matched) {
+          throw directError;
+        }
+
+        markup = {
+          candidate_outer_html_excerpt: matched.candidate_outer_html_excerpt || '',
+          candidate_outer_html_length: matched.candidate_outer_html_length || 0,
+          candidate_outer_html_truncated: !!matched.candidate_outer_html_truncated,
+          candidate_inner_html_excerpt: matched.candidate_inner_html_excerpt || '',
+          candidate_inner_html_length: matched.candidate_inner_html_length || 0,
+          candidate_inner_html_truncated: !!matched.candidate_inner_html_truncated,
+          candidate_text_excerpt: matched.candidate_text_excerpt || '',
+          candidate_markup_error: matched.candidate_markup_error || '',
+          candidate_resolved_tag_name: matched.candidate_resolved_tag_name || matched.tag_name || '',
+        };
+        markupSource = 'snapshot_redetect';
+      }
 
       res.json({
         markup: {
           ...markup,
-          candidate_markup_source: 'snapshot_backfill',
+          candidate_markup_source: markupSource,
         },
       });
     } catch (error) {
