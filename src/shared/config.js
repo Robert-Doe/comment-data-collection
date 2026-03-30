@@ -117,6 +117,14 @@ function getConfig() {
     modelDocsRoot: path.resolve(process.cwd(), process.env.MODEL_DOCS_ROOT || path.join('docs', 'modeling')),
     artifactUrlBasePath: normalizeBasePath(process.env.ARTIFACT_URL_BASE_PATH, '/artifacts'),
     publicBaseUrl: String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    emailNotificationsEnabled: booleanFromEnv('EMAIL_NOTIFICATIONS_ENABLED', false),
+    jobNotificationTo: String(process.env.JOB_NOTIFICATION_TO || '').trim(),
+    smtpFrom: String(process.env.SMTP_FROM || '').trim(),
+    smtpHost: String(process.env.SMTP_HOST || '').trim(),
+    smtpPort: integerFromEnv('SMTP_PORT', 587),
+    smtpSecure: booleanFromEnv('SMTP_SECURE', false),
+    smtpUser: String(process.env.SMTP_USER || '').trim(),
+    smtpPass: String(process.env.SMTP_PASS || ''),
   };
 }
 

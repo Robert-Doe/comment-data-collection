@@ -94,6 +94,8 @@ The extension defaults to `Frozen Styles Snapshot` mode:
 - the server now also renders the stored snapshot and saves a fresh screenshot from that rendered state for labeling
 - candidate review now stores both the element crop and the candidate's resolved `outerHTML` / `innerHTML` excerpts so you can inspect the exact suspected DOM region when the crop is misleading
 - live automated scans force a bottom-loading scroll pass before detection and screenshots so lazy-loaded comment sections, including YouTube-style pages, have a better chance of appearing in the DOM
+- the main scanner page now includes a `Job Events` panel that shows recent API, worker, queue, and notification events for the selected job, including retry and failure reasons
+- the worker now relaunches Chromium automatically if the cached browser process dies, instead of poisoning the rest of the batch with `browser.newContext` failures
 
 ## Model Lab
 
@@ -200,6 +202,14 @@ Required environment variables:
 - `PUBLIC_BASE_URL` optional, used when generating absolute artifact URLs
 - `MODEL_ARTIFACT_ROOT` optional, defaults to `output/models`
 - `MODEL_DOCS_ROOT` optional, defaults to `docs/modeling`
+- `EMAIL_NOTIFICATIONS_ENABLED` optional, defaults to `false`
+- `JOB_NOTIFICATION_TO` optional, recipient email address for job start/finish alerts
+- `SMTP_FROM` optional, sender address used for alerts
+- `SMTP_HOST` optional, SMTP hostname
+- `SMTP_PORT` optional, defaults to `587`
+- `SMTP_SECURE` optional, defaults to `false`
+- `SMTP_USER` optional, SMTP username if your provider requires authentication
+- `SMTP_PASS` optional, SMTP password or app password
 
 Endpoints:
 
@@ -207,6 +217,7 @@ Endpoints:
 - `GET /api/jobs`
 - `POST /api/jobs`
 - `GET /api/jobs/:jobId`
+- `GET /api/jobs/:jobId/events`
 - `GET /api/jobs/:jobId/results`
 - `GET /api/jobs/:jobId/items/:itemId`
 - `GET /api/manual-review/lookup?url=...`

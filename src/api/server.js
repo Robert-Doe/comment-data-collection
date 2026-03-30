@@ -39,6 +39,8 @@ const {
   getJob,
   getJobItem,
   getJobItems,
+  appendJobEvent,
+  listJobEvents,
   listItemsForModeling,
   listManualReviewCandidates,
   setManualReviewTarget,
@@ -52,6 +54,7 @@ const {
   getSharedQueue,
 } = require('../shared/queue');
 const { fillQueueForJob } = require('../shared/jobQueue');
+const { sendStartedNotification } = require('../shared/notifications');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -256,6 +259,44 @@ function createApp(config = getConfig()) {
         queue,
       );
 
+      const createdEvent = await appendJobEvent({
+        jobId: job.id,
+        scope: 'job',
+        eventType: 'job_created',
+        eventKey: 'job_created',
+        message: `Job created with ${job.totalUrls} row(s) from ${sourceFilename || 'upload.csv'}.`,
+        details: {
+          total_urls: job.totalUrls,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+        },
+      }, config.databaseUrl);
+      if (createdEvent) {
+        sendStartedNotification(config, {
+          id: job.id,
+          total_urls: job.totalUrls,
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+        }, {
+          sourceFilename,
+          sourceColumn: parsed.urlColumn,
+        }).catch(async (notificationError) => {
+          const message = notificationError && notificationError.message ? notificationError.message : String(notificationError);
+          console.error(`job start notification failed for ${job.id}: ${message}`);
+          await appendJobEvent({
+            jobId: job.id,
+            scope: 'notification',
+            level: 'warn',
+            eventType: 'notification_error',
+            message: `Failed to send job-start email: ${message}`,
+          }, config.databaseUrl).catch(() => {});
+        });
+      }
+
       res.status(202).json({
         jobId: job.id,
         totalUrls: job.totalUrls,
@@ -288,6 +329,26 @@ function createApp(config = getConfig()) {
           total: job.total_urls,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/jobs/:jobId/events', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 80));
+      const itemId = String(req.query.itemId || '').trim();
+      const events = await listJobEvents(req.params.jobId, {
+        limit,
+        itemId: itemId || undefined,
+      }, config.databaseUrl);
+      res.json({ events });
     } catch (error) {
       next(error);
     }
@@ -466,6 +527,23 @@ function createApp(config = getConfig()) {
           await markItemCompleted(req.params.itemId, scanResult, config.databaseUrl);
         }
         await recomputeJob(req.params.jobId, config.databaseUrl);
+        await appendJobEvent({
+          jobId: req.params.jobId,
+          itemId: req.params.itemId,
+          rowNumber: item.row_number,
+          scope: 'manual_capture',
+          level: scanResult.error ? 'warn' : 'info',
+          eventType: scanResult.error ? 'manual_capture_failed' : 'manual_capture_processed',
+          message: scanResult.error
+            ? `Manual snapshot failed for row ${item.row_number}: ${scanResult.error}`
+            : `Manual snapshot processed for row ${item.row_number}.`,
+          details: {
+            analysis_source: scanResult.analysis_source || 'manual_snapshot',
+            manual_capture_url: scanResult.manual_capture_url || item.manual_capture_url || item.normalized_url || '',
+            ugc_detected: !!scanResult.ugc_detected,
+            candidate_count: Array.isArray(scanResult.candidates) ? scanResult.candidates.length : 0,
+          },
+        }, config.databaseUrl).catch(() => {});
 
         const updated = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
         res.json({

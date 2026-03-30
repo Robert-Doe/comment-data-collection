@@ -89,6 +89,14 @@ The ready-to-use command-line deployment files on this branch are:
 - `API_RESULTS_PAGE_SIZE`
 - `CAPTURE_SCREENSHOTS`
 - `CAPTURE_HTML_SNAPSHOTS`
+- `EMAIL_NOTIFICATIONS_ENABLED` optional
+- `JOB_NOTIFICATION_TO` optional
+- `SMTP_FROM` optional
+- `SMTP_HOST` optional
+- `SMTP_PORT` optional
+- `SMTP_SECURE` optional
+- `SMTP_USER` optional
+- `SMTP_PASS` optional
 
 ### Frontend build variable
 
@@ -117,6 +125,17 @@ The extension should point to the deployed API URL:
 - `QUEUE_RECOVERY_INTERVAL_MS=30000`
 
 The worker now derives sane lock timings from those scan values. In most cases you should leave the advanced lock variables unset unless you are deliberately tuning BullMQ behavior.
+
+If you want email alerts when a job starts or finishes, add SMTP settings plus a recipient:
+
+- `EMAIL_NOTIFICATIONS_ENABLED=true`
+- `JOB_NOTIFICATION_TO=you@example.com`
+- `SMTP_FROM=ugc-scanner@example.com`
+- `SMTP_HOST=your-smtp-host`
+- `SMTP_PORT=587`
+- `SMTP_SECURE=false`
+- `SMTP_USER=your-smtp-username`
+- `SMTP_PASS=your-app-password-or-smtp-password`
 
 For a `2 vCPU / 2 GB RAM` droplet, start with:
 

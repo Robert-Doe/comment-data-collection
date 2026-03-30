@@ -6,16 +6,57 @@ const crypto = require('crypto');
 const { chromium } = require('playwright');
 
 let browserPromise;
+let browserInstance = null;
 
 function getFeaturePath() {
   return path.resolve(__dirname, '..', 'commentFeatures.js');
 }
 
+function isClosedBrowserError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  return /Target page, context or browser has been closed|browser\.newContext:|Browser has been closed|Connection closed|disconnected/i.test(message);
+}
+
+async function launchBrowser() {
+  const browser = await chromium.launch({ headless: true });
+  browserInstance = browser;
+  browser.once('disconnected', () => {
+    if (browserInstance === browser) {
+      browserInstance = null;
+      browserPromise = null;
+    }
+  });
+  return browser;
+}
+
 async function getBrowser() {
   if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: true });
+    browserPromise = launchBrowser().catch((error) => {
+      browserPromise = null;
+      browserInstance = null;
+      throw error;
+    });
   }
   return browserPromise;
+}
+
+async function resetBrowser() {
+  const pending = browserPromise;
+  const existing = browserInstance;
+  browserPromise = null;
+  browserInstance = null;
+
+  if (existing) {
+    await existing.close().catch(() => {});
+    return;
+  }
+
+  if (pending) {
+    const browser = await pending.catch(() => null);
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
 }
 
 async function safeWait(page, state, timeoutMs) {
@@ -856,22 +897,36 @@ function deriveManualCaptureState(result, source = 'automated') {
 }
 
 async function createContext() {
-  const browser = await getBrowser();
-  const context = await browser.newContext({
-    ignoreHTTPSErrors: true,
-  });
+  let lastError = null;
 
-  await context.addInitScript({ path: getFeaturePath() });
-  await context.route('**/*', (route) => {
-    const type = route.request().resourceType();
-    if (type === 'image' || type === 'media' || type === 'font') {
-      route.abort().catch(() => {});
-      return;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const browser = await getBrowser();
+      const context = await browser.newContext({
+        ignoreHTTPSErrors: true,
+      });
+
+      await context.addInitScript({ path: getFeaturePath() });
+      await context.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (type === 'image' || type === 'media' || type === 'font') {
+          route.abort().catch(() => {});
+          return;
+        }
+        route.continue().catch(() => {});
+      });
+
+      return context;
+    } catch (error) {
+      lastError = error;
+      if (!isClosedBrowserError(error) || attempt >= 2) {
+        throw error;
+      }
+      await resetBrowser();
     }
-    route.continue().catch(() => {});
-  });
+  }
 
-  return context;
+  throw lastError || new Error('Failed to create a browser context');
 }
 
 async function scanUrl(normalizedUrl, options = {}) {
@@ -1758,10 +1813,7 @@ async function hydrateCandidateMarkupFromSnapshot(snapshot, candidate, options =
 }
 
 async function closeBrowser() {
-  if (!browserPromise) return;
-  const browser = await browserPromise;
-  browserPromise = null;
-  await browser.close().catch(() => {});
+  await resetBrowser();
 }
 
 module.exports = {

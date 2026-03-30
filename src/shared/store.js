@@ -97,8 +97,25 @@ async function ensureSchema(databaseUrl) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS job_events (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES job_items(id) ON DELETE CASCADE,
+      row_number INTEGER,
+      level TEXT NOT NULL DEFAULT 'info',
+      scope TEXT NOT NULL DEFAULT 'job',
+      event_type TEXT NOT NULL DEFAULT '',
+      event_key TEXT,
+      message TEXT NOT NULL,
+      details JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_job_items_job_id ON job_items(job_id);
     CREATE INDEX IF NOT EXISTS idx_job_items_status ON job_items(status);
+    CREATE INDEX IF NOT EXISTS idx_job_events_job_id_created_at ON job_events(job_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_job_events_item_id_created_at ON job_events(item_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_job_events_job_id_event_key ON job_events(job_id, event_key) WHERE event_key IS NOT NULL;
   `);
 
   await db.query(`
@@ -164,6 +181,24 @@ async function ensureSchema(databaseUrl) {
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS candidate_reviews JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS row_number INTEGER;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'info';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'job';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT '';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS event_key TEXT;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS details JSONB;
   `);
 }
 
@@ -296,6 +331,73 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
       Math.max(1, Number(options.limit) || 100),
       Math.max(0, Number(options.offset) || 0),
     ],
+  );
+  return result.rows;
+}
+
+async function appendJobEvent(event, databaseUrl) {
+  const jobId = String(event && event.jobId || '').trim();
+  if (!jobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const message = String(event && event.message || '').trim();
+  if (!message) {
+    throw new Error('Job event message is required');
+  }
+
+  const details = event && event.details && typeof event.details === 'object'
+    ? event.details
+    : null;
+  const result = await db.query(
+    `INSERT INTO job_events (
+       id, job_id, item_id, row_number, level, scope, event_type, event_key, message, details
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
+     )
+     ON CONFLICT (job_id, event_key) WHERE event_key IS NOT NULL DO NOTHING
+     RETURNING *`,
+    [
+      crypto.randomUUID(),
+      jobId,
+      event && event.itemId ? String(event.itemId) : null,
+      Number.isFinite(Number(event && event.rowNumber)) ? Number(event.rowNumber) : null,
+      String(event && event.level || 'info'),
+      String(event && event.scope || 'job'),
+      String(event && event.eventType || ''),
+      event && event.eventKey ? String(event.eventKey) : null,
+      message,
+      details ? JSON.stringify(details) : null,
+    ],
+  );
+  return result.rows[0] || null;
+}
+
+async function listJobEvents(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const db = getPool(databaseUrl);
+  const params = [jobId];
+  const clauses = ['job_id = $1'];
+
+  if (options.itemId) {
+    params.push(String(options.itemId));
+    clauses.push(`item_id = $${params.length}`);
+  }
+
+  params.push(Math.max(1, Number(options.limit) || 100));
+  const result = await db.query(
+    `SELECT *
+     FROM job_events
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY created_at DESC
+     LIMIT $${params.length}`,
+    params,
   );
   return result.rows;
 }
@@ -714,6 +816,8 @@ module.exports = {
   ensureSchema,
   createJob,
   listJobs,
+  appendJobEvent,
+  listJobEvents,
   listIncompleteJobs,
   getJob,
   getJobItem,

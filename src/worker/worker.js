@@ -5,15 +5,18 @@ const { Worker } = require('bullmq');
 const { getConfig } = require('../shared/config');
 const {
   ensureSchema,
+  getJob,
   markItemRunning,
   markItemCompleted,
   markItemFailed,
   recomputeJob,
   setItemStatus,
+  appendJobEvent,
 } = require('../shared/store');
 const { SCAN_QUEUE_NAME, createRedisConnection, getSharedQueue } = require('../shared/queue');
 const { fillQueueForJob, recoverIncompleteJobs } = require('../shared/jobQueue');
 const { scanUrl, deriveManualCaptureState, closeBrowser } = require('../shared/scanner');
+const { sendTerminalNotification } = require('../shared/notifications');
 
 async function main() {
   const config = getConfig();
@@ -24,6 +27,55 @@ async function main() {
 
   async function refillJob(jobId) {
     await fillQueueForJob(jobId, config.queueRefillCount, config.databaseUrl, queue);
+  }
+
+  async function noteEvent(event) {
+    return appendJobEvent(event, config.databaseUrl).catch((error) => {
+      console.error(`failed to append job event for ${event && event.jobId ? event.jobId : 'unknown'}: ${error && error.message ? error.message : error}`);
+      return null;
+    });
+  }
+
+  async function noteTerminalJobState(jobId) {
+    const job = await getJob(jobId, config.databaseUrl).catch((error) => {
+      console.error(`failed to load job ${jobId} for terminal event: ${error && error.message ? error.message : error}`);
+      return null;
+    });
+    if (!job || !['completed', 'completed_with_errors', 'failed'].includes(job.status)) {
+      return;
+    }
+
+    const event = await noteEvent({
+      jobId,
+      scope: 'job',
+      level: job.status === 'completed' ? 'info' : 'warn',
+      eventType: 'job_terminal',
+      eventKey: `job_terminal:${job.status}`,
+      message: `Job ${job.status}. Completed ${job.completed_count}/${job.total_urls}; failed ${job.failed_count}.`,
+      details: {
+        status: job.status,
+        total_urls: job.total_urls,
+        completed_count: job.completed_count,
+        failed_count: job.failed_count,
+        detected_count: job.detected_count,
+        finished_at: job.finished_at || '',
+      },
+    });
+    if (!event) {
+      return;
+    }
+
+    sendTerminalNotification(config, job).catch(async (notificationError) => {
+      const message = notificationError && notificationError.message ? notificationError.message : String(notificationError);
+      console.error(`job terminal notification failed for ${jobId}: ${message}`);
+      await noteEvent({
+        jobId,
+        scope: 'notification',
+        level: 'warn',
+        eventType: 'notification_error',
+        message: `Failed to send job-finished email: ${message}`,
+      });
+    });
   }
 
   async function runQueueRecovery(reason) {
@@ -92,6 +144,21 @@ async function main() {
 
         if (scanResult.error) {
           await markItemFailed(itemId, scanResult, config.databaseUrl);
+          await noteEvent({
+            jobId,
+            itemId,
+            rowNumber,
+            scope: 'item',
+            level: 'warn',
+            eventType: 'item_failed',
+            eventKey: `item_terminal:${itemId}`,
+            message: `Row ${rowNumber} failed: ${scanResult.error || scanResult.access_reason || 'Scan failed'}`,
+            details: {
+              normalized_url: normalizedUrl,
+              manual_capture_required: !!scanResult.manual_capture_required,
+              manual_capture_reason: scanResult.manual_capture_reason || '',
+            },
+          });
         } else {
           await markItemCompleted(itemId, scanResult, config.databaseUrl);
         }
@@ -104,9 +171,39 @@ async function main() {
           await setItemStatus(itemId, 'queued', config.databaseUrl).catch((statusError) => {
             console.error(`failed to reset item ${itemId} for retry: ${statusError && statusError.message ? statusError.message : statusError}`);
           });
+          await noteEvent({
+            jobId,
+            itemId,
+            rowNumber,
+            scope: 'item',
+            level: 'warn',
+            eventType: 'item_retry_scheduled',
+            eventKey: `item_retry:${itemId}:${nextAttemptNumber}`,
+            message: `Row ${rowNumber} failed on attempt ${nextAttemptNumber}/${maxAttempts}; retrying.`,
+            details: {
+              normalized_url: normalizedUrl,
+              error_message: error && error.message ? error.message : String(error),
+              next_attempt: nextAttemptNumber + 1,
+              max_attempts: maxAttempts,
+            },
+          });
         } else {
           await markItemFailed(itemId, error, config.databaseUrl).catch((markError) => {
             console.error(`failed to persist terminal error for item ${itemId}: ${markError && markError.message ? markError.message : markError}`);
+          });
+          await noteEvent({
+            jobId,
+            itemId,
+            rowNumber,
+            scope: 'item',
+            level: 'error',
+            eventType: 'item_failed',
+            eventKey: `item_terminal:${itemId}`,
+            message: `Row ${rowNumber} failed: ${error && error.message ? error.message : error}`,
+            details: {
+              normalized_url: normalizedUrl,
+              max_attempts: maxAttempts,
+            },
           });
         }
 
@@ -114,6 +211,9 @@ async function main() {
       } finally {
         await recomputeJob(jobId, config.databaseUrl).catch((recomputeError) => {
           console.error(`failed to recompute job ${jobId}: ${recomputeError && recomputeError.message ? recomputeError.message : recomputeError}`);
+        });
+        await noteTerminalJobState(jobId).catch((eventError) => {
+          console.error(`failed to note terminal job state for ${jobId}: ${eventError && eventError.message ? eventError.message : eventError}`);
         });
         await refillJob(jobId).catch((refillError) => {
           console.error(`failed to refill job ${jobId}: ${refillError && refillError.message ? refillError.message : refillError}`);
@@ -150,8 +250,25 @@ async function main() {
     await markItemFailed(job.data.itemId, error, config.databaseUrl).catch((markError) => {
       console.error(`failed to persist fallback final error for item ${job.data.itemId}: ${markError && markError.message ? markError.message : markError}`);
     });
+    await noteEvent({
+      jobId: job.data.jobId,
+      itemId: job.data.itemId,
+      rowNumber: job.data.rowNumber,
+      scope: 'item',
+      level: 'error',
+      eventType: 'item_failed',
+      eventKey: `item_terminal:${job.data.itemId}`,
+      message: `Row ${job.data.rowNumber} failed: ${error && error.message ? error.message : error}`,
+      details: {
+        normalized_url: job.data.normalizedUrl || '',
+        max_attempts: maxAttempts,
+      },
+    });
     await recomputeJob(job.data.jobId, config.databaseUrl).catch((recomputeError) => {
       console.error(`failed to recompute fallback final job state for ${job.data.jobId}: ${recomputeError && recomputeError.message ? recomputeError.message : recomputeError}`);
+    });
+    await noteTerminalJobState(job.data.jobId).catch((eventError) => {
+      console.error(`failed to note fallback terminal job state for ${job.data.jobId}: ${eventError && eventError.message ? eventError.message : eventError}`);
     });
   });
 
@@ -165,6 +282,19 @@ async function main() {
     if (!stalledJob || !stalledJob.data || !stalledJob.data.jobId) {
       return;
     }
+
+    await noteEvent({
+      jobId: stalledJob.data.jobId,
+      itemId,
+      rowNumber: stalledJob.data.rowNumber,
+      scope: 'queue',
+      level: 'warn',
+      eventType: 'item_stalled',
+      message: `Row ${stalledJob.data.rowNumber} stalled and was returned to the queue.`,
+      details: {
+        normalized_url: stalledJob.data.normalizedUrl || '',
+      },
+    });
 
     await recomputeJob(stalledJob.data.jobId, config.databaseUrl).catch((recomputeError) => {
       console.error(`failed to recompute stalled job ${stalledJob.data.jobId}: ${recomputeError && recomputeError.message ? recomputeError.message : recomputeError}`);

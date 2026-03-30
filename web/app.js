@@ -9,6 +9,7 @@
   const screenshotDelayInput = document.getElementById('screenshot-delay-ms');
   const formMessage = document.getElementById('form-message');
   const jobSummary = document.getElementById('job-summary');
+  const jobEvents = document.getElementById('job-events');
   const jobItems = document.getElementById('job-items');
   const recentJobs = document.getElementById('recent-jobs');
   const refreshJobsButton = document.getElementById('refresh-jobs');
@@ -268,6 +269,58 @@
       `<div><strong>Scan Delay:</strong> ${escapeHtml(job.scan_delay_ms ?? '')} ms</div>`,
       `<div><strong>Screenshot Delay:</strong> ${escapeHtml(job.screenshot_delay_ms ?? '')} ms</div>`,
     ].join('');
+  }
+
+  function formatEventTimestamp(value) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+    return parsed.toLocaleString();
+  }
+
+  function renderJobEvents(events, options = {}) {
+    const message = options.message || (currentJobId ? 'No events recorded yet for this job.' : 'Select a job to view recent events.');
+    if (!events || !events.length) {
+      jobEvents.className = options.isError ? 'event-list empty error' : 'event-list empty';
+      jobEvents.textContent = message;
+      return;
+    }
+
+    const rows = events.map((event) => {
+      const level = String(event.level || 'info').toLowerCase();
+      const scope = String(event.scope || 'job').replace(/_/g, ' ');
+      const detailBits = [];
+      if (event.row_number) {
+        detailBits.push(`row ${event.row_number}`);
+      }
+      if (event.details && event.details.normalized_url) {
+        detailBits.push(String(event.details.normalized_url));
+      }
+      if (event.details && event.details.manual_capture_url) {
+        detailBits.push(String(event.details.manual_capture_url));
+      }
+      if (event.details && Number.isFinite(Number(event.details.max_attempts))) {
+        detailBits.push(`max attempts ${event.details.max_attempts}`);
+      }
+      return `
+        <article class="event-item level-${escapeHtml(level)}">
+          <div class="event-item-top">
+            <div class="event-badges">
+              <span class="event-level ${escapeHtml(level)}">${escapeHtml(level)}</span>
+              <span class="event-scope">${escapeHtml(scope)}</span>
+              ${event.event_type ? `<span class="event-type mono">${escapeHtml(event.event_type)}</span>` : ''}
+            </div>
+            <time class="event-time" datetime="${escapeHtml(event.created_at || '')}">${escapeHtml(formatEventTimestamp(event.created_at))}</time>
+          </div>
+          <div class="event-message">${escapeHtml(event.message || '')}</div>
+          ${detailBits.length ? `<div class="event-meta">${escapeHtml(detailBits.join(' | '))}</div>` : ''}
+        </article>
+      `;
+    }).join('');
+
+    jobEvents.className = 'event-list';
+    jobEvents.innerHTML = rows;
   }
 
   function reviewChip(item) {
@@ -1446,6 +1499,26 @@
     return response.json();
   }
 
+  async function fetchJobEvents(jobId) {
+    if (!jobId) {
+      renderJobEvents([], { message: 'Select a job to view recent events.' });
+      return [];
+    }
+
+    try {
+      const body = await fetchJson(`/api/jobs/${jobId}/events?limit=80`);
+      const events = Array.isArray(body && body.events) ? body.events : [];
+      renderJobEvents(events);
+      return events;
+    } catch (error) {
+      renderJobEvents([], {
+        message: error && error.message ? error.message : 'Failed to load job events.',
+        isError: true,
+      });
+      return [];
+    }
+  }
+
   async function refreshSelectedItem() {
     if (!currentJobId || !selectedManualItemId) return null;
     const data = await fetchJson(`/api/jobs/${currentJobId}/items/${selectedManualItemId}`);
@@ -1483,7 +1556,10 @@
 
   async function refreshJob(jobId) {
     if (!jobId) return;
-    const { job, items, pagination } = await fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`);
+    const [{ job, items, pagination }] = await Promise.all([
+      fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
+      fetchJobEvents(jobId),
+    ]);
     if (currentJobId && currentJobId !== jobId && selectedManualItemId) {
       selectedManualItemId = '';
       selectManualItem(null);
@@ -1803,6 +1879,7 @@
   renderWorkspaceSelection(null);
   renderCandidateReview(null);
   renderScoringBreakdown(null);
+  renderJobEvents([], { message: 'Select a job to view recent events.' });
   refreshJobs().catch((error) => console.error(error));
   if (currentJobId) {
     refreshJob(currentJobId).catch((error) => console.error(error));
