@@ -60,8 +60,8 @@ function getConfig() {
   const queueRefillCount = clamp(requestedQueueRefillCount, workerConcurrency, initialQueueFill);
   const queueRecoveryIntervalMs = clamp(integerFromEnv('QUEUE_RECOVERY_INTERVAL_MS', 30000), 10000, 300000);
   const scanTimeoutMs = numberFromEnv('SCAN_TIMEOUT_MS', 90000);
-  const postLoadDelayMs = numberFromEnv('POST_LOAD_DELAY_MS', 6000);
-  const preScreenshotDelayMs = numberFromEnv('PRE_SCREENSHOT_DELAY_MS', 1500);
+  const postLoadDelayMs = numberFromEnv('POST_LOAD_DELAY_MS', 750);
+  const preScreenshotDelayMs = numberFromEnv('PRE_SCREENSHOT_DELAY_MS', 250);
   const workerLockDurationMs = clamp(
     integerFromEnv(
       'WORKER_LOCK_DURATION_MS',
@@ -91,9 +91,9 @@ function getConfig() {
     postLoadDelayMs,
     preScreenshotDelayMs,
     navigationRetries: numberFromEnv('NAVIGATION_RETRIES', 2),
-    loadSettlePasses: numberFromEnv('LOAD_SETTLE_PASSES', 2),
-    negativeRetrySettlePasses: numberFromEnv('NEGATIVE_RETRY_SETTLE_PASSES', 2),
-    actionSettleMs: numberFromEnv('ACTION_SETTLE_MS', 1250),
+    loadSettlePasses: numberFromEnv('LOAD_SETTLE_PASSES', 1),
+    negativeRetrySettlePasses: numberFromEnv('NEGATIVE_RETRY_SETTLE_PASSES', 1),
+    actionSettleMs: numberFromEnv('ACTION_SETTLE_MS', 350),
     maxCandidates: numberFromEnv('MAX_CANDIDATES', 25),
     maxResults: numberFromEnv('MAX_RESULTS', 5),
     workerConcurrency,

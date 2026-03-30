@@ -763,6 +763,40 @@ button,
   min-width: 180px;
 }
 
+.candidate-markup-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.candidate-markup-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.candidate-markup-details summary::after {
+  float: none;
+  margin-left: auto;
+}
+
+.candidate-markup-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.candidate-markup {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  max-height: 320px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .score-candidate-table caption {
   caption-side: top;
   text-align: left;

@@ -150,19 +150,24 @@ async function expandPotentialUgc(page) {
 
 async function autoScroll(page, options = {}) {
   const steps = Math.max(1, Number(options.steps || 5));
-  const stepDelayMs = Math.max(0, Number(options.stepDelayMs || 500));
-  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(stepDelayMs, 750)));
+  const stepDelayMs = Math.max(0, Number(options.stepDelayMs ?? 250));
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(stepDelayMs, 300)));
   const stabilizationPasses = Math.max(1, Number(options.stabilizationPasses || 2));
   const returnToTop = options.returnToTop === true;
-  await page.evaluate(async ({ steps, stepDelayMs, bottomPauseMs, stabilizationPasses, returnToTop }) => {
+  return page.evaluate(async ({ steps, stepDelayMs, bottomPauseMs, stabilizationPasses, returnToTop }) => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const getScrollHeight = () => Math.max(
       document.body ? document.body.scrollHeight : 0,
       document.documentElement ? document.documentElement.scrollHeight : 0,
     );
-    let observedHeight = 0;
+    const startingHeight = getScrollHeight();
+    let observedHeight = startingHeight;
+    let heightChanged = false;
+    let passesCompleted = 0;
+    let previousSettledHeight = startingHeight;
 
     for (let pass = 0; pass < stabilizationPasses; pass += 1) {
+      passesCompleted += 1;
       let passHeight = getScrollHeight();
       observedHeight = Math.max(observedHeight, passHeight);
 
@@ -175,7 +180,16 @@ async function autoScroll(page, options = {}) {
 
       window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
       await sleep(bottomPauseMs);
-      observedHeight = Math.max(observedHeight, getScrollHeight());
+      const settledHeight = getScrollHeight();
+      if (settledHeight > previousSettledHeight + 4) {
+        heightChanged = true;
+      }
+      observedHeight = Math.max(observedHeight, settledHeight);
+      if (Math.abs(settledHeight - previousSettledHeight) <= 4) {
+        previousSettledHeight = settledHeight;
+        break;
+      }
+      previousSettledHeight = settledHeight;
     }
 
     window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
@@ -183,13 +197,26 @@ async function autoScroll(page, options = {}) {
     if (returnToTop) {
       window.scrollTo(0, 0);
     }
+    return {
+      startingHeight,
+      finalHeight: getScrollHeight(),
+      observedHeight,
+      heightChanged,
+      passesCompleted,
+    };
   }, {
     steps,
     stepDelayMs,
     bottomPauseMs,
     stabilizationPasses,
     returnToTop,
-  }).catch(() => {});
+  }).catch(() => ({
+    startingHeight: 0,
+    finalHeight: 0,
+    observedHeight: 0,
+    heightChanged: false,
+    passesCompleted: 0,
+  }));
 }
 
 async function waitForDocumentComplete(page, timeoutMs) {
@@ -199,11 +226,11 @@ async function waitForDocumentComplete(page, timeoutMs) {
 async function settlePageForDetection(page, options = {}) {
   const loadWaitMs = Math.max(1000, Number(options.loadWaitMs || 15000));
   const networkIdleWaitMs = Math.max(1000, Number(options.networkIdleWaitMs || 8000));
-  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
+  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 350));
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 0));
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
   const scrollBackToTop = options.scrollBackToTop === true;
-  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(actionSettleMs, 1500)));
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(actionSettleMs, 350)));
 
   await waitForDocumentComplete(page, loadWaitMs);
   await safeWait(page, 'load', loadWaitMs);
@@ -218,9 +245,9 @@ async function settlePageForDetection(page, options = {}) {
     if (actionSettleMs > 0) {
       await page.waitForTimeout(actionSettleMs);
     }
-    await autoScroll(page, {
+    const scrollSummary = await autoScroll(page, {
       steps: 6,
-      stepDelayMs: 600,
+      stepDelayMs: 220,
       bottomPauseMs,
       stabilizationPasses: 2,
       returnToTop: scrollBackToTop,
@@ -234,6 +261,9 @@ async function settlePageForDetection(page, options = {}) {
     await expandPotentialUgc(page);
     if (actionSettleMs > 0) {
       await page.waitForTimeout(actionSettleMs);
+    }
+    if (!scrollSummary.heightChanged) {
+      break;
     }
   }
 
@@ -373,31 +403,74 @@ async function resolveCandidateElementHandle(frame, candidate) {
   return null;
 }
 
-async function captureCandidateScreenshot(page, frame, candidate, options = {}) {
-  const empty = {
+async function extractCandidateMarkup(handle, options = {}) {
+  const maxHtmlChars = Math.max(500, Number(options.maxCandidateHtmlChars || 8000));
+  return handle.evaluate((node, input) => {
+    const outerHtml = String(node && node.outerHTML ? node.outerHTML : '');
+    const innerHtml = String(node && node.innerHTML ? node.innerHTML : '');
+    const text = String((node && (node.innerText || node.textContent)) || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      candidate_outer_html_excerpt: outerHtml.slice(0, input.maxHtmlChars),
+      candidate_outer_html_length: outerHtml.length,
+      candidate_outer_html_truncated: outerHtml.length > input.maxHtmlChars,
+      candidate_inner_html_excerpt: innerHtml.slice(0, input.maxHtmlChars),
+      candidate_inner_html_length: innerHtml.length,
+      candidate_inner_html_truncated: innerHtml.length > input.maxHtmlChars,
+      candidate_text_excerpt: text.slice(0, 1200),
+      candidate_markup_error: '',
+      candidate_resolved_tag_name: node && node.tagName ? String(node.tagName).toLowerCase() : '',
+    };
+  }, { maxHtmlChars });
+}
+
+async function captureCandidateArtifacts(page, frame, candidate, options = {}) {
+  const emptyScreenshot = {
     candidate_screenshot_path: '',
     candidate_screenshot_url: '',
     candidate_screenshot_error: '',
   };
 
-  if (!options.captureScreenshots || !options.artifactRoot || !page || !frame || !candidate) {
-    return empty;
+  if (!page || !frame || !candidate) {
+    return {
+      ...emptyScreenshot,
+      candidate_markup_error: 'Candidate frame or page was unavailable.',
+    };
   }
 
+  let handle = null;
+  let markup = {};
   try {
-    const handle = await resolveCandidateElementHandle(frame, candidate);
+    handle = await resolveCandidateElementHandle(frame, candidate);
     if (!handle) {
       return {
-        ...empty,
+        ...emptyScreenshot,
         candidate_screenshot_error: 'Candidate element could not be resolved from xpath/css path',
+        candidate_markup_error: 'Candidate element could not be resolved from xpath/css path',
+      };
+    }
+
+    try {
+      markup = await extractCandidateMarkup(handle, options);
+    } catch (error) {
+      markup = {
+        candidate_markup_error: error && error.message ? error.message : String(error),
+      };
+    }
+
+    if (!options.captureScreenshots || !options.artifactRoot) {
+      return {
+        ...emptyScreenshot,
+        ...markup,
       };
     }
 
     const box = await handle.boundingBox();
-    await handle.dispose().catch(() => {});
     if (!box || box.width <= 1 || box.height <= 1) {
       return {
-        ...empty,
+        ...emptyScreenshot,
+        ...markup,
         candidate_screenshot_error: 'Candidate element has no visible bounding box',
       };
     }
@@ -415,27 +488,28 @@ async function captureCandidateScreenshot(page, frame, candidate, options = {}) 
     const relativePath = path.join(...pathParts);
     const absolutePath = path.join(options.artifactRoot, relativePath);
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-    await page.screenshot({
+    await handle.screenshot({
       path: absolutePath,
-      clip: {
-        x: Math.max(0, box.x),
-        y: Math.max(0, box.y),
-        width: Math.max(1, box.width),
-        height: Math.max(1, box.height),
-      },
       animations: 'disabled',
     });
 
     return {
+      ...emptyScreenshot,
+      ...markup,
       candidate_screenshot_path: absolutePath,
       candidate_screenshot_url: buildArtifactUrl(relativePath, options),
       candidate_screenshot_error: '',
     };
   } catch (error) {
     return {
-      ...empty,
+      ...emptyScreenshot,
+      ...markup,
       candidate_screenshot_error: error && error.message ? error.message : String(error),
     };
+  } finally {
+    if (handle) {
+      await handle.dispose().catch(() => {});
+    }
   }
 }
 
@@ -451,14 +525,21 @@ async function enrichCandidatesWithArtifacts(page, candidates, frameLookup, opti
     };
     const frame = frameLookup.get(candidate.frame_key || '');
 
-    if (index < reviewArtifactLimit && frame) {
-      Object.assign(candidate, await captureCandidateScreenshot(page, frame, candidate, options));
+    if (frame) {
+      const artifactOptions = index < reviewArtifactLimit
+        ? options
+        : { ...options, captureScreenshots: false };
+      Object.assign(candidate, await captureCandidateArtifacts(page, frame, candidate, artifactOptions));
+      if (index >= reviewArtifactLimit) {
+        candidate.candidate_screenshot_error = 'Candidate screenshot was skipped because only the top review candidates get screenshot artifacts.';
+      }
     } else {
       candidate.candidate_screenshot_path = '';
       candidate.candidate_screenshot_url = '';
       candidate.candidate_screenshot_error = index >= reviewArtifactLimit
         ? 'Candidate screenshot was skipped because only the top review candidates get screenshot artifacts.'
         : 'Candidate screenshot could not be captured because its frame was unavailable.';
+      candidate.candidate_markup_error = 'Candidate markup could not be captured because its frame was unavailable.';
     }
 
     enriched.push(candidate);

@@ -1662,6 +1662,21 @@ function collectSampleText(root) {
   };
 }
 
+function collectCandidateMarkup(root, maxChars = 8000) {
+  const outerHtml = String(root && root.outerHTML ? root.outerHTML : '');
+  const innerHtml = String(root && root.innerHTML ? root.innerHTML : '');
+  const text = String(textOf(root) || '').replace(/\s+/g, ' ').trim();
+  return {
+    candidate_outer_html_excerpt: outerHtml.slice(0, maxChars),
+    candidate_outer_html_length: outerHtml.length,
+    candidate_outer_html_truncated: outerHtml.length > maxChars,
+    candidate_inner_html_excerpt: innerHtml.slice(0, maxChars),
+    candidate_inner_html_length: innerHtml.length,
+    candidate_inner_html_truncated: innerHtml.length > maxChars,
+    candidate_text_excerpt: text.slice(0, 1200),
+  };
+}
+
 function inferUgcType(features) {
   if (features.star_rating_present && features.has_text_content && !features.add_to_cart_present) {
     return 'product_review';
@@ -2019,8 +2034,9 @@ function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {
   const results = roots.map((root) => {
     const features = extractAllFeatures(root, rawHTML, responseHeaders);
     const summary = collectSampleText(root);
+    const markup = collectCandidateMarkup(root);
     const scoring = scoreFeatures(features);
-    return Object.assign({}, features, summary, scoring);
+    return Object.assign({}, features, summary, markup, scoring);
   });
 
   results.sort((left, right) => (

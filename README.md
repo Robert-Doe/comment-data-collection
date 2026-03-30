@@ -92,6 +92,7 @@ The extension defaults to `Frozen Styles Snapshot` mode:
 - `snapshot.raw.html` keeps the original DOM for analysis
 - the uploaded screenshot is still only the visible browser viewport
 - the server now also renders the stored snapshot and saves a fresh screenshot from that rendered state for labeling
+- candidate review now stores both the element crop and the candidate's resolved `outerHTML` / `innerHTML` excerpts so you can inspect the exact suspected DOM region when the crop is misleading
 - live automated scans force a bottom-loading scroll pass before detection and screenshots so lazy-loaded comment sections, including YouTube-style pages, have a better chance of appearing in the DOM
 
 ## Model Lab

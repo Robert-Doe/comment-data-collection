@@ -357,6 +357,50 @@
     `;
   }
 
+  function renderCandidateMarkupSection(label, value, meta) {
+    if (!value) return '';
+    return `
+      <details class="score-details candidate-markup-details">
+        <summary>
+          <span>${escapeHtml(label)}</span>
+          ${meta ? `<span class="candidate-markup-meta">${escapeHtml(meta)}</span>` : ''}
+        </summary>
+        <div class="score-details-body">
+          <pre class="candidate-markup mono">${escapeHtml(value)}</pre>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderCandidateMarkupDetails(candidate) {
+    if (!candidate) return '';
+    const markupSections = [];
+    const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
+    const outerMeta = candidate.candidate_outer_html_length
+      ? `${resolvedTag ? `${resolvedTag} · ` : ''}${candidate.candidate_outer_html_length} chars${candidate.candidate_outer_html_truncated ? ' · truncated' : ''}`
+      : '';
+    const innerMeta = candidate.candidate_inner_html_length
+      ? `${candidate.candidate_inner_html_length} chars${candidate.candidate_inner_html_truncated ? ' · truncated' : ''}`
+      : '';
+
+    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta));
+    markupSections.push(renderCandidateMarkupSection('Inner HTML', candidate.candidate_inner_html_excerpt || '', innerMeta));
+
+    const content = markupSections.filter(Boolean).join('');
+    if (!content && !candidate.candidate_markup_error) {
+      return '';
+    }
+
+    return `
+      <div class="candidate-markup-stack">
+        ${content}
+        ${candidate.candidate_markup_error
+          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+          : ''}
+      </div>
+    `;
+  }
+
   function humanLabelText(label) {
     if (label === 'comment_region') return 'human: comment region';
     if (label === 'not_comment_region') return 'human: not comment';
@@ -634,6 +678,15 @@
       'matched_signals',
       'penalty_signals',
       'candidate_screenshot_url',
+      'candidate_outer_html_excerpt',
+      'candidate_outer_html_length',
+      'candidate_outer_html_truncated',
+      'candidate_inner_html_excerpt',
+      'candidate_inner_html_length',
+      'candidate_inner_html_truncated',
+      'candidate_text_excerpt',
+      'candidate_markup_error',
+      'candidate_resolved_tag_name',
       'human_label',
       'human_notes',
       'human_reviewed_at',
@@ -732,6 +785,7 @@
             </div>
             <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available for this candidate.')}</p>
             <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+            ${renderCandidateMarkupDetails(candidate)}
             ${matchedSignals ? `<div><p class="candidate-copy"><strong>Positive Signals</strong></p>${matchedSignals}</div>` : ''}
             ${penaltySignals ? `<div><p class="candidate-copy"><strong>Penalty Signals</strong></p>${penaltySignals}</div>` : ''}
             <label class="field">
@@ -762,7 +816,7 @@
       </div>
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
-      <p class="candidate-copy"><strong>Screenshot note:</strong> the images below are candidate-region crops from analysis, not the raw page screenshot uploaded by the extension. When a crop fails, the UI falls back to the stored text preview so you can still label the candidate.</p>
+      <p class="candidate-copy"><strong>Artifact note:</strong> the image below is an element-level crop resolved from the candidate's stored xpath/CSS path, not the raw page screenshot uploaded by the extension. The HTML panels show the candidate's stored markup so you can inspect the suspected DOM region even when the crop is misleading.</p>
       ${renderManualArtifactLinks(item, '')}
       <div class="candidate-toolbar">
         <span class="candidate-page-copy">Reviewing candidate ${escapeHtml(startIndex + 1)} of ${escapeHtml(candidates.length)}</span>
@@ -805,6 +859,15 @@
       'human_reviewed_at',
       'candidate_screenshot_url',
       'candidate_screenshot_error',
+      'candidate_outer_html_excerpt',
+      'candidate_outer_html_length',
+      'candidate_outer_html_truncated',
+      'candidate_inner_html_excerpt',
+      'candidate_inner_html_length',
+      'candidate_inner_html_truncated',
+      'candidate_text_excerpt',
+      'candidate_markup_error',
+      'candidate_resolved_tag_name',
       'base_detected',
       'acceptance_gate_passed',
       'keyword_evidence_present',
@@ -1042,6 +1105,7 @@
               <h4>Selected Candidate</h4>
               <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available.')}</p>
               <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+              ${renderCandidateMarkupDetails(candidate)}
               ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
             </div>
           </article>
