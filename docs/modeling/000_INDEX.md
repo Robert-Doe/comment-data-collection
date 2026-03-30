@@ -9,3 +9,4 @@ Read in this order:
 3. [003_keyword_ablated_logistic_model.md](./003_keyword_ablated_logistic_model.md)
 4. [004_model_lab_and_site_group_workflow.md](./004_model_lab_and_site_group_workflow.md)
 5. [005_beginner_modeling_codebase_guide.md](./005_beginner_modeling_codebase_guide.md)
+6. [006_beginner_model_lab_training_walkthrough.md](./006_beginner_model_lab_training_walkthrough.md)
