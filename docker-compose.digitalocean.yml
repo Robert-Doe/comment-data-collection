@@ -40,8 +40,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-3000}:3000"
+    expose:
+      - "3000"
     volumes:
       - artifact-data:/data/comment-data/artifacts
 
@@ -69,10 +69,28 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env.digitalocean
+    depends_on:
+      - api
+      - ui
     ports:
-      - "${UI_PORT:-8080}:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   postgres-data:
   redis-data:
   artifact-data:
+  caddy-data:
+  caddy-config:

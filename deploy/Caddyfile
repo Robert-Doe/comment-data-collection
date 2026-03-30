@@ -1,0 +1,12 @@
+{$DOMAIN_NAME}, www.{$DOMAIN_NAME} {
+  @www host www.{$DOMAIN_NAME}
+  redir @www https://{$DOMAIN_NAME}{uri} permanent
+
+  encode zstd gzip
+  reverse_proxy ui:80
+}
+
+{$API_DOMAIN_NAME} {
+  encode zstd gzip
+  reverse_proxy api:3000
+}

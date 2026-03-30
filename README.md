@@ -181,6 +181,18 @@ What still needs to be addressed before a supervisor-facing production deploymen
 
 That means the current Render blueprint is close, but screenshots, candidate images, and stored HTML snapshots need shared storage before production use. The practical fix is to move artifacts to shared object storage and keep the URLs in Postgres.
 
+## DigitalOcean HTTPS
+
+The DigitalOcean deployment now uses Caddy as the public entrypoint with automatic Let's Encrypt certificates.
+
+Expected hostnames:
+
+- `xsscommentdetection.me` for the UI
+- `www.xsscommentdetection.me` redirected to the apex UI domain
+- `api.xsscommentdetection.me` for the API
+
+The `ui` and `api` containers are now intended to stay behind Caddy instead of being exposed directly on public high ports.
+
 ## Services
 
 ### API

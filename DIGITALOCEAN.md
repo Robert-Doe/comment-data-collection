@@ -98,6 +98,16 @@ The ready-to-use command-line deployment files on this branch are:
 - `SMTP_USER` optional
 - `SMTP_PASS` optional
 
+### HTTPS hostnames
+
+Recommended public hostnames for this droplet:
+
+- `xsscommentdetection.me` for the UI
+- `www.xsscommentdetection.me` redirected to the apex UI domain
+- `api.xsscommentdetection.me` for the API
+
+The Docker Compose stack now includes Caddy on ports `80` and `443` and expects those DNS records to point at the droplet before certificates are issued.
+
 ### Frontend build variable
 
 - `API_BASE_URL`
@@ -160,8 +170,8 @@ docker compose --env-file .env.digitalocean -f docker-compose.digitalocean.yml u
 
 That will give you:
 
-- UI on port `8080`
-- API on port `3000`
+- UI on `https://YOUR_DOMAIN`
+- API on `https://api.YOUR_DOMAIN`
 - worker running in the background
 
 ### Windows command-line deploy
