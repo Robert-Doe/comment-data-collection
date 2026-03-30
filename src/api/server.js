@@ -133,13 +133,19 @@ function materializeLookupItem(item, req) {
   };
 }
 
-async function readSnapshotHtmlForItem(item) {
-  const candidates = [
-    item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
-    item && item.manual_html_path ? item.manual_html_path : '',
-  ].filter(Boolean);
+async function readSnapshotHtmlForItem(item, options = {}) {
+  const preferRendered = options.preferRendered !== false;
+  const candidates = preferRendered
+    ? [
+      item && item.manual_html_path ? item.manual_html_path : '',
+      item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
+    ]
+    : [
+      item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
+      item && item.manual_html_path ? item.manual_html_path : '',
+    ];
 
-  for (const filePath of candidates) {
+  for (const filePath of candidates.filter(Boolean)) {
     try {
       const value = await fs.readFile(filePath, 'utf8');
       if (String(value || '').trim()) {
@@ -569,7 +575,7 @@ function createApp(config = getConfig()) {
         return;
       }
 
-      const html = await readSnapshotHtmlForItem(item);
+      const html = await readSnapshotHtmlForItem(item, { preferRendered: true });
       const snapshot = {
         html,
         raw_html: html,
