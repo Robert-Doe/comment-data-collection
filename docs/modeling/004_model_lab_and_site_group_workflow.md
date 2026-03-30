@@ -44,6 +44,7 @@ Use it to:
 - train the `keyword-ablated` model
 - download the candidate dataset CSV
 - list previously saved models
+- download a browser-runtime JSON bundle for a saved model
 - score an existing job
 - upload site groups for hostname-based probing
 
@@ -93,6 +94,16 @@ Each training run saves a model artifact under:
 - `output/models/<variant-id>/<artifact-id>.json`
 
 That artifact becomes selectable in the rest of the Model Lab.
+
+The `Trained Models` table also exposes:
+
+- `Runtime JSON`
+
+That export is the intended handoff bundle for browser-side inference.
+
+It is smaller and cleaner than the full training artifact because it
+keeps the model, vectorizer, thresholds, and provenance metadata
+without shipping the entire training record.
 
 ## What scoring a job does
 

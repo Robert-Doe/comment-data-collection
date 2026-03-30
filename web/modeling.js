@@ -33,6 +33,10 @@
     return `${apiBase}${path}`;
   }
 
+  function runtimeModelUrl(modelId) {
+    return apiUrl(`/api/modeling/models/${encodeURIComponent(String(modelId || ''))}/runtime.json`);
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -261,6 +265,7 @@
                 <td>
                   <div class="action-stack">
                     <button class="secondary compact" type="button" data-use-model="${escapeHtml(model.id || '')}">Use</button>
+                    <a class="link-button compact" href="${escapeHtml(runtimeModelUrl(model.id || ''))}">Runtime JSON</a>
                   </div>
                 </td>
               </tr>

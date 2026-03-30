@@ -267,6 +267,80 @@ function summarizeScoredItems(items) {
   return summary;
 }
 
+function summarizeEvaluationForRuntime(evaluation) {
+  if (!evaluation) return null;
+
+  function slimSegment(segment) {
+    if (!segment) return null;
+    return {
+      candidate_metrics: segment.candidate_metrics || null,
+      ranking_metrics: segment.ranking_metrics || null,
+      page_metrics: segment.page_metrics || null,
+    };
+  }
+
+  return {
+    train: slimSegment(evaluation.train),
+    test: slimSegment(evaluation.test),
+  };
+}
+
+function buildRuntimeModelBundle(artifact, options = {}) {
+  if (!artifact) return null;
+
+  const positiveThreshold = Number(options.positiveThreshold);
+  const manualReviewLow = Number(options.manualReviewLow);
+  const manualReviewHigh = Number(options.manualReviewHigh);
+  const vectorizer = artifact.vectorizer || {};
+  const model = artifact.model || {};
+  const reliance = artifact.reliance || {};
+
+  return {
+    schema_version: 1,
+    artifact_type: 'ugc_candidate_runtime_model',
+    artifact_id: artifact.id,
+    variant_id: artifact.variant_id,
+    variant_title: artifact.variant_title,
+    variant_description: artifact.variant_description,
+    created_at: artifact.created_at,
+    algorithm: artifact.algorithm,
+    feature_count: artifact.feature_count,
+    thresholds: {
+      positive: Number.isFinite(positiveThreshold) ? positiveThreshold : 0.5,
+      manual_review_low: Number.isFinite(manualReviewLow) ? manualReviewLow : 0.2,
+      manual_review_high: Number.isFinite(manualReviewHigh) ? manualReviewHigh : 0.8,
+    },
+    feature_catalog: Array.isArray(artifact.feature_catalog)
+      ? artifact.feature_catalog.map((entry) => ({ ...entry }))
+      : [],
+    vectorizer: {
+      descriptors: Array.isArray(vectorizer.descriptors)
+        ? vectorizer.descriptors.map((entry) => ({ ...entry }))
+        : [],
+      numericStats: vectorizer.numericStats ? { ...vectorizer.numericStats } : {},
+      categoricalMaps: vectorizer.categoricalMaps ? { ...vectorizer.categoricalMaps } : {},
+      dimension: Number(vectorizer.dimension) || 0,
+    },
+    model: {
+      algorithm: model.algorithm || artifact.algorithm,
+      weights: Array.isArray(model.weights) ? model.weights.slice() : [],
+      bias: Number(model.bias) || 0,
+    },
+    evaluation_summary: summarizeEvaluationForRuntime(artifact.evaluation),
+    reliance_summary: {
+      family_importance: Array.isArray(reliance.family_importance)
+        ? reliance.family_importance.map((entry) => ({ ...entry }))
+        : [],
+      positive_weights: Array.isArray(reliance.positive_weights)
+        ? reliance.positive_weights.map((entry) => ({ ...entry }))
+        : [],
+      negative_weights: Array.isArray(reliance.negative_weights)
+        ? reliance.negative_weights.map((entry) => ({ ...entry }))
+        : [],
+    },
+  };
+}
+
 async function trainModel(items, artifactRoot, trainingInput = {}) {
   const variant = getModelVariant(trainingInput.variantId);
   if (!variant) {
@@ -431,6 +505,7 @@ module.exports = {
   buildOverview,
   trainModel,
   getModelDetails,
+  buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
   exportDataset,

@@ -224,8 +224,14 @@ This is where you:
 
 - train the two model variants
 - list saved model artifacts
+- download `Runtime JSON` for browser-side inference handoff
 - score completed jobs
 - upload site groups by hostname for comparison
+
+Important:
+
+- the full saved model artifact is mainly for training, debugging, and research
+- the `Runtime JSON` export is the smaller bundle another browser extension would eventually consume
 
 ### Feature Docs
 

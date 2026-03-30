@@ -91,6 +91,41 @@ You do **not** manually pass this JSON into the extension.
 
 Today the server is the thing that owns and uses the trained model.
 
+## If another browser extension needs the model
+
+If your separate XSS-protection extension eventually needs the model,
+it should **not** consume the full training artifact directly.
+
+Instead, it should consume the distilled runtime export:
+
+- `GET /api/modeling/models/:artifactId/runtime.json`
+
+That runtime JSON is the correct handoff format for browser-side
+inference.
+
+It contains:
+
+- artifact metadata
+- model variant metadata
+- thresholds
+- feature catalog snapshot
+- vectorizer descriptors
+- numeric normalization statistics
+- categorical value maps
+- logistic regression weights
+- logistic regression bias
+- compact evaluation and reliance summaries
+
+In plain language:
+
+- the full training artifact is the lab notebook
+- the runtime JSON is the deployment bundle
+
+So if you later want to plug the trained detector into another
+browser extension, the thing to hand over is:
+
+- the `Runtime JSON` export from the `Trained Models` section
+
 ## What the model can do today
 
 After training, the saved model can be used in two places:

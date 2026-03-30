@@ -42,10 +42,46 @@ Initial modeling should favor:
 - candidate-level logistic regression
 - page-level aggregation over candidate scores
 
+For deployment, the trained model should not be treated as a vague
+"ML result." It should be treated as a versioned browser-runtime
+artifact.
+
+The distinction should be explicit:
+
+- full training artifact for research, audit, and reproducibility
+- distilled runtime JSON bundle for browser-side inference
+
+The runtime bundle should carry:
+
+- feature schema
+- vectorizer metadata
+- logistic weights and bias
+- thresholds
+- compact provenance metadata
+
 Later work can compare:
 
 - gradient-boosted trees
 - ranking models
+
+## Extension handoff boundary
+
+The future XSS-protection extension should consume the distilled
+runtime bundle, not the full training record.
+
+That matters because the browser-side system only needs:
+
+- candidate feature extraction
+- vectorization with the saved schema
+- lightweight inference
+- thresholded region selection
+
+It does not need the entire training trace or evaluation payload.
+
+This separation strengthens the systems story:
+
+- offline training remains rich and auditable
+- online deployment remains compact and practical
 
 ## Human review
 

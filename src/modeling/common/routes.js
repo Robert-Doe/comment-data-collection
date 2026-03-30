@@ -13,6 +13,7 @@ const {
   buildOverview,
   trainModel,
   getModelDetails,
+  buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
   exportDataset,
@@ -81,6 +82,27 @@ function createModelingRouter(dependencies) {
         return;
       }
       res.json({ model: artifact });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/models/:artifactId/runtime.json', async (req, res, next) => {
+    try {
+      const artifact = await getModelDetails(dependencies.artifactRoot, req.params.artifactId);
+      if (!artifact) {
+        res.status(404).json({ error: 'Model artifact not found' });
+        return;
+      }
+
+      const runtimeBundle = buildRuntimeModelBundle(artifact, {
+        positiveThreshold: req.query.positiveThreshold,
+        manualReviewLow: req.query.manualReviewLow,
+        manualReviewHigh: req.query.manualReviewHigh,
+      });
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${artifact.id}-runtime.json"`);
+      res.send(`${JSON.stringify(runtimeBundle, null, 2)}\n`);
     } catch (error) {
       next(error);
     }

@@ -16,6 +16,7 @@ Current sequence:
 4. `004_experiments_and_evaluation_plan.md`
 5. `005_latest_research_writing_backlog.md`
 6. `006_complete_process_and_operational_record.md`
+7. `007_browser_runtime_model_artifact_and_extension_handoff.md`
 
 Naming rule:
 

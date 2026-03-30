@@ -117,7 +117,13 @@ The intended workflow is:
 2. open `Model Lab`
 3. train one or both variants
 4. inspect the saved artifact and feature-family reliance
-5. score completed jobs or probe site groups that match already scanned hostnames
+5. download `Runtime JSON` from `Trained Models` if another browser component needs a deployable inference bundle
+6. score completed jobs or probe site groups that match already scanned hostnames
+
+Important distinction:
+
+- the full saved model artifact is the training and research record
+- the `Runtime JSON` export is the intended browser-side handoff bundle
 
 ### Browser Extension
 
@@ -247,6 +253,7 @@ Endpoints:
 - `GET /api/modeling/features`
 - `GET /api/modeling/models`
 - `GET /api/modeling/models/:artifactId`
+- `GET /api/modeling/models/:artifactId/runtime.json`
 - `POST /api/modeling/train`
 - `POST /api/modeling/score-job`
 - `POST /api/modeling/site-groups`

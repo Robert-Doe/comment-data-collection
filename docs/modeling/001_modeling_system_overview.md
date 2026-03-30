@@ -240,6 +240,33 @@ This matters because a model artifact must be self-contained enough to:
 - explain its own feature space
 - preserve the exact training-time schema
 
+Important distinction:
+
+- the full saved artifact is a training and research record
+- it is not the best thing to embed directly into another browser extension
+
+The full artifact currently keeps extra material such as:
+
+- split metadata
+- train/test counts
+- evaluation summaries
+- feature reliance summaries
+
+For browser-side inference, the system now also exposes a distilled
+runtime bundle:
+
+- `GET /api/modeling/models/:artifactId/runtime.json`
+
+That smaller runtime JSON keeps only the parts needed for browser
+inference and model provenance:
+
+- artifact metadata
+- thresholds
+- feature catalog snapshot
+- vectorizer descriptors and normalization maps
+- logistic regression weights and bias
+- compact evaluation and reliance summaries
+
 ## Website usage
 
 The website now exposes two dedicated pages:
