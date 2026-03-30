@@ -16,6 +16,7 @@ Usage:
 5. Open the extension popup on that tab.
 6. Click `Refresh Match` if needed. The extension will ask the scanner which row matches the current page URL, while prioritizing the row you selected in the web app.
 7. Click `Capture & Upload`.
+8. Keep the scanner page open on that job. It now continues polling after completion, so the uploaded snapshot should appear in the UI within a few seconds without a manual refresh.
 
 Fallback:
 
@@ -36,3 +37,4 @@ Notes:
 - `Frozen Styles Snapshot` is the recommended mode for manual labeling and visual review.
 - The server uses the frozen/styled snapshot for screenshot rendering when available, so the saved rendered image is closer to what you saw in the browser.
 - The server still uses the raw DOM for structural candidate detection when available, so the detector is less skewed by the freeze attributes added to the rendered snapshot.
+- Normal automated scans also do a bottom-loading scroll pass before detection so comment panes that only appear after scrolling, such as some YouTube pages, have a better chance of being loaded before analysis.

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UGC Scanner Model Lab</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link active" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+      </nav>
+
+      <section class="hero">
+        <p class="eyebrow">Model Construction</p>
+        <h1>Model Lab</h1>
+        <p class="lede">Train the two list-level candidate models, compare their feature reliance, score completed jobs, and upload site groups to see how trained models behave across the domains you have already scanned and labeled.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Overview</h2>
+          <button id="refresh-modeling" class="secondary" type="button">Refresh</button>
+        </div>
+        <div id="model-overview" class="summary empty">Loading model overview...</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Train Variants</h2>
+        </div>
+        <p class="lede manual-lede">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates currently stored, or limit training to specific jobs by entering comma-separated job IDs.</p>
+        <div class="config-grid">
+          <label class="field">
+            <span>Job IDs Filter</span>
+            <input id="train-job-ids" type="text" placeholder="Optional: job-1, job-2">
+          </label>
+          <label class="field">
+            <span>Dataset Export</span>
+            <a id="download-all-dataset" class="link-button" href="#">Download Candidate Dataset CSV</a>
+          </label>
+        </div>
+        <div id="variant-cards" class="model-card-grid"></div>
+        <p id="train-message" class="message"></p>
+        <div id="train-result" class="model-card-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Trained Models</h2>
+        </div>
+        <div id="model-list" class="table-shell empty">No trained models saved yet.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Score Existing Job</h2>
+        </div>
+        <p class="lede manual-lede">Use a trained model against a completed job. This scores every stored candidate on the job, re-ranks each page, and shows whether the top candidate looks auto-acceptable or still needs manual review.</p>
+        <form id="score-job-form" class="model-form">
+          <label class="field">
+            <span>Model</span>
+            <select id="score-model-id"></select>
+          </label>
+          <label class="field">
+            <span>Job ID</span>
+            <input id="score-job-id" type="text" placeholder="Paste a completed job ID" required>
+          </label>
+          <button class="primary" type="submit">Score Job</button>
+        </form>
+        <div id="recent-jobs-model" class="table-shell empty">Loading recent jobs...</div>
+        <p id="score-job-message" class="message"></p>
+        <div id="score-job-summary" class="summary empty">Run a scored job to see item-level predictions.</div>
+        <div id="score-job-results" class="table-shell empty">No scored job loaded.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Site Group Probe</h2>
+        </div>
+        <p class="lede manual-lede">Paste or upload URLs or hostnames. The probe matches those sites against pages you have already scanned, scores them with the selected model, and groups the results by hostname so you can compare how the model behaves across site families.</p>
+        <form id="site-group-form" class="model-form site-group-form">
+          <label class="field">
+            <span>Model</span>
+            <select id="site-group-model-id"></select>
+          </label>
+          <label class="field">
+            <span>Optional Job IDs Filter</span>
+            <input id="site-group-job-ids" type="text" placeholder="Optional: limit probe to some jobs">
+          </label>
+          <label class="field site-group-wide">
+            <span>Upload CSV Or Text File</span>
+            <input id="site-group-file" type="file" accept=".csv,.txt,text/csv,text/plain">
+          </label>
+          <label class="field site-group-wide">
+            <span>URLs Or Hostnames</span>
+            <textarea id="site-group-text" rows="6" placeholder="https://example.com/post&#10;reddit.com&#10;tiktok.com"></textarea>
+          </label>
+          <button class="primary" type="submit">Run Site Probe</button>
+        </form>
+        <p id="site-group-message" class="message"></p>
+        <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./modeling.js"></script>
+  </body>
+</html>

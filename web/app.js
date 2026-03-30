@@ -52,7 +52,11 @@
   let currentItemsById = new Map();
   const pageSize = 50;
   const candidatePageSize = 1;
+  const activePollIntervalMs = 4000;
+  const terminalPollIntervalMs = 12000;
   let pollHandle = null;
+  let pollJobId = '';
+  let pollIntervalMs = 0;
   const scoreDetailOpenState = new Set();
 
   function apiUrl(path) {
@@ -61,6 +65,39 @@
 
   function absoluteApiBase() {
     return apiBase || window.location.origin;
+  }
+
+  function stopPolling() {
+    if (pollHandle) {
+      clearInterval(pollHandle);
+    }
+    pollHandle = null;
+    pollJobId = '';
+    pollIntervalMs = 0;
+  }
+
+  function startPolling(jobId, intervalMs) {
+    if (!jobId) {
+      stopPolling();
+      return;
+    }
+    if (pollHandle && pollJobId === jobId && pollIntervalMs === intervalMs) {
+      return;
+    }
+    stopPolling();
+    pollJobId = jobId;
+    pollIntervalMs = intervalMs;
+    pollHandle = setInterval(() => {
+      refreshJob(jobId).catch((error) => {
+        console.error(error);
+      });
+    }, intervalMs);
+  }
+
+  function pollIntervalForStatus(status) {
+    return ['completed', 'completed_with_errors', 'failed'].includes(status)
+      ? terminalPollIntervalMs
+      : activePollIntervalMs;
   }
 
   function setResourceDownloads() {
@@ -282,6 +319,42 @@
     }
 
     return `<div class="action-stack">${links.join('')}</div>`;
+  }
+
+  function renderCandidateScreenshotFallback(candidate, heading) {
+    const previewText = escapeHtml(candidate && candidate.sample_text
+      ? candidate.sample_text
+      : 'No sample text is available for this candidate.');
+    const errorText = escapeHtml(candidate && candidate.candidate_screenshot_error
+      ? candidate.candidate_screenshot_error
+      : 'Candidate screenshot was not captured for this candidate.');
+    return `
+      <div class="candidate-shot-fallback">
+        <strong>${escapeHtml(heading || 'Text Preview')}</strong>
+        <span>${previewText}</span>
+        <small>${errorText}</small>
+      </div>
+    `;
+  }
+
+  function renderCandidateVisual(candidate, options = {}) {
+    const assetUrl = candidate && candidate.candidate_screenshot_url
+      ? resolveAssetUrl(candidate.candidate_screenshot_url)
+      : '';
+    const imageClass = escapeHtml(options.imageClass || 'candidate-shot');
+    if (assetUrl) {
+      const linkClass = options.linkClass ? ` class="${escapeHtml(options.linkClass)}"` : '';
+      return `
+        <a${linkClass} href="${escapeHtml(assetUrl)}" target="_blank" rel="noreferrer">
+          <img class="${imageClass}" src="${escapeHtml(assetUrl)}" alt="Candidate ${escapeHtml(candidate && candidate.candidate_rank)} screenshot">
+        </a>
+      `;
+    }
+    return `
+      <div class="${imageClass} empty">
+        ${renderCandidateScreenshotFallback(candidate, options.fallbackHeading || 'Text Preview')}
+      </div>
+    `;
   }
 
   function humanLabelText(label) {
@@ -640,12 +713,12 @@
       const labelClass = humanLabelClass(candidate.human_label);
       const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
       const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
-      const candidateScreenshotEmptyMessage = escapeHtml(candidate.candidate_screenshot_error || 'No candidate screenshot was captured for this candidate.');
       return `
         <article class="candidate-card ${candidate.human_label ? 'active-review' : ''}">
-          ${candidate.candidate_screenshot_url
-            ? `<a href="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" target="_blank" rel="noreferrer"><img class="candidate-shot" src="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" alt="Candidate ${escapeHtml(candidate.candidate_rank)} screenshot"></a>`
-            : `<div class="candidate-shot empty">${candidateScreenshotEmptyMessage}</div>`}
+          ${renderCandidateVisual(candidate, {
+            imageClass: 'candidate-shot',
+            fallbackHeading: 'Text Preview',
+          })}
           <div class="candidate-meta">
             <div class="candidate-meta-row">
               <span class="candidate-pill">rank ${escapeHtml(candidate.candidate_rank)}</span>
@@ -689,7 +762,7 @@
       </div>
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
-      <p class="candidate-copy"><strong>Screenshot note:</strong> the images below are candidate-region crops from analysis, not the raw page screenshot uploaded by the extension.</p>
+      <p class="candidate-copy"><strong>Screenshot note:</strong> the images below are candidate-region crops from analysis, not the raw page screenshot uploaded by the extension. When a crop fails, the UI falls back to the stored text preview so you can still label the candidate.</p>
       ${renderManualArtifactLinks(item, '')}
       <div class="candidate-toolbar">
         <span class="candidate-page-copy">Reviewing candidate ${escapeHtml(startIndex + 1)} of ${escapeHtml(candidates.length)}</span>
@@ -909,13 +982,11 @@
       verdictTitle = 'Raw score passed, but the keyword gate rejected this candidate';
       verdictCopy = `Candidate #${candidate.candidate_rank} cleared the raw score threshold at score ${formatMetricValue(candidate.score)}, but the acceptance gate blocked it. ${candidate.acceptance_gate_reason || ''}`;
     }
-    const candidateScreenshot = candidate.candidate_screenshot_url
-      ? `
-        <a class="score-shot-link" href="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" target="_blank" rel="noreferrer">
-          <img class="score-shot" src="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" alt="Candidate ${escapeHtml(candidate.candidate_rank)} screenshot">
-        </a>
-      `
-      : `<div class="candidate-shot empty">${escapeHtml(candidate.candidate_screenshot_error || 'No candidate screenshot was captured for this candidate.')}</div>`;
+    const candidateScreenshot = renderCandidateVisual(candidate, {
+      linkClass: 'score-shot-link',
+      imageClass: 'score-shot',
+      fallbackHeading: 'Candidate Text Preview',
+    });
     const candidateSummary = candidates.slice(0, 5).map((entry) => `
       <tr>
         <td>${escapeHtml(entry.candidate_rank)}</td>
@@ -1231,7 +1302,7 @@
   }
 
   async function fetchJson(path) {
-    const response = await fetch(apiUrl(path));
+    const response = await fetch(apiUrl(path), { cache: 'no-store' });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Request failed: ${response.status}`);
@@ -1288,12 +1359,7 @@
     await refreshSelectedItem().catch((error) => console.error(error));
     setDownloads(jobId);
     refreshJobs().catch((error) => console.error(error));
-
-    const terminal = ['completed', 'completed_with_errors', 'failed'].includes(job.status);
-    if (terminal && pollHandle) {
-      clearInterval(pollHandle);
-      pollHandle = null;
-    }
+    startPolling(jobId, pollIntervalForStatus(job.status));
   }
 
   async function refreshJobs() {
@@ -1341,13 +1407,6 @@
     await refreshJobs();
     currentOffset = 0;
     await refreshJob(body.jobId);
-
-    if (pollHandle) clearInterval(pollHandle);
-    pollHandle = setInterval(() => {
-      refreshJob(body.jobId).catch((error) => {
-        console.error(error);
-      });
-    }, 4000);
   }
 
   async function handleManualSubmit(event) {
@@ -1488,10 +1547,6 @@
     if (!jobId) return;
     currentOffset = 0;
     refreshJob(jobId).catch((error) => console.error(error));
-    if (pollHandle) clearInterval(pollHandle);
-    pollHandle = setInterval(() => {
-      refreshJob(jobId).catch((error) => console.error(error));
-    }, 4000);
   });
 
   jobItems.addEventListener('click', (event) => {
@@ -1615,8 +1670,5 @@
   refreshJobs().catch((error) => console.error(error));
   if (currentJobId) {
     refreshJob(currentJobId).catch((error) => console.error(error));
-    pollHandle = setInterval(() => {
-      refreshJob(currentJobId).catch((error) => console.error(error));
-    }, 4000);
   }
 }());

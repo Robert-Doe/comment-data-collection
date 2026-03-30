@@ -12,6 +12,7 @@ Playwright-based UGC/comment region detection with:
 If you are new to this repo, read:
 
 - [docs/BEGINNER_GUIDE.md](docs/BEGINNER_GUIDE.md) for a beginner-friendly explanation of the codebase, branches, deployment flow, and why the system is split into API, worker, Redis, and Postgres
+- [docs/modeling/000_INDEX.md](docs/modeling/000_INDEX.md) for the model-system overview, the two first variants, and the Model Lab workflow
 - [docs/paper/000_INDEX.md](docs/paper/000_INDEX.md) for the longer paper-style notes and project record
 
 ## Local CLI
@@ -70,8 +71,9 @@ Local workflow:
 4. Open the target row URL in a new browser tab
 5. Reveal the comments manually, then open the extension popup on that tab
 6. The extension auto-matches the current page URL to the scanner row and uploads the snapshot
-7. The server re-renders the uploaded snapshot, saves its own rendered screenshot, re-analyzes the DOM state, and persists the updated result
-8. In the web app, open the row and review the candidate panel to mark the true UGC region, hard negatives, or uncertain cases
+7. The server re-renders the uploaded snapshot, saves its own rendered screenshot, re-analyzes the DOM state, and persists the updated result immediately
+8. The selected job page keeps polling even after completion, so manual uploads flow back into the UI without a full page reload
+9. In the web app, open the row and review the candidate panel to mark the true UGC region, hard negatives, or uncertain cases
 
 Downloaded CSV/JSON now include the manual-review fields and artifact URLs.
 
@@ -90,6 +92,29 @@ The extension defaults to `Frozen Styles Snapshot` mode:
 - `snapshot.raw.html` keeps the original DOM for analysis
 - the uploaded screenshot is still only the visible browser viewport
 - the server now also renders the stored snapshot and saves a fresh screenshot from that rendered state for labeling
+- live automated scans force a bottom-loading scroll pass before detection and screenshots so lazy-loaded comment sections, including YouTube-style pages, have a better chance of appearing in the DOM
+
+## Model Lab
+
+The frontend now has two extra pages in addition to the main scanner:
+
+- `modeling.html` for model training, saved-model listing, existing-job scoring, and hostname/site-group probing
+- `feature-docs.html` for a consulting-style glossary of feature meanings and model terminology
+
+The first supervised modeling pass builds two list-level candidate rerankers:
+
+- `keyword-aware`
+- `keyword-ablated`
+
+Both are logistic-regression baselines trained from human-reviewed candidate rows already stored on job items.
+
+The intended workflow is:
+
+1. review and label candidates in the scanner UI
+2. open `Model Lab`
+3. train one or both variants
+4. inspect the saved artifact and feature-family reliance
+5. score completed jobs or probe site groups that match already scanned hostnames
 
 ### Browser Extension
 
@@ -172,6 +197,8 @@ Required environment variables:
 - `ARTIFACT_ROOT` optional for local or mounted artifact storage
 - `ARTIFACT_URL_BASE_PATH` optional, defaults to `/artifacts`
 - `PUBLIC_BASE_URL` optional, used when generating absolute artifact URLs
+- `MODEL_ARTIFACT_ROOT` optional, defaults to `output/models`
+- `MODEL_DOCS_ROOT` optional, defaults to `docs/modeling`
 
 Endpoints:
 
@@ -191,6 +218,15 @@ Endpoints:
 - `GET /api/jobs/:jobId/download.csv`
 - `GET /api/downloads/sample-sites-labeled.csv`
 - `GET /api/downloads/extension.zip`
+- `GET /api/modeling/overview`
+- `GET /api/modeling/variants`
+- `GET /api/modeling/features`
+- `GET /api/modeling/models`
+- `GET /api/modeling/models/:artifactId`
+- `POST /api/modeling/train`
+- `POST /api/modeling/score-job`
+- `POST /api/modeling/site-groups`
+- `GET /api/modeling/dataset.csv`
 
 ### Worker
 

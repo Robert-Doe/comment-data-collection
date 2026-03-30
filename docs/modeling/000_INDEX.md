@@ -1,0 +1,11 @@
+# Modeling Docs Index
+
+This folder contains the first implementation docs for the list-level candidate models.
+
+Read in this order:
+
+1. [001_modeling_system_overview.md](./001_modeling_system_overview.md)
+2. [002_keyword_aware_logistic_model.md](./002_keyword_aware_logistic_model.md)
+3. [003_keyword_ablated_logistic_model.md](./003_keyword_ablated_logistic_model.md)
+4. [004_model_lab_and_site_group_workflow.md](./004_model_lab_and_site_group_workflow.md)
+5. [005_beginner_modeling_codebase_guide.md](./005_beginner_modeling_codebase_guide.md)

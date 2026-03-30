@@ -152,6 +152,91 @@ Important values:
 - `SCAN_TIMEOUT_MS`, `POST_LOAD_DELAY_MS`, `PRE_SCREENSHOT_DELAY_MS`: scan pacing
 - `WORKER_LOCK_*`: advanced BullMQ timing overrides; usually best left unset
 
+## Where the modeling code now lives
+
+The first supervised model system is split into a few clear places.
+
+### Shared model code
+
+- `src/modeling/common/`
+
+This contains:
+
+- the feature catalog
+- dataset building
+- vectorization
+- logistic regression
+- metrics
+- artifact save/load helpers
+- the shared service layer
+- the HTTP routes used by the API and local runtime
+
+### Model variants
+
+- `src/modeling/variants/keywordAware/`
+- `src/modeling/variants/keywordAblated/`
+
+These directories are intentionally small.
+
+They only define what makes each model variant different.
+
+### Website pages
+
+- `web/modeling.html`
+- `web/feature-docs.html`
+
+These are the user-facing modeling pages.
+
+### Saved trained models
+
+- `output/models/`
+
+This is where trained model artifacts are written.
+
+That directory contains runtime outputs, not source code.
+
+## What the two model variants mean
+
+The first model pair is:
+
+- `keyword-aware`: uses the full curated feature catalog, including direct lexical keyword signals
+- `keyword-ablated`: removes the lexical keyword family so structure, block repetition, author-time, interaction, and negative-control evidence have to carry more of the detection
+
+This split exists so the repo can answer a real question:
+
+- do keywords genuinely help
+- or do they create shortcut-driven overfitting
+
+## What the new website pages are for
+
+### Scanner
+
+This is still where you:
+
+- upload CSVs
+- run scan jobs
+- inspect rows
+- label candidates
+
+### Model Lab
+
+This is where you:
+
+- train the two model variants
+- list saved model artifacts
+- score completed jobs
+- upload site groups by hostname for comparison
+
+### Feature Docs
+
+This is the consulting page.
+
+Use it when you want a plain-language explanation of:
+
+- comment list vs comment block vs comment block element
+- the two model variants
+- what each curated feature really means
+
 ## Why the Dockerfiles changed
 
 Both the API and the worker now use Playwright-capable images.

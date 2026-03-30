@@ -300,6 +300,44 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   return result.rows;
 }
 
+async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const db = getPool(databaseUrl);
+  const clauses = [];
+  const params = [];
+
+  const jobIds = Array.isArray(options.jobIds)
+    ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  if (jobIds.length) {
+    params.push(jobIds);
+    clauses.push(`job_id = ANY($${params.length}::text[])`);
+  }
+
+  if (options.requireCandidates !== false) {
+    clauses.push('candidates IS NOT NULL');
+  }
+
+  const limit = Math.max(1, Number(options.limit) || 20000);
+  params.push(limit);
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     ${whereClause}
+     ORDER BY created_at DESC, row_number ASC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
 async function listJobItemsByStatuses(statuses, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
     ? optionsOrDatabaseUrl
@@ -680,6 +718,7 @@ module.exports = {
   getJob,
   getJobItem,
   getJobItems,
+  listItemsForModeling,
   listJobItemsByStatuses,
   listManualReviewCandidates,
   setManualReviewTarget,

@@ -27,6 +27,8 @@ const {
 const { renderDotToSvg } = require('../shared/graphviz');
 const { scanUrl, buildHtmlSnapshotDot, deriveManualCaptureState, closeBrowser } = require('../shared/scanner');
 const { analyzeManualCapture } = require('../shared/manualCapture');
+const { createModelingRouter } = require('../modeling/common/routes');
+const { listModelArtifacts } = require('../modeling/common/artifacts');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -477,6 +479,7 @@ function createLocalRuntime(options = {}) {
   return {
     config,
     statePath,
+    state,
     listJobs(limit = 25) {
       return state.jobs.slice(0, limit);
     },
@@ -484,6 +487,15 @@ function createLocalRuntime(options = {}) {
     getItem,
     getJobItems(jobId, limit = 100, offset = 0) {
       return getItemsForJob(jobId).slice(offset, offset + limit);
+    },
+    listItemsForModeling(options = {}) {
+      const jobIds = Array.isArray(options.jobIds)
+        ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+      const requireCandidates = options.requireCandidates !== false;
+      return state.items
+        .filter((item) => !jobIds.length || jobIds.includes(item.job_id))
+        .filter((item) => !requireCandidates || (Array.isArray(item.candidates) && item.candidates.length > 0));
     },
     getManualReviewTarget() {
       return state.manual_review_target || null;
@@ -600,6 +612,13 @@ function createLocalApp(options = {}) {
   app.set('trust proxy', true);
   app.use(cors({ origin: true }));
   app.use(express.json({ limit: '1mb' }));
+  app.use('/api/modeling', createModelingRouter({
+    artifactRoot: runtime.config.modelArtifactRoot,
+    listModelArtifacts: () => listModelArtifacts(runtime.config.modelArtifactRoot),
+    listItemsForModeling: (options) => runtime.listItemsForModeling(options),
+    getJob: (jobId) => runtime.getJob(jobId),
+    getItemsForJob: (jobId, job) => runtime.getJobItems(jobId, Math.max(1, Number(job && job.total_urls) || 100), 0),
+  }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, mode: 'local' });

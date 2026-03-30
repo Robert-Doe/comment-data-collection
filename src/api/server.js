@@ -25,6 +25,8 @@ const {
 const { analyzeManualCapture } = require('../shared/manualCapture');
 const { buildHtmlSnapshotDot } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
+const { createModelingRouter } = require('../modeling/common/routes');
+const { listModelArtifacts } = require('../modeling/common/artifacts');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -37,6 +39,7 @@ const {
   getJob,
   getJobItem,
   getJobItems,
+  listItemsForModeling,
   listManualReviewCandidates,
   setManualReviewTarget,
   getManualReviewTarget,
@@ -179,6 +182,16 @@ function createApp(config = getConfig()) {
   app.use(cors(createCorsOptions(config)));
   app.use(express.json({ limit: '1mb' }));
   app.use(config.artifactUrlBasePath, express.static(config.artifactRoot));
+  app.use('/api/modeling', createModelingRouter({
+    artifactRoot: config.modelArtifactRoot,
+    listModelArtifacts: () => listModelArtifacts(config.modelArtifactRoot),
+    listItemsForModeling: (options) => listItemsForModeling(options, config.databaseUrl),
+    getJob: (jobId) => getJob(jobId, config.databaseUrl),
+    getItemsForJob: async (jobId, job) => getJobItems(jobId, {
+      limit: Math.max(1, Number(job && job.total_urls) || 100),
+      offset: 0,
+    }, config.databaseUrl),
+  }));
 
   app.get('/api/health', async (_req, res) => {
     res.json({ ok: true });

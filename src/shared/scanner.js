@@ -151,15 +151,45 @@ async function expandPotentialUgc(page) {
 async function autoScroll(page, options = {}) {
   const steps = Math.max(1, Number(options.steps || 5));
   const stepDelayMs = Math.max(0, Number(options.stepDelayMs || 500));
-  await page.evaluate(async ({ steps, stepDelayMs }) => {
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(stepDelayMs, 750)));
+  const stabilizationPasses = Math.max(1, Number(options.stabilizationPasses || 2));
+  const returnToTop = options.returnToTop === true;
+  await page.evaluate(async ({ steps, stepDelayMs, bottomPauseMs, stabilizationPasses, returnToTop }) => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const maxHeight = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
-    for (let i = 1; i <= steps; i += 1) {
-      window.scrollTo(0, Math.round((maxHeight * i) / steps));
-      await sleep(stepDelayMs);
+    const getScrollHeight = () => Math.max(
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? document.documentElement.scrollHeight : 0,
+    );
+    let observedHeight = 0;
+
+    for (let pass = 0; pass < stabilizationPasses; pass += 1) {
+      let passHeight = getScrollHeight();
+      observedHeight = Math.max(observedHeight, passHeight);
+
+      for (let i = 1; i <= steps; i += 1) {
+        window.scrollTo(0, Math.round((passHeight * i) / steps));
+        await sleep(stepDelayMs);
+        passHeight = Math.max(passHeight, getScrollHeight());
+        observedHeight = Math.max(observedHeight, passHeight);
+      }
+
+      window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
+      await sleep(bottomPauseMs);
+      observedHeight = Math.max(observedHeight, getScrollHeight());
     }
-    window.scrollTo(0, 0);
-  }, { steps, stepDelayMs }).catch(() => {});
+
+    window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
+    await sleep(bottomPauseMs);
+    if (returnToTop) {
+      window.scrollTo(0, 0);
+    }
+  }, {
+    steps,
+    stepDelayMs,
+    bottomPauseMs,
+    stabilizationPasses,
+    returnToTop,
+  }).catch(() => {});
 }
 
 async function waitForDocumentComplete(page, timeoutMs) {
@@ -172,6 +202,8 @@ async function settlePageForDetection(page, options = {}) {
   const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 0));
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
+  const scrollBackToTop = options.scrollBackToTop === true;
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(actionSettleMs, 1500)));
 
   await waitForDocumentComplete(page, loadWaitMs);
   await safeWait(page, 'load', loadWaitMs);
@@ -189,10 +221,17 @@ async function settlePageForDetection(page, options = {}) {
     await autoScroll(page, {
       steps: 6,
       stepDelayMs: 600,
+      bottomPauseMs,
+      stabilizationPasses: 2,
+      returnToTop: scrollBackToTop,
     });
     await safeWait(page, 'load', Math.min(loadWaitMs, 8000));
     await safeWait(page, 'networkidle', networkIdleWaitMs);
     await waitForDocumentComplete(page, Math.min(loadWaitMs, 8000));
+    if (actionSettleMs > 0) {
+      await page.waitForTimeout(actionSettleMs);
+    }
+    await expandPotentialUgc(page);
     if (actionSettleMs > 0) {
       await page.waitForTimeout(actionSettleMs);
     }
@@ -1544,6 +1583,13 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     await page.setContent(htmlWithBase, {
       waitUntil: 'domcontentloaded',
       timeout: timeoutMs,
+    });
+    await autoScroll(page, {
+      steps: 4,
+      stepDelayMs: 350,
+      bottomPauseMs: 600,
+      stabilizationPasses: 1,
+      returnToTop: false,
     });
     await safeWait(page, 'networkidle', 2000);
     if (postLoadDelayMs > 0) {

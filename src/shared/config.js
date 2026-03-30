@@ -113,6 +113,8 @@ function getConfig() {
     captureScreenshots: booleanFromEnv('CAPTURE_SCREENSHOTS', true),
     captureHtmlSnapshots: booleanFromEnv('CAPTURE_HTML_SNAPSHOTS', true),
     artifactRoot: path.resolve(process.cwd(), process.env.ARTIFACT_ROOT || path.join('output', 'artifacts')),
+    modelArtifactRoot: path.resolve(process.cwd(), process.env.MODEL_ARTIFACT_ROOT || path.join('output', 'models')),
+    modelDocsRoot: path.resolve(process.cwd(), process.env.MODEL_DOCS_ROOT || path.join('docs', 'modeling')),
     artifactUrlBasePath: normalizeBasePath(process.env.ARTIFACT_URL_BASE_PATH, '/artifacts'),
     publicBaseUrl: String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
   };
