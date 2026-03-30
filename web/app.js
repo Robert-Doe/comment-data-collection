@@ -412,16 +412,72 @@
     `;
   }
 
-  function renderCandidateMarkupSection(label, value, meta) {
+  function buildMarkupPreviewDocument(value, mode) {
+    const content = mode === 'inner'
+      ? `<section class="preview-shell">${value}</section>`
+      : value;
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; media-src data: https: http:; style-src 'unsafe-inline'; font-src data: https: http:; connect-src 'none'; frame-src 'none';">
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #111827;
+        font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+      }
+      body {
+        padding: 12px;
+      }
+      .preview-shell {
+        min-height: 100%;
+      }
+      img, video, canvas, svg, iframe {
+        max-width: 100%;
+      }
+      a, button, input, select, textarea, summary, details {
+        pointer-events: none !important;
+      }
+    </style>
+  </head>
+  <body>${value ? content : '<div></div>'}</body>
+</html>`;
+  }
+
+  function renderCandidateMarkupSection(label, value, meta, mode) {
     if (!value) return '';
+    const previewDocument = buildMarkupPreviewDocument(value, mode);
     return `
       <details class="score-details candidate-markup-details" open>
         <summary>
           <span>${escapeHtml(label)}</span>
           ${meta ? `<span class="candidate-markup-meta">${escapeHtml(meta)}</span>` : ''}
         </summary>
-        <div class="score-details-body">
-          <pre class="candidate-markup mono">${escapeHtml(value)}</pre>
+        <div class="score-details-body candidate-markup-body">
+          <div class="candidate-markup-preview-shell">
+            <iframe
+              class="candidate-markup-preview"
+              loading="lazy"
+              sandbox="allow-same-origin"
+              referrerpolicy="no-referrer"
+              srcdoc="${escapeHtml(previewDocument)}"
+              title="${escapeHtml(label)} preview"></iframe>
+          </div>
+          <details class="candidate-markup-source-toggle">
+            <summary>HTML Source</summary>
+            <div class="score-details-body">
+              <pre class="candidate-markup mono">${escapeHtml(value)}</pre>
+            </div>
+          </details>
         </div>
       </details>
     `;
@@ -438,8 +494,8 @@
       ? `${candidate.candidate_inner_html_length} chars${candidate.candidate_inner_html_truncated ? ' · truncated' : ''}`
       : '';
 
-    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta));
-    markupSections.push(renderCandidateMarkupSection('Inner HTML', candidate.candidate_inner_html_excerpt || '', innerMeta));
+    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta, 'outer'));
+    markupSections.push(renderCandidateMarkupSection('Inner HTML', candidate.candidate_inner_html_excerpt || '', innerMeta, 'inner'));
 
     const content = markupSections.filter(Boolean).join('');
     const loadingCopy = candidate.candidate_markup_loading

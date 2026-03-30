@@ -420,6 +420,36 @@ button,
   line-height: 1.4;
 }
 
+.candidate-markup-body {
+  display: grid;
+  gap: 12px;
+}
+
+.candidate-markup-preview-shell {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.candidate-markup-preview {
+  display: block;
+  width: 100%;
+  min-height: 280px;
+  border: 0;
+  background: #fff;
+}
+
+.candidate-markup-source-toggle {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.candidate-markup-source-toggle > summary {
+  padding: 10px 12px;
+}
+
 .tight-summary {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
