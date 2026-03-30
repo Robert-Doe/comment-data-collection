@@ -57,6 +57,8 @@
   let pollHandle = null;
   let pollJobId = '';
   let pollIntervalMs = 0;
+  const candidateMarkupCache = new Map();
+  const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
 
   function apiUrl(path) {
@@ -360,7 +362,7 @@
   function renderCandidateMarkupSection(label, value, meta) {
     if (!value) return '';
     return `
-      <details class="score-details candidate-markup-details">
+      <details class="score-details candidate-markup-details" open>
         <summary>
           <span>${escapeHtml(label)}</span>
           ${meta ? `<span class="candidate-markup-meta">${escapeHtml(meta)}</span>` : ''}
@@ -387,18 +389,79 @@
     markupSections.push(renderCandidateMarkupSection('Inner HTML', candidate.candidate_inner_html_excerpt || '', innerMeta));
 
     const content = markupSections.filter(Boolean).join('');
-    if (!content && !candidate.candidate_markup_error) {
+    const loadingCopy = candidate.candidate_markup_loading
+      ? '<p class="candidate-copy"><strong>Markup:</strong> loading stored candidate HTML...</p>'
+      : '';
+
+    if (!content && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
       return '';
     }
 
     return `
       <div class="candidate-markup-stack">
+        ${loadingCopy}
         ${content}
         ${candidate.candidate_markup_error
           ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
           : ''}
       </div>
     `;
+  }
+
+  function candidateMarkupCacheKey(item, candidate) {
+    const jobId = currentJobId || (item && item.job_id) || '';
+    const itemId = item && item.id ? item.id : '';
+    const candidateKey = candidate && candidate.candidate_key ? candidate.candidate_key : '';
+    return `${jobId}:${itemId}:${candidateKey}`;
+  }
+
+  function mergeCandidateMarkup(item, candidate) {
+    if (!candidate) return candidate;
+    const cached = candidateMarkupCache.get(candidateMarkupCacheKey(item, candidate));
+    return cached ? { ...candidate, ...cached } : candidate;
+  }
+
+  function candidateHasMarkup(candidate) {
+    return !!(candidate && (
+      candidate.candidate_outer_html_excerpt
+      || candidate.candidate_inner_html_excerpt
+      || candidate.candidate_markup_error
+      || candidate.candidate_markup_loading
+    ));
+  }
+
+  async function ensureCandidateMarkup(item, candidate) {
+    if (!item || !candidate || candidateHasMarkup(candidate)) return;
+    const cacheKey = candidateMarkupCacheKey(item, candidate);
+    if (!cacheKey || candidateMarkupPending.has(cacheKey)) return;
+
+    candidateMarkupPending.add(cacheKey);
+    candidateMarkupCache.set(cacheKey, { candidate_markup_loading: true });
+    const selected = selectedItem();
+    if (selected && selected.id === item.id) {
+      renderCandidateReview(selected);
+      renderScoringBreakdown(selected);
+    }
+
+    try {
+      const response = await fetchJson(`/api/jobs/${currentJobId || item.job_id}/items/${item.id}/candidates/${candidate.candidate_key}/markup`);
+      candidateMarkupCache.set(cacheKey, {
+        ...(response && response.markup ? response.markup : {}),
+        candidate_markup_loading: false,
+      });
+    } catch (error) {
+      candidateMarkupCache.set(cacheKey, {
+        candidate_markup_loading: false,
+        candidate_markup_error: error && error.message ? error.message : String(error),
+      });
+    } finally {
+      candidateMarkupPending.delete(cacheKey);
+      const selectedCurrent = selectedItem();
+      if (selectedCurrent && selectedCurrent.id === item.id) {
+        renderCandidateReview(selectedCurrent);
+        renderScoringBreakdown(selectedCurrent);
+      }
+    }
   }
 
   function humanLabelText(label) {
@@ -758,7 +821,13 @@
     const totalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
     currentCandidatePage = Math.min(currentCandidatePage, totalPages - 1);
     const startIndex = currentCandidatePage * candidatePageSize;
-    const visibleCandidates = candidates.slice(startIndex, startIndex + candidatePageSize);
+    const visibleCandidates = candidates
+      .slice(startIndex, startIndex + candidatePageSize)
+      .map((candidate) => {
+        const merged = mergeCandidateMarkup(item, candidate);
+        ensureCandidateMarkup(item, merged).catch((error) => console.error(error));
+        return merged;
+      });
 
     const cards = visibleCandidates.map((candidate) => {
       const noteId = `candidate-notes-${candidate.candidate_key || candidate.candidate_rank || 'x'}`;
@@ -835,13 +904,15 @@
     const candidates = Array.isArray(item && item.candidates) ? item.candidates : [];
     if (!candidates.length) return null;
     if (currentCandidatePage >= 0 && currentCandidatePage < candidates.length) {
-      return candidates[currentCandidatePage];
+      return mergeCandidateMarkup(item, candidates[currentCandidatePage]);
     }
     const best = item && item.best_candidate ? item.best_candidate : null;
-    if (!best) return candidates[0];
-    return candidates.find((candidate) => candidate.candidate_key && candidate.candidate_key === best.candidate_key)
+    if (!best) return mergeCandidateMarkup(item, candidates[0]);
+    return mergeCandidateMarkup(item, (
+      candidates.find((candidate) => candidate.candidate_key && candidate.candidate_key === best.candidate_key)
       || candidates.find((candidate) => candidate.xpath === best.xpath && candidate.css_path === best.css_path)
-      || candidates[0];
+      || candidates[0]
+    ));
   }
 
   function explainFeatureBuckets(candidate) {
@@ -939,6 +1010,7 @@
       scoringBreakdown.textContent = 'This row has no candidate regions yet, so there is no feature breakdown to explain.';
       return;
     }
+    ensureCandidateMarkup(item, candidate).catch((error) => console.error(error));
 
     const buckets = explainFeatureBuckets(candidate);
     const matchedSignalsArray = Array.isArray(candidate.matched_signals) ? candidate.matched_signals.filter(Boolean) : [];

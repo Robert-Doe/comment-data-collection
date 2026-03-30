@@ -1716,6 +1716,47 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
   return result;
 }
 
+async function hydrateCandidateMarkupFromSnapshot(snapshot, candidate, options = {}) {
+  const html = String(snapshot && (snapshot.raw_html || snapshot.html) ? (snapshot.raw_html || snapshot.html) : '');
+  if (!html.trim()) {
+    throw new Error('HTML snapshot is required');
+  }
+  if (candidate && candidate.frame_is_main === false) {
+    throw new Error('Stored HTML snapshots do not preserve iframe documents for this candidate');
+  }
+
+  const context = await createContext();
+  const page = await context.newPage();
+  const timeoutMs = Number(options.timeoutMs ?? 20000);
+  page.setDefaultNavigationTimeout(timeoutMs);
+  page.setDefaultTimeout(timeoutMs);
+
+  const normalizedUrl = snapshot.normalized_url || snapshot.final_url || snapshot.capture_url || 'about:blank';
+
+  try {
+    const htmlWithBase = injectBaseHref(html, normalizedUrl);
+    await page.setContent(htmlWithBase, {
+      waitUntil: 'domcontentloaded',
+      timeout: timeoutMs,
+    });
+    await safeWait(page, 'load', 2000);
+
+    const handle = await resolveCandidateElementHandle(page.mainFrame(), candidate);
+    if (!handle) {
+      throw new Error('Candidate element could not be resolved from the stored snapshot');
+    }
+
+    try {
+      return await extractCandidateMarkup(handle, options);
+    } finally {
+      await handle.dispose().catch(() => {});
+    }
+  } finally {
+    await page.close().catch(() => {});
+    await context.close().catch(() => {});
+  }
+}
+
 async function closeBrowser() {
   if (!browserPromise) return;
   const browser = await browserPromise;
@@ -1726,6 +1767,7 @@ async function closeBrowser() {
 module.exports = {
   scanUrl,
   analyzeHtmlSnapshot,
+  hydrateCandidateMarkupFromSnapshot,
   buildHtmlSnapshotDot,
   deriveManualCaptureState,
   closeBrowser,
