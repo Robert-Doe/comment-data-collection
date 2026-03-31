@@ -25,7 +25,14 @@ const {
   buildJobReportWorkbook,
 } = require('../shared/output');
 const { renderDotToSvg } = require('../shared/graphviz');
-const { scanUrl, buildHtmlSnapshotDot, deriveManualCaptureState, closeBrowser } = require('../shared/scanner');
+const {
+  scanUrl,
+  buildHtmlSnapshotDot,
+  deriveManualCaptureState,
+  hydrateCandidateMarkupFromSnapshot,
+  analyzeHtmlSnapshot,
+  closeBrowser,
+} = require('../shared/scanner');
 const { analyzeManualCapture } = require('../shared/manualCapture');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
@@ -1137,6 +1144,113 @@ function createLocalApp(options = {}) {
       ok: true,
       item: materializeItem(updated, req),
     });
+  });
+
+  app.get('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/markup', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const item = runtime.getItem(req.params.jobId, req.params.itemId);
+      if (!item) {
+        res.status(404).json({ error: 'Job item not found' });
+        return;
+      }
+
+      const candidateKey = String(req.params.candidateKey || '').trim();
+      const candidates = Array.isArray(item.candidates) ? item.candidates : [];
+      const candidate = candidates.find((entry) => String(entry.candidate_key || '') === candidateKey);
+      if (!candidate) {
+        res.status(404).json({ error: 'Candidate not found on this item' });
+        return;
+      }
+
+      const hasStoredMarkup = !!(
+        (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
+        || candidate.candidate_markup_error
+      );
+
+      if (hasStoredMarkup) {
+        res.json({
+          markup: {
+            candidate_outer_html_excerpt: candidate.candidate_outer_html_excerpt || '',
+            candidate_outer_html_length: candidate.candidate_outer_html_length || 0,
+            candidate_outer_html_truncated: !!candidate.candidate_outer_html_truncated,
+            candidate_text_excerpt: candidate.candidate_text_excerpt || '',
+            candidate_markup_error: candidate.candidate_markup_error || '',
+            candidate_resolved_tag_name: candidate.candidate_resolved_tag_name || '',
+            candidate_markup_source: 'stored_candidate',
+          },
+        });
+        return;
+      }
+
+      const html = await readSnapshotHtmlForItem(item);
+      const snapshot = {
+        html,
+        raw_html: html,
+        normalized_url: item.final_url || item.manual_capture_url || item.normalized_url || 'about:blank',
+        final_url: item.final_url || item.normalized_url || '',
+        capture_url: item.manual_capture_url || item.final_url || item.normalized_url || '',
+        title: item.manual_capture_title || item.title || '',
+      };
+
+      let markup = null;
+      let markupSource = 'snapshot_backfill';
+      try {
+        markup = await hydrateCandidateMarkupFromSnapshot(snapshot, candidate, {
+          timeoutMs: runtime.config.scanTimeoutMs,
+        });
+      } catch (directError) {
+        const fallbackResult = await analyzeHtmlSnapshot(snapshot, {
+          timeoutMs: runtime.config.scanTimeoutMs,
+          postLoadDelayMs: 0,
+          captureScreenshots: false,
+          maxCandidates: Math.max(runtime.config.maxCandidates, 25),
+          maxResults: Math.max(runtime.config.maxResults, 25),
+        });
+        const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
+        const matched = fallbackCandidates.find((entry) => (
+          (candidate.candidate_key && entry.candidate_key && entry.candidate_key === candidate.candidate_key)
+          || (
+            entry.xpath === candidate.xpath
+            && entry.css_path === candidate.css_path
+          )
+          || (
+            entry.node_id
+            && candidate.node_id
+            && entry.node_id === candidate.node_id
+            && entry.structural_signature === candidate.structural_signature
+          )
+        ));
+
+        if (!matched) {
+          throw directError;
+        }
+
+        markup = {
+          candidate_outer_html_excerpt: matched.candidate_outer_html_excerpt || '',
+          candidate_outer_html_length: matched.candidate_outer_html_length || 0,
+          candidate_outer_html_truncated: !!matched.candidate_outer_html_truncated,
+          candidate_text_excerpt: matched.candidate_text_excerpt || '',
+          candidate_markup_error: matched.candidate_markup_error || '',
+          candidate_resolved_tag_name: matched.candidate_resolved_tag_name || matched.tag_name || '',
+        };
+        markupSource = 'snapshot_redetect';
+      }
+
+      res.json({
+        markup: {
+          ...markup,
+          candidate_markup_source: markupSource,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/jobs/:jobId/items/:itemId/graph.dot', async (req, res, next) => {

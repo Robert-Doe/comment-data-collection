@@ -448,17 +448,16 @@ async function extractCandidateMarkup(handle, options = {}) {
   const maxHtmlChars = Math.max(500, Number(options.maxCandidateHtmlChars || 8000));
   return handle.evaluate((node, input) => {
     const outerHtml = String(node && node.outerHTML ? node.outerHTML : '');
-    const innerHtml = String(node && node.innerHTML ? node.innerHTML : '');
     const text = String((node && (node.innerText || node.textContent)) || '')
       .replace(/\s+/g, ' ')
       .trim();
     return {
-      candidate_outer_html_excerpt: outerHtml.slice(0, input.maxHtmlChars),
+      candidate_outer_html_excerpt: outerHtml,
       candidate_outer_html_length: outerHtml.length,
-      candidate_outer_html_truncated: outerHtml.length > input.maxHtmlChars,
-      candidate_inner_html_excerpt: innerHtml.slice(0, input.maxHtmlChars),
-      candidate_inner_html_length: innerHtml.length,
-      candidate_inner_html_truncated: innerHtml.length > input.maxHtmlChars,
+      candidate_outer_html_truncated: false,
+      candidate_inner_html_excerpt: '',
+      candidate_inner_html_length: 0,
+      candidate_inner_html_truncated: false,
       candidate_text_excerpt: text.slice(0, 1200),
       candidate_markup_error: '',
       candidate_resolved_tag_name: node && node.tagName ? String(node.tagName).toLowerCase() : '',

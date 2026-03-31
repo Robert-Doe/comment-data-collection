@@ -885,8 +885,7 @@ function createApp(config = getConfig()) {
       }
 
       const hasStoredMarkup = !!(
-        candidate.candidate_outer_html_excerpt
-        || candidate.candidate_inner_html_excerpt
+        (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
         || candidate.candidate_markup_error
       );
 
@@ -896,9 +895,6 @@ function createApp(config = getConfig()) {
             candidate_outer_html_excerpt: candidate.candidate_outer_html_excerpt || '',
             candidate_outer_html_length: candidate.candidate_outer_html_length || 0,
             candidate_outer_html_truncated: !!candidate.candidate_outer_html_truncated,
-            candidate_inner_html_excerpt: candidate.candidate_inner_html_excerpt || '',
-            candidate_inner_html_length: candidate.candidate_inner_html_length || 0,
-            candidate_inner_html_truncated: !!candidate.candidate_inner_html_truncated,
             candidate_text_excerpt: candidate.candidate_text_excerpt || '',
             candidate_markup_error: candidate.candidate_markup_error || '',
             candidate_resolved_tag_name: candidate.candidate_resolved_tag_name || '',
@@ -955,9 +951,6 @@ function createApp(config = getConfig()) {
           candidate_outer_html_excerpt: matched.candidate_outer_html_excerpt || '',
           candidate_outer_html_length: matched.candidate_outer_html_length || 0,
           candidate_outer_html_truncated: !!matched.candidate_outer_html_truncated,
-          candidate_inner_html_excerpt: matched.candidate_inner_html_excerpt || '',
-          candidate_inner_html_length: matched.candidate_inner_html_length || 0,
-          candidate_inner_html_truncated: !!matched.candidate_inner_html_truncated,
           candidate_text_excerpt: matched.candidate_text_excerpt || '',
           candidate_markup_error: matched.candidate_markup_error || '',
           candidate_resolved_tag_name: matched.candidate_resolved_tag_name || matched.tag_name || '',

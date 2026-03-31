@@ -679,6 +679,36 @@
     `;
   }
 
+  function renderCandidateMarkupDetails(candidate) {
+    if (!candidate) return '';
+    const markupSections = [];
+    const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
+    const outerMeta = candidate.candidate_outer_html_length
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
+      : '';
+
+    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta, 'outer'));
+
+    const content = markupSections.filter(Boolean).join('');
+    const loadingCopy = candidate.candidate_markup_loading
+      ? '<p class="candidate-copy"><strong>Markup:</strong> loading stored candidate HTML...</p>'
+      : '';
+
+    if (!content && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
+      return '';
+    }
+
+    return `
+      <div class="candidate-markup-stack">
+        ${loadingCopy}
+        ${content}
+        ${candidate.candidate_markup_error
+          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+          : ''}
+      </div>
+    `;
+  }
+
   function candidateMarkupCacheKey(item, candidate) {
     const jobId = currentJobId || (item && item.job_id) || '';
     const itemId = item && item.id ? item.id : '';
@@ -694,8 +724,7 @@
 
   function candidateHasMarkup(candidate) {
     return !!(candidate && (
-      candidate.candidate_outer_html_excerpt
-      || candidate.candidate_inner_html_excerpt
+      (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
       || candidate.candidate_markup_error
       || candidate.candidate_markup_loading
     ));

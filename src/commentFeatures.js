@@ -1662,17 +1662,16 @@ function collectSampleText(root) {
   };
 }
 
-function collectCandidateMarkup(root, maxChars = 8000) {
+function collectCandidateMarkup(root, _maxChars = 8000) {
   const outerHtml = String(root && root.outerHTML ? root.outerHTML : '');
-  const innerHtml = String(root && root.innerHTML ? root.innerHTML : '');
   const text = String(textOf(root) || '').replace(/\s+/g, ' ').trim();
   return {
-    candidate_outer_html_excerpt: outerHtml.slice(0, maxChars),
+    candidate_outer_html_excerpt: outerHtml,
     candidate_outer_html_length: outerHtml.length,
-    candidate_outer_html_truncated: outerHtml.length > maxChars,
-    candidate_inner_html_excerpt: innerHtml.slice(0, maxChars),
-    candidate_inner_html_length: innerHtml.length,
-    candidate_inner_html_truncated: innerHtml.length > maxChars,
+    candidate_outer_html_truncated: false,
+    candidate_inner_html_excerpt: '',
+    candidate_inner_html_length: 0,
+    candidate_inner_html_truncated: false,
     candidate_text_excerpt: text.slice(0, 1200),
   };
 }
