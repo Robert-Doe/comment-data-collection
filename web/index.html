@@ -82,6 +82,7 @@
             <button class="tab-button active" type="button" role="tab" aria-selected="true" data-workspace-tab="queue">Rows</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manual">Manual</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates">Candidates</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="labeler">Labeler</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring">Scoring</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager">Manager</button>
           </div>
@@ -143,6 +144,25 @@
             <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. For manual uploads you can now compare the browser-uploaded screenshot, the server-rendered snapshot screenshot, and the candidate crops together. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
             <div id="candidate-review" class="candidate-review empty">Select a row from Job Status to inspect and label candidate regions.</div>
             <p id="candidate-message" class="message"></p>
+          </section>
+          <section id="workspace-panel-labeler" class="workspace-panel" data-workspace-panel="labeler">
+            <div class="panel-header compact-header">
+              <h3>Job Labeler</h3>
+              <div class="panel-actions">
+                <button id="job-labeler-reload" class="secondary compact" type="button">Reload Queue</button>
+                <button id="job-labeler-prev" class="secondary compact" type="button" disabled>Previous</button>
+                <button id="job-labeler-next" class="secondary compact" type="button" disabled>Next</button>
+              </div>
+            </div>
+            <p class="lede manual-lede">Review candidates from the entire selected job on one screen. Use the large screenshot, label buttons, and next controls instead of opening each row one by one. Keyboard shortcuts: left/right arrows for navigation, `1` for comment region, `2` for not comment, `3` for uncertain.</p>
+            <div class="job-labeler-controls">
+              <label class="job-labeler-toggle">
+                <input id="job-labeler-auto-advance" type="checkbox" checked>
+                <span>After saving, jump to the next unlabeled candidate when possible.</span>
+              </label>
+            </div>
+            <div id="job-labeler-review" class="candidate-review empty">Select a job, then open Labeler to build a review queue from every row in that job.</div>
+            <p id="job-labeler-message" class="message"></p>
           </section>
           <section id="workspace-panel-scoring" class="workspace-panel" data-workspace-panel="scoring">
             <div class="panel-header compact-header">

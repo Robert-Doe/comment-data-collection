@@ -659,6 +659,26 @@ button[data-error="true"],
   color: var(--muted);
 }
 
+.job-labeler-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.job-labeler-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 640px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.job-labeler-toggle input {
+  margin-top: 4px;
+}
+
 .candidate-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1135,6 +1155,39 @@ button[data-error="true"],
   font-size: 0.92rem;
 }
 
+.job-labeler-toolbar {
+  margin: 12px 0 4px;
+}
+
+.job-labeler-toolbar .candidate-pager {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.job-labeler-toolbar .candidate-page-copy {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.job-labeler-stage {
+  display: grid;
+  gap: 10px;
+}
+
+.job-labeler-shot {
+  max-height: 560px;
+}
+
+.job-labeler-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.job-labeler-shortcuts {
+  font-size: 0.88rem;
+}
+
 .candidate-signal-list {
   display: flex;
   flex-wrap: wrap;
@@ -1369,6 +1422,10 @@ img {
 
   .panel {
     padding: 18px;
+  }
+
+  .job-labeler-controls {
+    justify-content: flex-start;
   }
 
   .manager-danger-zone,
