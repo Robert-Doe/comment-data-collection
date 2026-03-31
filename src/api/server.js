@@ -31,6 +31,7 @@ const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
   summarizeCandidateReviews,
+  upsertCandidateReview: upsertCandidateReviewArray,
 } = require('../shared/candidateReviews');
 const {
   ensureSchema,
@@ -52,7 +53,7 @@ const {
   getManualReviewTarget,
   markItemCompleted,
   markItemFailed,
-  upsertCandidateReview,
+  upsertCandidateReview: persistCandidateReview,
   recomputeJob,
 } = require('../shared/store');
 const {
@@ -813,12 +814,6 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/review', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
-      if (!job) {
-        res.status(404).json({ error: 'Job not found' });
-        return;
-      }
-
       const item = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
       if (!item) {
         res.status(404).json({ error: 'Job item not found' });
@@ -842,7 +837,7 @@ function createApp(config = getConfig()) {
         return;
       }
 
-      await upsertCandidateReview(req.params.jobId, req.params.itemId, {
+      const nextReviews = await persistCandidateReview(req.params.jobId, req.params.itemId, {
         candidate_key: candidateKey,
         label: clear ? '' : label,
         notes,
@@ -850,12 +845,38 @@ function createApp(config = getConfig()) {
         css_path: candidate.css_path || '',
         candidate_rank: candidate.candidate_rank || 0,
         source: 'web_review',
-      }, config.databaseUrl);
+      }, config.databaseUrl, item);
 
-      const updated = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
+      const includeItem = !(
+        req.body
+        && (req.body.includeItem === false || String(req.body.includeItem || '').toLowerCase() === 'false')
+      );
+
+      if (!includeItem) {
+        res.json({
+          ok: true,
+          candidate_key: candidateKey,
+          candidate_review_summary: summarizeCandidateReviews(nextReviews || []),
+        });
+        return;
+      }
+
+      const updatedItem = {
+        ...item,
+        candidate_reviews: Array.isArray(nextReviews) ? nextReviews : upsertCandidateReviewArray(item.candidate_reviews || [], {
+          candidate_key: candidateKey,
+          label: clear ? '' : label,
+          notes,
+          xpath: candidate.xpath || '',
+          css_path: candidate.css_path || '',
+          candidate_rank: candidate.candidate_rank || 0,
+          source: 'web_review',
+        }),
+        updated_at: new Date().toISOString(),
+      };
       res.json({
         ok: true,
-        item: materializeItem(updated, req),
+        item: materializeItem(updatedItem, req),
       });
     } catch (error) {
       next(error);

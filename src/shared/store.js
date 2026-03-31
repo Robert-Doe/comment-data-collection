@@ -990,13 +990,13 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
   );
 }
 
-async function upsertCandidateReview(jobId, itemId, review, databaseUrl) {
-  const existingItem = await getJobItem(jobId, itemId, databaseUrl);
-  if (!existingItem) {
+async function upsertCandidateReview(jobId, itemId, review, databaseUrl, existingItem = null) {
+  const currentItem = existingItem || await getJobItem(jobId, itemId, databaseUrl);
+  if (!currentItem) {
     return null;
   }
 
-  const nextReviews = upsertCandidateReviewArray(existingItem.candidate_reviews || [], review);
+  const nextReviews = upsertCandidateReviewArray(currentItem.candidate_reviews || [], review);
   const db = getPool(databaseUrl);
   await db.query(
     `UPDATE job_items

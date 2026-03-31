@@ -1102,12 +1102,6 @@ function createLocalApp(options = {}) {
   );
 
   app.post('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/review', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
-
     const item = runtime.getItem(req.params.jobId, req.params.itemId);
     if (!item) {
       res.status(404).json({ error: 'Job item not found' });
@@ -1139,6 +1133,20 @@ function createLocalApp(options = {}) {
       candidate_rank: candidate.candidate_rank || 0,
       source: 'web_review',
     });
+
+    const includeItem = !(
+      req.body
+      && (req.body.includeItem === false || String(req.body.includeItem || '').toLowerCase() === 'false')
+    );
+
+    if (!includeItem) {
+      res.json({
+        ok: true,
+        candidate_key: candidateKey,
+        candidate_review_summary: summarizeCandidateReviews(updated.candidate_reviews || []),
+      });
+      return;
+    }
 
     res.json({
       ok: true,
