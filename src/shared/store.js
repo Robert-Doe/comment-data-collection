@@ -335,6 +335,253 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   return result.rows;
 }
 
+async function replaceJobRecords(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const records = Array.isArray(options.records)
+    ? options.records.filter((record) => record && record.__normalized_url)
+    : [];
+  if (!records.length) {
+    throw new Error('At least one normalized record is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const batchSize = Math.max(1, Number(options.batchSize) || 250);
+
+  try {
+    await client.query('BEGIN');
+
+    const existingJobResult = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 FOR UPDATE',
+      [normalizedJobId],
+    );
+    const existingJob = existingJobResult.rows[0] || null;
+    if (!existingJob) {
+      throw new Error('Job not found');
+    }
+
+    const nextSourceFilename = options.sourceFilename !== undefined
+      ? String(options.sourceFilename || '')
+      : String(existingJob.source_filename || '');
+    const nextSourceColumn = options.sourceColumn !== undefined
+      ? String(options.sourceColumn || '')
+      : String(existingJob.source_column || '');
+    const nextScanDelayMs = Number.isFinite(Number(options.scanDelayMs))
+      ? Number(options.scanDelayMs)
+      : Number(existingJob.scan_delay_ms || 6000);
+    const nextScreenshotDelayMs = Number.isFinite(Number(options.screenshotDelayMs))
+      ? Number(options.screenshotDelayMs)
+      : Number(existingJob.screenshot_delay_ms || 1500);
+
+    await client.query(
+      'DELETE FROM manual_review_targets WHERE job_id = $1',
+      [normalizedJobId],
+    );
+    await client.query(
+      'DELETE FROM job_events WHERE job_id = $1',
+      [normalizedJobId],
+    );
+    await client.query(
+      'DELETE FROM job_items WHERE job_id = $1',
+      [normalizedJobId],
+    );
+
+    for (let offset = 0; offset < records.length; offset += batchSize) {
+      const chunk = records.slice(offset, offset + batchSize);
+      const { values, placeholders } = buildInsertBatch(normalizedJobId, chunk);
+      await client.query(
+        `INSERT INTO job_items (
+          id, job_id, row_number, input_url, normalized_url, status
+        ) VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    const updatedResult = await client.query(
+      `UPDATE jobs
+       SET source_filename = $2,
+           source_column = $3,
+           scan_delay_ms = $4,
+           screenshot_delay_ms = $5,
+           status = 'pending',
+           total_urls = $6,
+           pending_count = $6,
+           queued_count = 0,
+           running_count = 0,
+           completed_count = 0,
+           failed_count = 0,
+           detected_count = 0,
+           error_message = NULL,
+           updated_at = NOW(),
+           finished_at = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [
+        normalizedJobId,
+        nextSourceFilename,
+        nextSourceColumn,
+        nextScanDelayMs,
+        nextScreenshotDelayMs,
+        records.length,
+      ],
+    );
+
+    await client.query('COMMIT');
+    return updatedResult.rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function restartJob(jobId, options = {}, databaseUrl) {
+  const existingJob = await getJob(jobId, databaseUrl);
+  if (!existingJob) {
+    return null;
+  }
+
+  const items = await getJobItems(jobId, {
+    limit: Math.max(1, Number(existingJob.total_urls) || 1),
+    offset: 0,
+  }, databaseUrl);
+  const records = items.map((item) => ({
+    __row_number: item.row_number,
+    __input_url: item.input_url,
+    __normalized_url: item.normalized_url,
+  }));
+
+  return replaceJobRecords(jobId, {
+    sourceFilename: existingJob.source_filename || '',
+    sourceColumn: existingJob.source_column || '',
+    records,
+    batchSize: options.batchSize,
+    scanDelayMs: existingJob.scan_delay_ms,
+    screenshotDelayMs: existingJob.screenshot_delay_ms,
+  }, databaseUrl);
+}
+
+async function resumeJob(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const batchSize = Math.max(1, Number(options.batchSize) || 250);
+
+  try {
+    await client.query('BEGIN');
+
+    const existingJobResult = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 FOR UPDATE',
+      [normalizedJobId],
+    );
+    const existingJob = existingJobResult.rows[0] || null;
+    if (!existingJob) {
+      throw new Error('Job not found');
+    }
+
+    const unfinishedResult = await client.query(
+      `SELECT id, row_number, input_url, normalized_url
+       FROM job_items
+       WHERE job_id = $1
+         AND status = ANY($2::text[])
+       ORDER BY row_number ASC`,
+      [normalizedJobId, ['pending', 'queued', 'running']],
+    );
+    const unfinishedItems = unfinishedResult.rows;
+    const replacedCount = unfinishedItems.length;
+    if (!replacedCount) {
+      await client.query('COMMIT');
+      return {
+        job: existingJob,
+        replacedCount: 0,
+      };
+    }
+
+    const staleItemIds = unfinishedItems.map((item) => item.id);
+    const records = unfinishedItems.map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    }));
+
+    await client.query(
+      `DELETE FROM manual_review_targets
+       WHERE job_id = $1
+         AND item_id = ANY($2::text[])`,
+      [normalizedJobId, staleItemIds],
+    );
+    await client.query(
+      'DELETE FROM job_items WHERE id = ANY($1::text[])',
+      [staleItemIds],
+    );
+
+    for (let offset = 0; offset < records.length; offset += batchSize) {
+      const chunk = records.slice(offset, offset + batchSize);
+      const { values, placeholders } = buildInsertBatch(normalizedJobId, chunk);
+      await client.query(
+        `INSERT INTO job_items (
+          id, job_id, row_number, input_url, normalized_url, status
+        ) VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    const updatedResult = await client.query(
+      `UPDATE jobs
+       SET error_message = NULL,
+           updated_at = NOW(),
+           finished_at = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [normalizedJobId],
+    );
+
+    await client.query('COMMIT');
+    await recomputeJob(normalizedJobId, databaseUrl);
+
+    return {
+      job: await getJob(normalizedJobId, databaseUrl),
+      replacedCount,
+      staleItemIds,
+      previousJob: updatedResult.rows[0] || existingJob,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteJob(jobId, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    'DELETE FROM jobs WHERE id = $1 RETURNING id',
+    [normalizedJobId],
+  );
+  return result.rowCount > 0;
+}
+
+async function clearAllJobs(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('DELETE FROM jobs');
+  return result.rowCount || 0;
+}
+
 async function appendJobEvent(event, databaseUrl) {
   const jobId = String(event && event.jobId || '').trim();
   if (!jobId) {
@@ -815,6 +1062,11 @@ module.exports = {
   getPool,
   ensureSchema,
   createJob,
+  replaceJobRecords,
+  restartJob,
+  resumeJob,
+  deleteJob,
+  clearAllJobs,
   listJobs,
   appendJobEvent,
   listJobEvents,

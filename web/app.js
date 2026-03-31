@@ -44,17 +44,38 @@
   const downloadDotGraphLink = document.getElementById('download-dot-graph');
   const downloadCandidateJsonButton = document.getElementById('download-candidate-json');
   const downloadCandidateCsvButton = document.getElementById('download-candidate-csv');
+  const managerSelection = document.getElementById('manager-selection');
+  const managerForm = document.getElementById('manager-replace-form');
+  const managerJobId = document.getElementById('manager-job-id');
+  const managerSourceColumn = document.getElementById('manager-source-column');
+  const managerScanDelayInput = document.getElementById('manager-scan-delay-ms');
+  const managerScreenshotDelayInput = document.getElementById('manager-screenshot-delay-ms');
+  const managerReplaceFile = document.getElementById('manager-replace-file');
+  const managerMessage = document.getElementById('manager-message');
+  const managerResumeButton = document.getElementById('manager-resume-job');
+  const managerRestartButton = document.getElementById('manager-restart-job');
+  const managerDeleteButton = document.getElementById('manager-delete-job');
+  const managerClearJobsButton = document.getElementById('manager-clear-jobs');
+  const confirmDialog = document.getElementById('confirm-dialog');
+  const confirmTitle = document.getElementById('confirm-title');
+  const confirmDescription = document.getElementById('confirm-description');
+  const confirmAccept = document.getElementById('confirm-accept');
+  const toastStack = document.getElementById('toast-stack');
 
   let currentJobId = new URLSearchParams(window.location.search).get('jobId') || '';
+  let currentJob = null;
   let currentOffset = 0;
   let selectedManualItemId = '';
   let activeWorkspaceTab = 'queue';
   let currentCandidatePage = 0;
   let currentItemsById = new Map();
+  let managerFormJobId = '';
+  let confirmResolver = null;
   const pageSize = 50;
   const candidatePageSize = 1;
   const activePollIntervalMs = 4000;
   const terminalPollIntervalMs = 12000;
+  const actionStateDurationMs = 1400;
   let pollHandle = null;
   let pollJobId = '';
   let pollIntervalMs = 0;
@@ -165,6 +186,147 @@
   function setCandidateMessage(text, isError) {
     candidateMessage.textContent = text || '';
     candidateMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function setManagerMessage(text, isError) {
+    managerMessage.textContent = text || '';
+    managerMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function showToast(text, options = {}) {
+    if (!toastStack || !text) return;
+    const tone = options.tone || 'info';
+    const timeoutMs = Math.max(1800, Number(options.timeoutMs) || (tone === 'error' ? 5200 : 3200));
+    const toast = document.createElement('div');
+    const copy = document.createElement('div');
+    toast.className = `toast toast-${tone}`;
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    copy.className = 'toast-copy';
+    copy.textContent = text;
+    toast.appendChild(copy);
+    toastStack.appendChild(toast);
+
+    const dismiss = () => {
+      toast.classList.remove('visible');
+      toast.classList.add('leaving');
+      window.setTimeout(() => {
+        toast.remove();
+      }, 220);
+    };
+
+    requestAnimationFrame(() => {
+      toast.classList.add('visible');
+    });
+    const timer = window.setTimeout(dismiss, timeoutMs);
+    toast.addEventListener('click', () => {
+      window.clearTimeout(timer);
+      dismiss();
+    }, { once: true });
+  }
+
+  function setBusyState(element, busy) {
+    if (!element) return;
+
+    if (busy) {
+      element.dataset.busy = 'true';
+      if ('disabled' in element) {
+        element.dataset.wasDisabled = element.disabled ? 'true' : 'false';
+        element.disabled = true;
+      } else {
+        element.dataset.hadDisabledClass = element.classList.contains('disabled') ? 'true' : 'false';
+      }
+      return;
+    }
+
+    delete element.dataset.busy;
+    if ('disabled' in element) {
+      if (element.dataset.wasDisabled !== 'true') {
+        element.disabled = false;
+      }
+      delete element.dataset.wasDisabled;
+    } else {
+      delete element.dataset.hadDisabledClass;
+    }
+  }
+
+  function flashActionState(element, state) {
+    if (!element) return;
+    const attribute = state === 'error' ? 'error' : 'success';
+    element.dataset[attribute] = 'true';
+    window.setTimeout(() => {
+      delete element.dataset[attribute];
+    }, actionStateDurationMs);
+  }
+
+  async function runElementAction(element, action) {
+    setBusyState(element, true);
+    try {
+      const result = await action();
+      flashActionState(element, 'success');
+      return result;
+    } catch (error) {
+      flashActionState(element, 'error');
+      throw error;
+    } finally {
+      setBusyState(element, false);
+    }
+  }
+
+  function confirmAction(options = {}) {
+    const title = options.title || 'Confirm action';
+    const description = options.description || '';
+    const acceptLabel = options.acceptLabel || 'Continue';
+    const danger = options.danger !== false;
+
+    if (!confirmDialog || typeof confirmDialog.showModal !== 'function') {
+      return Promise.resolve(window.confirm(description || title));
+    }
+
+    if (confirmResolver) {
+      confirmResolver(false);
+      confirmResolver = null;
+    }
+
+    confirmTitle.textContent = title;
+    confirmDescription.textContent = description;
+    confirmAccept.textContent = acceptLabel;
+    confirmAccept.classList.toggle('danger-button', danger);
+    confirmDialog.returnValue = 'cancel';
+    confirmDialog.showModal();
+
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+    });
+  }
+
+  function canResumeJob(job) {
+    if (!job) return false;
+    return (Number(job.pending_count) || 0) > 0
+      || (Number(job.queued_count) || 0) > 0
+      || (Number(job.running_count) || 0) > 0;
+  }
+
+  function resetCurrentJobSelection(options = {}) {
+    currentJob = null;
+    currentJobId = '';
+    currentOffset = 0;
+    selectedManualItemId = '';
+    currentItemsById = new Map();
+    managerFormJobId = '';
+    stopPolling();
+    window.history.replaceState({}, '', window.location.pathname);
+    renderSummary(null);
+    renderItems([], null);
+    renderWorkspaceSelection(null);
+    renderCandidateReview(null);
+    renderScoringBreakdown(null);
+    renderJobEvents([], { message: options.eventsMessage || 'Select a job to view recent events.' });
+    renderJobManager(null);
+    setDownloads('');
+    setMessage(options.formMessage || '', false);
+    setManualMessage('', false);
+    setCandidateMessage('', false);
+    setManagerMessage(options.managerMessage || '', false);
   }
 
   function selectedItem() {
@@ -795,10 +957,13 @@
 
     const item = selectedItem();
     try {
-      await downloadRemoteFile(href, buildGraphDownloadFilename(item, extension));
+      await runElementAction(link, () => downloadRemoteFile(href, buildGraphDownloadFilename(item, extension)));
       setCandidateMessage(successText, false);
+      showToast(successText, { tone: 'success' });
     } catch (error) {
-      setCandidateMessage(error && error.message ? error.message : String(error), true);
+      const message = error && error.message ? error.message : String(error);
+      setCandidateMessage(message, true);
+      showToast(message, { tone: 'error' });
     }
   }
 
@@ -893,6 +1058,8 @@
     const fileBase = toFileSafeSegment(`${item.row_number || 'row'}-${item.id || 'item'}-candidates`, 'candidates');
     triggerDownload(`${fileBase}.json`, `${JSON.stringify(payload, null, 2)}\n`, 'application/json');
     setCandidateMessage('Candidate JSON downloaded.', false);
+    flashActionState(downloadCandidateJsonButton, 'success');
+    showToast('Candidate JSON downloaded.', { tone: 'success' });
   }
 
   function downloadCandidateCsv(item) {
@@ -906,6 +1073,8 @@
     const fileBase = toFileSafeSegment(`${item.row_number || 'row'}-${item.id || 'item'}-candidates`, 'candidates');
     triggerDownload(`${fileBase}.csv`, `${lines.join('\n')}\n`, 'text/csv;charset=utf-8');
     setCandidateMessage('Candidate CSV downloaded.', false);
+    flashActionState(downloadCandidateCsvButton, 'success');
+    showToast('Candidate CSV downloaded.', { tone: 'success' });
   }
 
   function renderCandidateReview(item) {
@@ -1441,8 +1610,13 @@
 
   function renderItems(items, pagination) {
     currentItemsById = new Map((items || []).map((item) => [item.id, item]));
-    if (selectedManualItemId && currentItemsById.has(selectedManualItemId)) {
-      selectManualItem(currentItemsById.get(selectedManualItemId) || null);
+    if (selectedManualItemId) {
+      if (currentItemsById.has(selectedManualItemId)) {
+        selectManualItem(currentItemsById.get(selectedManualItemId) || null);
+      } else {
+        selectedManualItemId = '';
+        selectManualItem(null);
+      }
     }
 
     if (!items || !items.length) {
@@ -1512,6 +1686,56 @@
     `;
   }
 
+  function renderJobManager(job) {
+    const replaceButton = managerForm ? managerForm.querySelector('button[type="submit"]') : null;
+    if (!job) {
+      managerSelection.className = 'summary empty';
+      managerSelection.textContent = 'Select a job from Job Status or Recent Jobs to manage it here.';
+      managerJobId.value = '';
+      managerSourceColumn.value = '';
+      managerScanDelayInput.value = '';
+      managerScreenshotDelayInput.value = '';
+      managerReplaceFile.value = '';
+      managerResumeButton.disabled = true;
+      managerRestartButton.disabled = true;
+      managerDeleteButton.disabled = true;
+      if (replaceButton) {
+        replaceButton.disabled = true;
+      }
+      return;
+    }
+
+    managerSelection.className = 'summary tight-summary';
+    managerSelection.innerHTML = [
+      `<div><strong>Job:</strong> ${escapeHtml(job.id)}</div>`,
+      `<div><strong>Source:</strong> ${escapeHtml(job.source_filename || 'upload.csv')}</div>`,
+      `<div><strong>Column:</strong> ${escapeHtml(job.source_column || '(auto)')}</div>`,
+      `<div><strong>Status:</strong> ${escapeHtml(job.status || '')}</div>`,
+      `<div><strong>Progress:</strong> ${escapeHtml(job.completed_count || 0)}/${escapeHtml(job.total_urls || 0)}</div>`,
+      `<div><strong>Pending:</strong> ${escapeHtml(job.pending_count || 0)}</div>`,
+      `<div><strong>Queued:</strong> ${escapeHtml(job.queued_count || 0)}</div>`,
+      `<div><strong>Running:</strong> ${escapeHtml(job.running_count || 0)}</div>`,
+    ].join('');
+
+    if (managerFormJobId !== job.id) {
+      managerJobId.value = job.id || '';
+      managerSourceColumn.value = job.source_column || '';
+      managerScanDelayInput.value = job.scan_delay_ms ?? '';
+      managerScreenshotDelayInput.value = job.screenshot_delay_ms ?? '';
+      managerReplaceFile.value = '';
+      managerFormJobId = job.id;
+    } else {
+      managerJobId.value = job.id || '';
+    }
+
+    managerResumeButton.disabled = !canResumeJob(job);
+    managerRestartButton.disabled = false;
+    managerDeleteButton.disabled = false;
+    if (replaceButton) {
+      replaceButton.disabled = false;
+    }
+  }
+
   function renderRecentJobs(jobs) {
     if (!jobs || !jobs.length) {
       recentJobs.className = 'table-shell empty';
@@ -1520,12 +1744,20 @@
     }
 
     const rows = jobs.map((job) => `
-      <tr data-job-id="${escapeHtml(job.id)}">
+      <tr data-job-id="${escapeHtml(job.id)}" class="${currentJobId === job.id ? 'is-current' : ''}">
         <td class="mono">${escapeHtml(job.id)}</td>
         <td>${escapeHtml(job.status)}</td>
         <td>${escapeHtml(job.completed_count)}/${escapeHtml(job.total_urls)}</td>
         <td>${escapeHtml(job.detected_count)}</td>
-        <td><button class="secondary compact" type="button" data-open-job="${escapeHtml(job.id)}">Open</button></td>
+        <td>
+          <div class="job-action-grid">
+            <button class="secondary compact" type="button" data-open-job="${escapeHtml(job.id)}">Open</button>
+            <button class="secondary compact" type="button" data-manage-job="${escapeHtml(job.id)}">Manage</button>
+            <button class="secondary compact" type="button" data-resume-job="${escapeHtml(job.id)}" ${canResumeJob(job) ? '' : 'disabled'}>Resume</button>
+            <button class="secondary compact" type="button" data-restart-job="${escapeHtml(job.id)}">Restart</button>
+            <button class="secondary compact danger-button" type="button" data-delete-job="${escapeHtml(job.id)}">Delete</button>
+          </div>
+        </td>
       </tr>
     `).join('');
 
@@ -1546,8 +1778,11 @@
     `;
   }
 
-  async function fetchJson(path) {
-    const response = await fetch(apiUrl(path), { cache: 'no-store' });
+  async function fetchJson(path, options = {}) {
+    const response = await fetch(apiUrl(path), {
+      cache: 'no-store',
+      ...options,
+    });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Request failed: ${response.status}`);
@@ -1610,6 +1845,41 @@
     return body.target || null;
   }
 
+  async function postJobAction(jobId, path, options = {}) {
+    const response = await fetch(apiUrl(path), {
+      method: options.method || 'POST',
+      body: options.body,
+      headers: options.headers,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Job action failed.');
+    }
+
+    await refreshJobs().catch((error) => {
+      console.error(error);
+    });
+    if (body && body.deletedJobId) {
+      if (currentJobId === body.deletedJobId) {
+        resetCurrentJobSelection({
+          managerMessage: 'Job removed.',
+          eventsMessage: 'Select a job to view recent events.',
+        });
+      }
+      return body;
+    }
+    if (options.skipFollowUpRefresh) {
+      return body;
+    }
+
+    const nextJobId = body.jobId || (body.job && body.job.id) || jobId || currentJobId;
+    if (nextJobId) {
+      currentOffset = 0;
+      await refreshJob(nextJobId);
+    }
+    return body;
+  }
+
   async function refreshJob(jobId) {
     if (!jobId) return;
     const [{ job, items, pagination }] = await Promise.all([
@@ -1620,10 +1890,12 @@
       selectedManualItemId = '';
       selectManualItem(null);
     }
+    currentJob = job;
     currentJobId = jobId;
     window.history.replaceState({}, '', `?jobId=${jobId}`);
     renderSummary(job);
     renderItems(items, pagination);
+    renderJobManager(job);
     await refreshSelectedItem().catch((error) => console.error(error));
     setDownloads(jobId);
     refreshJobs().catch((error) => console.error(error));
@@ -1632,104 +1904,271 @@
 
   async function refreshJobs() {
     const data = await fetchJson('/api/jobs?limit=10');
-    renderRecentJobs(data.jobs || []);
+    const jobs = data.jobs || [];
+    renderRecentJobs(jobs);
+    return jobs;
+  }
+
+  async function handleResumeJob(jobId, triggerElement) {
+    if (!jobId) return;
+    try {
+      setManagerMessage('Resuming unfinished rows...', false);
+      const body = await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}/resume`));
+      const replacedCount = Number(body && body.replacedCount) || 0;
+      const message = replacedCount
+        ? `Resumed ${replacedCount} unfinished row(s).`
+        : 'Resume requested. No unfinished rows needed replacement.';
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleRestartJob(jobId, triggerElement) {
+    if (!jobId) return;
+    const confirmed = await confirmAction({
+      title: 'Restart this job?',
+      description: `This will reset all rows for job ${jobId} and start the scan again from the beginning.`,
+      acceptLabel: 'Restart Job',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Restarting job...', false);
+      await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}/restart`));
+      const message = `Job ${jobId} restarted.`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleDeleteJob(jobId, triggerElement) {
+    if (!jobId) return;
+    const confirmed = await confirmAction({
+      title: 'Delete this job?',
+      description: `This removes job ${jobId}, its rows, saved results, and job history for the current runtime.`,
+      acceptLabel: 'Delete Job',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Deleting job...', false);
+      await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}`, { method: 'DELETE' }));
+      const message = `Job ${jobId} deleted.`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleReplaceJob(event) {
+    event.preventDefault();
+    if (!currentJobId || !currentJob) {
+      setManagerMessage('Select a job first.', true);
+      showToast('Select a job first.', { tone: 'error' });
+      return;
+    }
+
+    const file = managerReplaceFile.files[0];
+    if (!file) {
+      setManagerMessage('Choose a replacement CSV first.', true);
+      showToast('Choose a replacement CSV first.', { tone: 'error' });
+      return;
+    }
+
+    const submitButton = managerForm.querySelector('button[type="submit"]');
+    try {
+      setManagerMessage('Replacing job CSV...', false);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (managerSourceColumn.value.trim()) {
+        formData.append('urlColumn', managerSourceColumn.value.trim());
+      }
+      if (managerScanDelayInput.value.trim()) {
+        formData.append('scanDelayMs', managerScanDelayInput.value.trim());
+      }
+      if (managerScreenshotDelayInput.value.trim()) {
+        formData.append('screenshotDelayMs', managerScreenshotDelayInput.value.trim());
+      }
+
+      const body = await runElementAction(submitButton, () => postJobAction(currentJobId, `/api/jobs/${currentJobId}/replace`, {
+        body: formData,
+      }));
+      managerReplaceFile.value = '';
+      const message = `Job ${currentJobId} updated with ${body.totalUrls || 0} row(s).`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleClearAllJobs(triggerElement) {
+    const confirmed = await confirmAction({
+      title: 'Clear all jobs?',
+      description: 'This removes every saved job in the current runtime. Use this only when you want to wipe the job database and start fresh.',
+      acceptLabel: 'Clear All Jobs',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Clearing saved jobs...', false);
+      const body = await runElementAction(triggerElement, () => postJobAction('', '/api/jobs/clear', {
+        skipFollowUpRefresh: true,
+      }));
+      resetCurrentJobSelection({
+        managerMessage: `Cleared ${body.deletedCount || 0} job(s).`,
+        eventsMessage: 'Select a job to view recent events.',
+      });
+      await refreshJobs();
+      const message = `Cleared ${body.deletedCount || 0} job(s).`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setMessage('Starting scan...', false);
 
     const file = fileInput.files[0];
     if (!file) {
       setMessage('Choose a CSV file first.', true);
+      showToast('Choose a CSV file first.', { tone: 'error' });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    if (urlColumnInput.value.trim()) {
-      formData.append('urlColumn', urlColumnInput.value.trim());
-    }
-    if (scanDelayInput && scanDelayInput.value.trim()) {
-      formData.append('scanDelayMs', scanDelayInput.value.trim());
-    }
-    if (screenshotDelayInput && screenshotDelayInput.value.trim()) {
-      formData.append('screenshotDelayMs', screenshotDelayInput.value.trim());
-    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    try {
+      setMessage('Starting scan...', false);
+      await runElementAction(submitButton, async () => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (urlColumnInput.value.trim()) {
+          formData.append('urlColumn', urlColumnInput.value.trim());
+        }
+        if (scanDelayInput && scanDelayInput.value.trim()) {
+          formData.append('scanDelayMs', scanDelayInput.value.trim());
+        }
+        if (screenshotDelayInput && screenshotDelayInput.value.trim()) {
+          formData.append('screenshotDelayMs', screenshotDelayInput.value.trim());
+        }
 
-    const response = await fetch(apiUrl('/api/jobs'), {
-      method: 'POST',
-      body: formData,
-    });
+        const response = await fetch(apiUrl('/api/jobs'), {
+          method: 'POST',
+          body: formData,
+        });
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setMessage(body.error || 'Failed to create job.', true);
-      return;
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to create job.');
+        }
+
+        setMessage(
+          `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
+          false,
+        );
+        showToast(`Job ${body.jobId} created.`, { tone: 'success' });
+        await refreshJobs();
+        currentOffset = 0;
+        await refreshJob(body.jobId);
+      });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setMessage(message, true);
+      showToast(message, { tone: 'error' });
     }
-
-    setMessage(
-      `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
-      false,
-    );
-    await refreshJobs();
-    currentOffset = 0;
-    await refreshJob(body.jobId);
   }
 
   async function handleManualSubmit(event) {
     event.preventDefault();
-    setManualMessage('Uploading manual snapshot...', false);
 
     if (!currentJobId || !selectedManualItemId) {
       setManualMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
     const htmlFile = manualHtmlFile.files[0];
     if (!htmlFile) {
       setManualMessage('Choose an HTML snapshot file.', true);
+      showToast('Choose an HTML snapshot file.', { tone: 'error' });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('snapshot', htmlFile);
-    if (manualScreenshotFile.files[0]) {
-      formData.append('screenshot', manualScreenshotFile.files[0]);
-    }
-    if (manualCaptureUrl.value.trim()) {
-      formData.append('captureUrl', manualCaptureUrl.value.trim());
-    }
-    if (manualCaptureTitle.value.trim()) {
-      formData.append('title', manualCaptureTitle.value.trim());
-    }
-    if (manualNotes.value.trim()) {
-      formData.append('notes', manualNotes.value.trim());
-    }
+    const submitButton = manualForm.querySelector('button[type="submit"]');
+    try {
+      setManualMessage('Uploading manual snapshot...', false);
+      await runElementAction(submitButton, async () => {
+        const formData = new FormData();
+        formData.append('snapshot', htmlFile);
+        if (manualScreenshotFile.files[0]) {
+          formData.append('screenshot', manualScreenshotFile.files[0]);
+        }
+        if (manualCaptureUrl.value.trim()) {
+          formData.append('captureUrl', manualCaptureUrl.value.trim());
+        }
+        if (manualCaptureTitle.value.trim()) {
+          formData.append('title', manualCaptureTitle.value.trim());
+        }
+        if (manualNotes.value.trim()) {
+          formData.append('notes', manualNotes.value.trim());
+        }
 
-    const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/manual-capture`), {
-      method: 'POST',
-      body: formData,
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setManualMessage(body.error || 'Failed to upload manual snapshot.', true);
-      return;
-    }
+        const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/manual-capture`), {
+          method: 'POST',
+          body: formData,
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to upload manual snapshot.');
+        }
 
-    manualHtmlFile.value = '';
-    manualScreenshotFile.value = '';
-    setManualMessage('Manual snapshot analyzed.', false);
-    if (body.item) {
-      currentItemsById.set(body.item.id, body.item);
-      selectManualItem(body.item, preferredReviewTab(body.item));
+        manualHtmlFile.value = '';
+        manualScreenshotFile.value = '';
+        setManualMessage('Manual snapshot analyzed.', false);
+        showToast('Manual snapshot analyzed.', { tone: 'success' });
+        if (body.item) {
+          currentItemsById.set(body.item.id, body.item);
+          selectManualItem(body.item, preferredReviewTab(body.item));
+        }
+        await refreshJob(currentJobId);
+      });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManualMessage(message, true);
+      showToast(message, { tone: 'error' });
     }
-    await refreshJob(currentJobId);
   }
 
   async function copyManualConfig() {
     if (!currentJobId || !selectedManualItemId) {
       setManualMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
@@ -1744,62 +2183,89 @@
       snapshotMode: 'frozen_styles',
     };
 
-    await copyText(JSON.stringify(payload, null, 2));
+    await runElementAction(manualCopyConfigButton, async () => {
+      await copyText(JSON.stringify(payload, null, 2));
+    });
     setManualMessage('Fallback extension config copied to clipboard.', false);
+    showToast('Fallback extension config copied to clipboard.', { tone: 'success' });
   }
 
   async function saveCandidateReview(candidateKey, label, notes, clear) {
     if (!currentJobId || !selectedManualItemId) {
       setCandidateMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
-    const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/candidates/${encodeURIComponent(candidateKey)}/review`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        label: clear ? '' : label,
-        notes: notes || '',
-        clear: !!clear,
-      }),
-    });
+    const activeButton = candidateReview.querySelector(clear
+      ? `[data-candidate-clear="${CSS.escape(candidateKey)}"]`
+      : `[data-candidate-review="${CSS.escape(candidateKey)}"][data-label-value="${CSS.escape(label)}"]`);
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || 'Failed to save candidate review.');
+    try {
+      await runElementAction(activeButton, async () => {
+        const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/candidates/${encodeURIComponent(candidateKey)}/review`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            label: clear ? '' : label,
+            notes: notes || '',
+            clear: !!clear,
+          }),
+        });
+
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to save candidate review.');
+        }
+
+        const item = body.item || null;
+        if (item) {
+          currentItemsById.set(item.id, item);
+          selectManualItem(item);
+        }
+      });
+      const message = clear ? 'Candidate review cleared.' : 'Candidate review saved.';
+      setCandidateMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setCandidateMessage(message, true);
+      showToast(message, { tone: 'error' });
     }
-
-    const item = body.item || null;
-    if (item) {
-      currentItemsById.set(item.id, item);
-      selectManualItem(item);
-    }
-
-    setCandidateMessage(clear ? 'Candidate review cleared.' : 'Candidate review saved.', false);
   }
 
   form.addEventListener('submit', (event) => {
-    handleSubmit(event).catch((error) => {
-      setMessage(error.message || String(error), true);
-    });
+    handleSubmit(event).catch((error) => console.error(error));
   });
 
   manualForm.addEventListener('submit', (event) => {
-    handleManualSubmit(event).catch((error) => {
-      setManualMessage(error.message || String(error), true);
-    });
+    handleManualSubmit(event).catch((error) => console.error(error));
+  });
+
+  managerForm.addEventListener('submit', (event) => {
+    handleReplaceJob(event).catch((error) => console.error(error));
   });
 
   manualCopyConfigButton.addEventListener('click', () => {
     copyManualConfig().catch((error) => {
-      setManualMessage(error.message || String(error), true);
+      const message = error && error.message ? error.message : String(error);
+      setManualMessage(message, true);
+      showToast(message, { tone: 'error' });
     });
   });
 
   refreshJobsButton.addEventListener('click', () => {
-    refreshJobs().catch((error) => console.error(error));
+    runElementAction(refreshJobsButton, async () => {
+      if (currentJobId) {
+        await refreshJob(currentJobId);
+        return;
+      }
+      await refreshJobs();
+    }).catch((error) => {
+      showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+    });
   });
 
   workspaceTabs.forEach((button) => {
@@ -1810,11 +2276,49 @@
 
   recentJobs.addEventListener('click', (event) => {
     const button = event.target.closest('[data-open-job]');
-    if (!button) return;
-    const jobId = button.getAttribute('data-open-job');
-    if (!jobId) return;
-    currentOffset = 0;
-    refreshJob(jobId).catch((error) => console.error(error));
+    if (button) {
+      const jobId = button.getAttribute('data-open-job');
+      if (!jobId) return;
+      currentOffset = 0;
+      runElementAction(button, () => refreshJob(jobId)).catch((error) => {
+        showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+      });
+      return;
+    }
+
+    const manageButton = event.target.closest('[data-manage-job]');
+    if (manageButton) {
+      const jobId = manageButton.getAttribute('data-manage-job');
+      if (!jobId) return;
+      currentOffset = 0;
+      runElementAction(manageButton, async () => {
+        await refreshJob(jobId);
+        setWorkspaceTab('manager');
+      }).catch((error) => {
+        showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+      });
+      return;
+    }
+
+    const resumeButton = event.target.closest('[data-resume-job]');
+    if (resumeButton) {
+      const jobId = resumeButton.getAttribute('data-resume-job');
+      handleResumeJob(jobId, resumeButton).catch((error) => console.error(error));
+      return;
+    }
+
+    const restartButton = event.target.closest('[data-restart-job]');
+    if (restartButton) {
+      const jobId = restartButton.getAttribute('data-restart-job');
+      handleRestartJob(jobId, restartButton).catch((error) => console.error(error));
+      return;
+    }
+
+    const deleteButton = event.target.closest('[data-delete-job]');
+    if (deleteButton) {
+      const jobId = deleteButton.getAttribute('data-delete-job');
+      handleDeleteJob(jobId, deleteButton).catch((error) => console.error(error));
+    }
   });
 
   jobItems.addEventListener('click', (event) => {
@@ -1929,12 +2433,38 @@
     handleGraphDownload(event, downloadDotGraphLink, 'dot', 'DOT graph downloaded.');
   });
 
+  managerResumeButton.addEventListener('click', () => {
+    handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));
+  });
+
+  managerRestartButton.addEventListener('click', () => {
+    handleRestartJob(currentJobId, managerRestartButton).catch((error) => console.error(error));
+  });
+
+  managerDeleteButton.addEventListener('click', () => {
+    handleDeleteJob(currentJobId, managerDeleteButton).catch((error) => console.error(error));
+  });
+
+  managerClearJobsButton.addEventListener('click', () => {
+    handleClearAllJobs(managerClearJobsButton).catch((error) => console.error(error));
+  });
+
+  if (confirmDialog) {
+    confirmDialog.addEventListener('close', () => {
+      if (!confirmResolver) return;
+      const resolve = confirmResolver;
+      confirmResolver = null;
+      resolve(confirmDialog.returnValue === 'accept');
+    });
+  }
+
   setResourceDownloads();
   setDownloads(currentJobId);
   setWorkspaceTab('queue');
   renderWorkspaceSelection(null);
   renderCandidateReview(null);
   renderScoringBreakdown(null);
+  renderJobManager(null);
   renderJobEvents([], { message: 'Select a job to view recent events.' });
   refreshJobs().catch((error) => console.error(error));
   if (currentJobId) {

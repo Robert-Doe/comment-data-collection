@@ -35,6 +35,11 @@ const {
 const {
   ensureSchema,
   createJob,
+  replaceJobRecords,
+  restartJob,
+  resumeJob,
+  deleteJob,
+  clearAllJobs,
   listJobs,
   getJob,
   getJobItem,
@@ -52,6 +57,7 @@ const {
 } = require('../shared/store');
 const {
   getSharedQueue,
+  removeQueueItems,
 } = require('../shared/queue');
 const { fillQueueForJob } = require('../shared/jobQueue');
 const { sendStartedNotification } = require('../shared/notifications');
@@ -185,6 +191,29 @@ async function buildGraphForItem(item, config) {
   });
 }
 
+function queueFillCountForJob(job, config) {
+  if (!job) return 0;
+  const pendingCount = Math.max(0, Number(job.pending_count) || 0);
+  const totalUrls = Math.max(0, Number(job.total_urls) || 0);
+  return Math.min(config.initialQueueFill, pendingCount || totalUrls);
+}
+
+async function listAllJobItemsForAction(jobId, config) {
+  const job = await getJob(jobId, config.databaseUrl);
+  if (!job) {
+    return {
+      job: null,
+      items: [],
+    };
+  }
+
+  const items = await getJobItems(jobId, {
+    limit: Math.max(1, Number(job.total_urls) || 1),
+    offset: 0,
+  }, config.databaseUrl);
+  return { job, items };
+}
+
 function createApp(config = getConfig()) {
   const app = express();
   app.set('trust proxy', true);
@@ -303,6 +332,232 @@ function createApp(config = getConfig()) {
         sourceColumn: parsed.urlColumn,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/clear', async (_req, res, next) => {
+    try {
+      const jobs = await listJobs(10000, config.databaseUrl);
+      const itemIds = [];
+      for (const job of jobs) {
+        const items = await getJobItems(job.id, {
+          limit: Math.max(1, Number(job.total_urls) || 1),
+          offset: 0,
+        }, config.databaseUrl);
+        itemIds.push(...items.map((item) => item.id));
+      }
+
+      if (itemIds.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, itemIds);
+      }
+      const deletedCount = await clearAllJobs(config.databaseUrl);
+      res.json({
+        ok: true,
+        deletedCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/resume', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const staleItemIds = items
+        .filter((item) => ['pending', 'queued', 'running'].includes(item.status))
+        .map((item) => item.id);
+      if (staleItemIds.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, staleItemIds);
+      }
+
+      const resumed = await resumeJob(req.params.jobId, {
+        batchSize: config.ingestBatchSize,
+      }, config.databaseUrl);
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(resumed && resumed.job ? resumed.job : job, config),
+        config.databaseUrl,
+        queue,
+      );
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_resumed',
+        eventKey: `job_resumed:${Date.now()}`,
+        message: resumed && resumed.replacedCount
+          ? `Resumed ${resumed.replacedCount} unfinished row(s).`
+          : 'Resume requested. No unfinished rows required replacement.',
+        details: {
+          replaced_count: resumed && resumed.replacedCount ? resumed.replacedCount : 0,
+          queued_fill_count: queueFillCountForJob(updatedJob, config),
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: updatedJob,
+        replacedCount: resumed && resumed.replacedCount ? resumed.replacedCount : 0,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/restart', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      const restartedJob = await restartJob(req.params.jobId, {
+        batchSize: config.ingestBatchSize,
+      }, config.databaseUrl);
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(restartedJob, config),
+        config.databaseUrl,
+        queue,
+      );
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_restarted',
+        message: `Job restarted with ${updatedJob ? updatedJob.total_urls : job.total_urls} row(s).`,
+        details: {
+          total_urls: updatedJob ? updatedJob.total_urls : job.total_urls,
+          scan_delay_ms: updatedJob ? updatedJob.scan_delay_ms : job.scan_delay_ms,
+          screenshot_delay_ms: updatedJob ? updatedJob.screenshot_delay_ms : job.screenshot_delay_ms,
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: updatedJob,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/replace', upload.single('file'), async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
+      const sourceFilename = req.file ? req.file.originalname : (req.body.filename || job.source_filename || 'upload.csv');
+      const preferredColumn = req.body.urlColumn || '';
+      if (!uploadedText.trim()) {
+        res.status(400).json({ error: 'Upload a CSV file or provide csvText' });
+        return;
+      }
+
+      const parsed = parseCsvText(uploadedText, preferredColumn);
+      const records = parsed.records.filter((record) => record.__normalized_url);
+      if (!records.length) {
+        res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
+        return;
+      }
+
+      const jobSettings = normalizeJobScanSettings({
+        scanDelayMs: req.body.scanDelayMs,
+        screenshotDelayMs: req.body.screenshotDelayMs,
+      }, {
+        scanDelayMs: job.scan_delay_ms,
+        screenshotDelayMs: job.screenshot_delay_ms,
+      });
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      await replaceJobRecords(req.params.jobId, {
+        sourceFilename,
+        sourceColumn: parsed.urlColumn,
+        records,
+        batchSize: config.ingestBatchSize,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+      }, config.databaseUrl);
+
+      const queue = getSharedQueue(config.redisUrl);
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(updatedJob, config),
+        config.databaseUrl,
+        queue,
+      );
+      const refreshedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_replaced',
+        message: `Job updated with ${records.length} row(s) from ${sourceFilename || 'upload.csv'}.`,
+        details: {
+          total_urls: records.length,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+          scan_delay_ms: jobSettings.scanDelayMs,
+          screenshot_delay_ms: jobSettings.screenshotDelayMs,
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: refreshedJob,
+        totalUrls: records.length,
+        sourceColumn: parsed.urlColumn,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/jobs/:jobId', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      await deleteJob(req.params.jobId, config.databaseUrl);
+      res.json({
+        ok: true,
+        deletedJobId: req.params.jobId,
       });
     } catch (error) {
       next(error);

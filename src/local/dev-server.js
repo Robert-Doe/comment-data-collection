@@ -202,6 +202,58 @@ function createLocalRuntime(options = {}) {
     return state.items.find((item) => item.job_id === jobId && item.id === itemId) || null;
   }
 
+  function createPendingItems(jobId, records, now) {
+    return records.map((record) => ({
+      id: crypto.randomUUID(),
+      job_id: jobId,
+      row_number: record.__row_number,
+      input_url: record.__input_url,
+      normalized_url: record.__normalized_url,
+      status: 'pending',
+      attempts: 0,
+      title: '',
+      final_url: '',
+      ugc_detected: null,
+      best_score: null,
+      best_confidence: '',
+      best_ugc_type: '',
+      best_xpath: '',
+      best_css_path: '',
+      best_sample_text: '',
+      screenshot_path: '',
+      screenshot_url: '',
+      analysis_source: 'automated',
+      manual_capture_required: false,
+      manual_capture_reason: '',
+      manual_capture_mode: '',
+      manual_html_path: '',
+      manual_html_url: '',
+      manual_raw_html_path: '',
+      manual_raw_html_url: '',
+      manual_capture_url: '',
+      manual_capture_title: '',
+      manual_capture_notes: '',
+      manual_captured_at: null,
+      candidate_reviews: [],
+      best_candidate: null,
+      candidates: null,
+      scan_result: null,
+      error_message: '',
+      created_at: now,
+      updated_at: now,
+      started_at: null,
+      completed_at: null,
+    }));
+  }
+
+  function dropQueuedTasksForJob(jobId) {
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      if (queue[index] && queue[index].jobId === jobId) {
+        queue.splice(index, 1);
+      }
+    }
+  }
+
   function recomputeJob(jobId) {
     const job = getJob(jobId);
     if (!job) return null;
@@ -398,54 +450,144 @@ function createLocalRuntime(options = {}) {
     };
 
     state.jobs.unshift(job);
-    records.forEach((record) => {
-      state.items.push({
-        id: crypto.randomUUID(),
-        job_id: jobId,
-        row_number: record.__row_number,
-        input_url: record.__input_url,
-        normalized_url: record.__normalized_url,
-        status: 'pending',
-        attempts: 0,
-        title: '',
-        final_url: '',
-        ugc_detected: null,
-        best_score: null,
-        best_confidence: '',
-        best_ugc_type: '',
-        best_xpath: '',
-        best_css_path: '',
-        best_sample_text: '',
-        screenshot_path: '',
-        screenshot_url: '',
-        analysis_source: 'automated',
-        manual_capture_required: false,
-        manual_capture_reason: '',
-        manual_capture_mode: '',
-        manual_html_path: '',
-        manual_html_url: '',
-        manual_raw_html_path: '',
-        manual_raw_html_url: '',
-        manual_capture_url: '',
-        manual_capture_title: '',
-        manual_capture_notes: '',
-        manual_captured_at: null,
-        candidate_reviews: [],
-        best_candidate: null,
-        candidates: null,
-        scan_result: null,
-        error_message: '',
-        created_at: now,
-        updated_at: now,
-        started_at: null,
-        completed_at: null,
-      });
-    });
+    state.items.push(...createPendingItems(jobId, records, now));
 
     recomputeJob(jobId);
     persist();
     refillQueue(jobId, Math.min(config.initialQueueFill, records.length));
     return job;
+  }
+
+  function replaceJobRecords(jobId, options = {}) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const records = Array.isArray(options.records)
+      ? options.records.filter((record) => record && record.__normalized_url)
+      : [];
+    if (!records.length) {
+      throw new Error('At least one normalized record is required');
+    }
+
+    const now = new Date().toISOString();
+    dropQueuedTasksForJob(jobId);
+    state.items = state.items.filter((item) => item.job_id !== jobId);
+    state.items.push(...createPendingItems(jobId, records, now));
+
+    if (state.manual_review_target && state.manual_review_target.job_id === jobId) {
+      state.manual_review_target = null;
+    }
+
+    job.source_filename = options.sourceFilename !== undefined ? String(options.sourceFilename || '') : String(job.source_filename || '');
+    job.source_column = options.sourceColumn !== undefined ? String(options.sourceColumn || '') : String(job.source_column || '');
+    job.scan_delay_ms = Number.isFinite(Number(options.scanDelayMs)) ? Number(options.scanDelayMs) : job.scan_delay_ms;
+    job.screenshot_delay_ms = Number.isFinite(Number(options.screenshotDelayMs)) ? Number(options.screenshotDelayMs) : job.screenshot_delay_ms;
+    job.status = 'pending';
+    job.total_urls = records.length;
+    job.pending_count = records.length;
+    job.queued_count = 0;
+    job.running_count = 0;
+    job.completed_count = 0;
+    job.failed_count = 0;
+    job.detected_count = 0;
+    job.error_message = '';
+    job.updated_at = now;
+    job.finished_at = null;
+
+    recomputeJob(jobId);
+    persist();
+    refillQueue(jobId, Math.min(config.initialQueueFill, records.length));
+    return job;
+  }
+
+  function restartJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const records = getItemsForJob(jobId).map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    }));
+
+    return replaceJobRecords(jobId, {
+      sourceFilename: job.source_filename || '',
+      sourceColumn: job.source_column || '',
+      records,
+      scanDelayMs: job.scan_delay_ms,
+      screenshotDelayMs: job.screenshot_delay_ms,
+    });
+  }
+
+  function resumeJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const unfinishedItems = getItemsForJob(jobId).filter((item) => ['pending', 'queued', 'running'].includes(item.status));
+    if (!unfinishedItems.length) {
+      return {
+        job,
+        replacedCount: 0,
+      };
+    }
+
+    const staleIds = new Set(unfinishedItems.map((item) => item.id));
+    const now = new Date().toISOString();
+    dropQueuedTasksForJob(jobId);
+    state.items = state.items.filter((item) => !staleIds.has(item.id));
+    state.items.push(...createPendingItems(jobId, unfinishedItems.map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    })), now));
+
+    if (state.manual_review_target && staleIds.has(state.manual_review_target.item_id)) {
+      state.manual_review_target = null;
+    }
+
+    job.error_message = '';
+    job.updated_at = now;
+    job.finished_at = null;
+    recomputeJob(jobId);
+    persist();
+    refillQueue(jobId, Math.min(config.initialQueueFill, unfinishedItems.length));
+
+    return {
+      job,
+      replacedCount: unfinishedItems.length,
+    };
+  }
+
+  function deleteJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      return false;
+    }
+
+    dropQueuedTasksForJob(jobId);
+    state.jobs = state.jobs.filter((entry) => entry.id !== jobId);
+    state.items = state.items.filter((item) => item.job_id !== jobId);
+    if (state.manual_review_target && state.manual_review_target.job_id === jobId) {
+      state.manual_review_target = null;
+    }
+    persist();
+    return true;
+  }
+
+  function clearJobs() {
+    const deletedCount = state.jobs.length;
+    queue.length = 0;
+    state.jobs = [];
+    state.items = [];
+    state.manual_review_target = null;
+    persist();
+    return deletedCount;
   }
 
   function resumeIncompleteJobs() {
@@ -488,6 +630,11 @@ function createLocalRuntime(options = {}) {
     getJobItems(jobId, limit = 100, offset = 0) {
       return getItemsForJob(jobId).slice(offset, offset + limit);
     },
+    resumeJob,
+    restartJob,
+    replaceJobRecords,
+    deleteJob,
+    clearJobs,
     listItemsForModeling(options = {}) {
       const jobIds = Array.isArray(options.jobIds)
         ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
@@ -671,6 +818,105 @@ function createLocalApp(options = {}) {
     });
   });
 
+  app.post('/api/jobs/clear', (_req, res) => {
+    const deletedCount = runtime.clearJobs();
+    res.json({
+      ok: true,
+      deletedCount,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/resume', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const result = runtime.resumeJob(req.params.jobId);
+    res.json({
+      ok: true,
+      job: result.job,
+      replacedCount: result.replacedCount,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/restart', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const updated = runtime.restartJob(req.params.jobId);
+    res.json({
+      ok: true,
+      job: updated,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/replace', upload.single('file'), (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
+    const sourceFilename = req.file ? req.file.originalname : (req.body.filename || job.source_filename || 'upload.csv');
+    const preferredColumn = req.body.urlColumn || '';
+
+    if (!uploadedText.trim()) {
+      res.status(400).json({ error: 'Upload a CSV file or provide csvText' });
+      return;
+    }
+
+    const parsed = parseCsvText(uploadedText, preferredColumn);
+    const records = parsed.records.filter((record) => record.__normalized_url);
+    if (!records.length) {
+      res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
+      return;
+    }
+
+    const jobSettings = normalizeJobScanSettings({
+      scanDelayMs: req.body.scanDelayMs,
+      screenshotDelayMs: req.body.screenshotDelayMs,
+    }, {
+      scanDelayMs: job.scan_delay_ms,
+      screenshotDelayMs: job.screenshot_delay_ms,
+    });
+
+    const updated = runtime.replaceJobRecords(req.params.jobId, {
+      sourceFilename,
+      sourceColumn: parsed.urlColumn,
+      records,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
+    });
+
+    res.json({
+      ok: true,
+      job: updated,
+      totalUrls: records.length,
+      sourceColumn: parsed.urlColumn,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
+    });
+  });
+
+  app.delete('/api/jobs/:jobId', (req, res) => {
+    const deleted = runtime.deleteJob(req.params.jobId);
+    if (!deleted) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      deletedJobId: req.params.jobId,
+    });
+  });
+
   app.get('/api/jobs/:jobId', (req, res) => {
     const limit = Math.max(1, Number(req.query.limit) || runtime.config.apiResultsPageSize);
     const offset = Math.max(0, Number(req.query.offset) || 0);
@@ -709,6 +955,16 @@ function createLocalApp(options = {}) {
         total: job.total_urls,
       },
     });
+  });
+
+  app.get('/api/jobs/:jobId/events', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    res.json({ events: [] });
   });
 
   app.get('/api/jobs/:jobId/items/:itemId', (req, res) => {
