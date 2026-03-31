@@ -1669,9 +1669,6 @@ function collectCandidateMarkup(root, _maxChars = 8000) {
     candidate_outer_html_excerpt: outerHtml,
     candidate_outer_html_length: outerHtml.length,
     candidate_outer_html_truncated: false,
-    candidate_inner_html_excerpt: '',
-    candidate_inner_html_length: 0,
-    candidate_inner_html_truncated: false,
     candidate_text_excerpt: text.slice(0, 1200),
   };
 }

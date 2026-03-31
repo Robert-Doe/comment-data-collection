@@ -1242,11 +1242,18 @@ function createLocalApp(options = {}) {
         markupSource = 'snapshot_redetect';
       }
 
+      const normalizedMarkup = {
+        candidate_outer_html_excerpt: markup && markup.candidate_outer_html_excerpt ? markup.candidate_outer_html_excerpt : '',
+        candidate_outer_html_length: markup && markup.candidate_outer_html_length ? markup.candidate_outer_html_length : 0,
+        candidate_outer_html_truncated: !!(markup && markup.candidate_outer_html_truncated),
+        candidate_text_excerpt: markup && markup.candidate_text_excerpt ? markup.candidate_text_excerpt : '',
+        candidate_markup_error: markup && markup.candidate_markup_error ? markup.candidate_markup_error : '',
+        candidate_resolved_tag_name: markup && markup.candidate_resolved_tag_name ? markup.candidate_resolved_tag_name : '',
+        candidate_markup_source: markupSource,
+      };
+
       res.json({
-        markup: {
-          ...markup,
-          candidate_markup_source: markupSource,
-        },
+        markup: normalizedMarkup,
       });
     } catch (error) {
       next(error);

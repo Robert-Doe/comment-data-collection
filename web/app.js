@@ -650,14 +650,10 @@
     const markupSections = [];
     const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
     const outerMeta = candidate.candidate_outer_html_length
-      ? `${resolvedTag ? `${resolvedTag} · ` : ''}${candidate.candidate_outer_html_length} chars${candidate.candidate_outer_html_truncated ? ' · truncated' : ''}`
-      : '';
-    const innerMeta = candidate.candidate_inner_html_length
-      ? `${candidate.candidate_inner_html_length} chars${candidate.candidate_inner_html_truncated ? ' · truncated' : ''}`
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
       : '';
 
     markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta, 'outer'));
-    markupSections.push(renderCandidateMarkupSection('Inner HTML', candidate.candidate_inner_html_excerpt || '', innerMeta, 'inner'));
 
     const content = markupSections.filter(Boolean).join('');
     const loadingCopy = candidate.candidate_markup_loading
@@ -1047,9 +1043,6 @@
       'candidate_outer_html_excerpt',
       'candidate_outer_html_length',
       'candidate_outer_html_truncated',
-      'candidate_inner_html_excerpt',
-      'candidate_inner_html_length',
-      'candidate_inner_html_truncated',
       'candidate_text_excerpt',
       'candidate_markup_error',
       'candidate_resolved_tag_name',
@@ -1240,9 +1233,6 @@
       'candidate_outer_html_excerpt',
       'candidate_outer_html_length',
       'candidate_outer_html_truncated',
-      'candidate_inner_html_excerpt',
-      'candidate_inner_html_length',
-      'candidate_inner_html_truncated',
       'candidate_text_excerpt',
       'candidate_markup_error',
       'candidate_resolved_tag_name',
