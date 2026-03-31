@@ -1418,11 +1418,23 @@ function createLocalApp(options = {}) {
 
   app.get('/config.js', (_req, res) => {
     res.type('application/javascript');
+    res.setHeader('Cache-Control', 'no-store');
     res.send('window.__APP_CONFIG__ = {"apiBaseUrl": ""};\n');
   });
 
   app.use(runtime.config.artifactUrlBasePath, express.static(runtime.config.artifactRoot));
-  app.use(express.static(webRoot));
+  app.use(express.static(webRoot, {
+    etag: true,
+    setHeaders(res, filePath) {
+      if (/\.(?:js|css)$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        return;
+      }
+      if (/\.html$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   app.use((error, _req, res, _next) => {
     console.error(error);
     res.status(500).json({
@@ -1430,6 +1442,7 @@ function createLocalApp(options = {}) {
     });
   });
   app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webRoot, 'index.html'));
   });
 
