@@ -1073,7 +1073,9 @@ async function listAllEvents(options, databaseUrl) {
   params.push(Math.max(1, Math.min(500, Number(opts.limit) || 100)));
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const result = await db.query(
-    `SELECT je.*, j.source_filename
+    `SELECT je.id, je.job_id, je.item_id, je.row_number, je.level, je.scope,
+            je.event_type, je.event_key, je.message, je.details, je.created_at,
+            j.source_filename
      FROM job_events je
      LEFT JOIN jobs j ON j.id = je.job_id
      ${where}
