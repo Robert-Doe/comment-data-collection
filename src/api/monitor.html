@@ -19,18 +19,21 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: "IBM Plex Mono","Cascadia Code",monospace; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
-    header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; z-index: 10; }
+    header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 24px; height: 57px; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; z-index: 10; }
     header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; }
+    .hdr-left { display: flex; align-items: center; gap: 16px; }
+    .hdr-right { display: flex; align-items: center; gap: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; flex-shrink: 0; }
     .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
     .status-dot.warn { background: var(--yellow); }
     .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
-    .hdr-status { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--muted); }
-    .shell { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 57px); overflow: hidden; }
-    .sidebar { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; }
-    .main { overflow-y: auto; display: flex; flex-direction: column; }
+    .hdr-status { display: flex; align-items: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .shell { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 57px); overflow: hidden; }
+    .sidebar { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; scrollbar-gutter: stable; }
+    .main { overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
     .card { padding: 16px; border-bottom: 1px solid var(--line); }
-    .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+    .card:last-child { border-bottom: none; }
+    .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
     .hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .hi { background: var(--panel2); border-radius: 6px; padding: 8px 10px; }
     .hl { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
@@ -53,9 +56,10 @@
     .btn:hover { background: var(--accent); border-color: var(--accent); }
     .cbtn { width: 100%; text-align: left; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
     .cbtn.danger:hover { border-color: var(--red); background: rgba(239,68,68,0.1); }
-    .log-bar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
-    .ev-count { font-size: 11px; color: var(--muted); margin-left: auto; }
-    .feed { flex: 1; }
+    .log-bar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: sticky; top: 0; z-index: 5; }
+    .log-bar-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-right: 4px; }
+    .ev-count { font-size: 11px; color: var(--muted); margin-left: auto; padding-right: 4px; }
+    .feed { flex: 1; min-height: 0; overflow-y: auto; }
     .erow { display: flex; align-items: flex-start; gap: 10px; padding: 7px 16px; border-bottom: 1px solid rgba(255,255,255,0.025); font-size: 12px; }
     .erow:hover { background: rgba(255,255,255,0.03); }
     .erow.new-ev { animation: flash 1.2s ease; }
@@ -88,15 +92,18 @@
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:center;gap:16px">
+  <div class="hdr-left">
     <a class="back" href="/">Back to App</a>
     <h1>Server Monitor</h1>
   </div>
-  <div class="hdr-status">
-    <span><span id="sdot" class="status-dot"></span><span id="stxt">Connecting</span></span>
-    <span id="lts"></span>
+  <div class="hdr-right">
+    <div class="hdr-status">
+      <span id="sdot" class="status-dot"></span>
+      <span id="stxt">Connecting</span>
+      <span id="lts" style="margin-left:10px;font-size:11px;opacity:0.6"></span>
+    </div>
+    <button class="btn" onclick="doRefresh()">Refresh</button>
   </div>
-  <button class="btn" onclick="doRefresh()">Refresh</button>
 </header>
 
 <div class="shell">
@@ -149,7 +156,7 @@
 
   <div class="main">
     <div class="log-bar">
-      <span style="font-size:12px;color:var(--muted);font-weight:600">Live Activity Log</span>
+      <span class="log-bar-title">Live Activity Log</span>
       <span class="chip on" data-lv="all" onclick="setLv('all')">All</span>
       <span class="chip" data-lv="error" onclick="setLv('error')">Errors</span>
       <span class="chip" data-lv="warn" onclick="setLv('warn')">Warnings</span>
