@@ -46,6 +46,7 @@ const {
   getJobItem,
   getJobItems,
   appendJobEvent,
+  listAllEvents,
   listJobEvents,
   listItemsForModeling,
   listManualReviewCandidates,
@@ -1171,6 +1172,84 @@ function createApp(config = getConfig()) {
     } catch (error) {
       next(error);
     }
+  });
+
+  // Global events feed across all jobs
+  app.get('/api/events', async (req, res, next) => {
+    try {
+      const limit = Math.min(250, Math.max(1, Number(req.query.limit) || 100));
+      const since = req.query.since ? String(req.query.since) : '';
+      const events = await listAllEvents({ limit, since: since || undefined }, config.databaseUrl);
+      res.json({ events });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Detailed system health
+  app.get('/api/health/detailed', async (req, res, next) => {
+    try {
+      const { execSync } = require('child_process');
+      let diskFree = null;
+      let diskTotal = null;
+      try {
+        const df = execSync("df -k / | tail -1 | awk '{print $2,$4}'", { timeout: 5000 }).toString().trim();
+        const parts = df.split(' ');
+        diskTotal = Number(parts[0]) * 1024;
+        diskFree = Number(parts[1]) * 1024;
+      } catch (_) {}
+
+      const { getSharedRedis: _getRedis } = require('../shared/queue');
+      let redisOk = false;
+      try {
+        const r = _getRedis(config.redisUrl);
+        await r.ping();
+        redisOk = true;
+      } catch (_) {}
+
+      const jobs = await listJobs(10, config.databaseUrl);
+      const activeJobs = jobs.filter((j) => j.status === 'running');
+
+      res.json({
+        ok: true,
+        redis: redisOk,
+        diskFree,
+        diskTotal,
+        diskUsedPct: diskTotal ? Math.round((1 - diskFree / diskTotal) * 100) : null,
+        activeJobCount: activeJobs.length,
+        activeJobs: activeJobs.map((j) => ({
+          id: j.id,
+          status: j.status,
+          total_urls: j.total_urls,
+          completed_count: j.completed_count,
+          running_count: j.running_count,
+          failed_count: j.failed_count,
+          pending_count: j.pending_count,
+          detected_count: j.detected_count,
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Restart worker via Redis control signal
+  app.post('/api/admin/restart-worker', async (req, res, next) => {
+    try {
+      const { createRedisConnection } = require('../shared/queue');
+      const controlPub = createRedisConnection(config.redisUrl);
+      await controlPub.publish('ugc:control', 'restart');
+      await controlPub.quit().catch(() => {});
+      res.json({ ok: true, message: 'Restart signal sent to worker' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Serve monitoring dashboard
+  app.get('/monitor', (_req, res) => {
+    const path = require('path');
+    res.sendFile(path.join(__dirname, 'monitor.html'));
   });
 
   app.use((error, _req, res, _next) => {

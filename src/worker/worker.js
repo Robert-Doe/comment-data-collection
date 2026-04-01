@@ -303,6 +303,16 @@ async function main() {
 
   await runQueueRecovery('startup');
 
+  // Control channel: allows admin panel to trigger graceful restart
+  const controlSub = createRedisConnection(config.redisUrl);
+  controlSub.subscribe('ugc:control').catch(() => {});
+  controlSub.on('message', (_channel, msg) => {
+    if (msg === 'restart') {
+      console.log('Received restart signal via control channel, shutting down...');
+      shutdown().catch(() => process.exit(1));
+    }
+  });
+
   const recoveryTimer = config.queueRecoveryIntervalMs > 0
     ? setInterval(() => {
       runQueueRecovery('interval').catch((error) => {

@@ -1058,6 +1058,32 @@ async function recomputeJob(jobId, databaseUrl) {
   );
 }
 
+
+async function listAllEvents(options, databaseUrl) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const db = getPool(databaseUrl);
+  const params = [];
+  const clauses = [];
+
+  if (opts.since) {
+    params.push(String(opts.since));
+    clauses.push(`created_at > \$${params.length}`);
+  }
+
+  params.push(Math.max(1, Math.min(500, Number(opts.limit) || 100)));
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT je.*, j.source_filename
+     FROM job_events je
+     LEFT JOIN jobs j ON j.id = je.job_id
+     ${where}
+     ORDER BY je.created_at DESC
+     LIMIT \$${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
 module.exports = {
   getPool,
   ensureSchema,
@@ -1069,6 +1095,7 @@ module.exports = {
   clearAllJobs,
   listJobs,
   appendJobEvent,
+  listAllEvents,
   listJobEvents,
   listIncompleteJobs,
   getJob,

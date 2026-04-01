@@ -46,6 +46,7 @@ services:
       - "${API_PORT:-3000}:3000"
     volumes:
       - artifact-data:/data/comment-data/artifacts
+      - ./src:/app/src
 
   worker:
     build:

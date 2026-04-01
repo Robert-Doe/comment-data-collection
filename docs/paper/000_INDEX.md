@@ -17,6 +17,7 @@ Current sequence:
 5. `005_latest_research_writing_backlog.md`
 6. `006_complete_process_and_operational_record.md`
 7. `007_browser_runtime_model_artifact_and_extension_handoff.md`
+8. `008_server_monitoring_and_incident_resolution.md`
 
 Naming rule:
 
