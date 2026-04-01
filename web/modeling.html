@@ -5,6 +5,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>UGC Scanner Model Lab</title>
     <link rel="stylesheet" href="./styles.css">
+    <style>
+      /* ── Page-level tab strip ──────────────────────────── */
+      .page-tabs { display:flex; gap:10px; margin-bottom:24px; }
+      .page-tab {
+        padding:10px 20px; border-radius:999px; border:1px solid rgba(11,87,208,0.15);
+        background:rgba(255,255,255,0.7); color:var(--muted); font-weight:700;
+        font-size:0.9rem; cursor:pointer; transition:all 0.2s;
+      }
+      .page-tab:hover { background:rgba(11,87,208,0.06); color:var(--text); }
+      .page-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+      /* ── Demo shell ────────────────────────────────────── */
+      #tab-demo { display:none; }
+      .demo-layout {
+        display:grid; grid-template-columns:340px 1fr; gap:24px;
+        align-items:start;
+      }
+      .demo-narrator {
+        position:sticky; top:20px;
+        background:var(--panel); border:1px solid var(--line);
+        border-radius:24px; box-shadow:var(--shadow); padding:22px;
+        backdrop-filter:blur(10px);
+      }
+      .demo-step-meta { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+      .demo-badge {
+        font-size:0.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+        color:var(--accent); background:rgba(11,87,208,.08); border-radius:999px; padding:3px 11px;
+      }
+      .demo-frac { font-size:0.78rem; color:var(--muted); font-weight:600; }
+      .demo-dots { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
+      .demo-dot { width:7px; height:7px; border-radius:50%; background:rgba(11,87,208,.15); transition:all .3s; }
+      .demo-dot.done { background:var(--accent); }
+      .demo-dot.active { background:var(--accent); transform:scale(1.5); box-shadow:0 0 0 3px rgba(11,87,208,.2); }
+      .demo-prog-track { height:5px; background:rgba(11,87,208,.1); border-radius:3px; margin-bottom:16px; overflow:hidden; }
+      .demo-prog-fill { height:100%; background:var(--accent); border-radius:3px; transition:width .6s; }
+      .demo-icon { font-size:2.2rem; display:block; margin-bottom:8px; }
+      .demo-step-title { font-size:1.15rem; font-weight:700; margin:0 0 8px; font-family:"Space Grotesk","Segoe UI",sans-serif; min-height:2.8rem; }
+      .demo-step-desc { font-size:0.85rem; color:var(--muted); line-height:1.65; margin:0 0 14px; min-height:4.5rem; }
+      .demo-tip { background:rgba(11,87,208,.05); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:9px 12px; font-size:0.79rem; margin-bottom:8px; }
+      .demo-tip strong { color:var(--accent); display:block; margin-bottom:2px; }
+      .demo-tip.t-ok { background:rgba(29,107,87,.06); border-color:var(--success); }
+      .demo-tip.t-ok strong { color:var(--success); }
+      .demo-tip.t-warn { background:rgba(139,90,16,.06); border-color:var(--warning); }
+      .demo-tip.t-warn strong { color:var(--warning); }
+      .demo-controls { display:flex; gap:7px; margin-top:16px; }
+      .demo-controls button { flex:1; padding:9px 5px; border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,.7); font-size:0.8rem; font-weight:600; cursor:pointer; transition:all .2s; }
+      #d-play { background:var(--accent)!important; color:#fff!important; border-color:var(--accent)!important; flex:2; }
+
+      /* ── Start screen ──────────────────────────────────── */
+      .demo-start-screen {
+        text-align:center; padding:48px 24px;
+        background:linear-gradient(135deg,#0b57d0,#0842a0);
+        border-radius:24px; color:#fff; margin-bottom:24px;
+      }
+      .demo-start-screen h2 { font-family:"Space Grotesk","Segoe UI",sans-serif; font-size:2.4rem; margin:0 0 12px; }
+      .demo-start-screen p { opacity:.82; max-width:460px; margin:0 auto 28px; line-height:1.65; }
+      .demo-start-btn {
+        padding:15px 44px; border-radius:999px; background:#fff; color:var(--accent);
+        font-size:1rem; font-weight:800; border:none; cursor:pointer;
+        box-shadow:0 6px 24px rgba(0,0,0,.2); transition:all .2s;
+      }
+      .demo-start-btn:hover { transform:translateY(-2px) scale(1.04); }
+      .demo-feats { display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-top:24px; font-size:0.82rem; opacity:.72; }
+
+      /* ── Replica sections ──────────────────────────────── */
+      .rep-section { transition:opacity .5s,box-shadow .5s,transform .5s; border-radius:28px; }
+      .rep-section.dimmed { opacity:.25; pointer-events:none; }
+      .rep-section.lit { box-shadow:0 0 0 3px var(--accent),0 18px 48px rgba(11,87,208,.18)!important; transform:translateY(-2px); }
+      .rep-stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:9px; margin-top:10px; }
+      .rep-stat { background:rgba(11,87,208,.05); border:1px solid rgba(11,87,208,.1); border-radius:11px; padding:11px; text-align:center; }
+      .rep-stat-v { font-size:1.6rem; font-weight:800; color:var(--accent); display:block; font-family:"Space Grotesk","Segoe UI",sans-serif; }
+      .rep-stat-l { font-size:0.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+      .rep-model-card { border:1px solid var(--line); border-radius:12px; padding:13px; margin-bottom:8px; display:flex; align-items:center; gap:10px; transition:all .3s; }
+      .rep-model-card.lit { border-color:var(--accent); background:rgba(11,87,208,.04); }
+      .rep-tag { font-size:0.67rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:999px; background:rgba(11,87,208,.1); color:var(--accent); }
+      .rep-metrics { display:flex; gap:12px; font-size:0.75rem; }
+      .rep-metric-v { font-weight:700; color:var(--success); display:block; }
+      .rep-metric-l { color:var(--muted); font-size:0.65rem; }
+      .rep-job-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:0.82rem; }
+      .rep-job-row:last-child { border:none; }
+      .rep-job-id { font-family:monospace; font-size:0.76rem; color:var(--muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .rep-status { font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:999px; }
+      .rep-status.run { background:rgba(139,90,16,.1); color:var(--warning); }
+      .rep-status.err { background:rgba(179,38,30,.1); color:var(--danger); }
+      .rep-use-btn { padding:4px 12px; border-radius:7px; border:1px solid rgba(11,87,208,.3); background:rgba(11,87,208,.06); color:var(--accent); font-size:0.75rem; font-weight:700; cursor:pointer; transition:all .2s; }
+      .rep-use-btn.hl, .rep-use-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); animation:pulse-b .8s ease 3; }
+      @keyframes pulse-b { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1);box-shadow:0 0 0 5px rgba(11,87,208,.18)} }
+      .rep-scores { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-bottom:14px; }
+      .rep-score-s { background:var(--panel-soft); border:1px solid var(--line); border-radius:12px; padding:12px 10px; text-align:center; }
+      .rep-score-v { font-size:1.4rem; font-weight:800; display:block; font-family:"Space Grotesk","Segoe UI",sans-serif; }
+      .rep-score-l { font-size:0.67rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+      .rep-result-row { display:grid; grid-template-columns:36px 1fr 80px 80px 95px auto; gap:6px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); font-size:0.78rem; opacity:0; transform:translateY(7px); transition:all .4s; }
+      .rep-result-row.vis { opacity:1!important; transform:none!important; }
+      .rep-result-row.hdr { opacity:1!important; transform:none!important; font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+      .rep-url { color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .rep-pbar { display:flex; align-items:center; gap:5px; }
+      .rep-pt { height:4px; background:rgba(11,87,208,.1); border-radius:2px; flex:1; }
+      .rep-pf { height:100%; border-radius:2px; background:var(--accent); transition:width .8s; }
+      .rep-pf.hi { background:var(--success); } .rep-pf.md { background:var(--warning); }
+      .rep-ins-btn { padding:3px 10px; border-radius:7px; border:1px solid var(--line); background:rgba(255,255,255,.8); font-size:0.72rem; font-weight:600; cursor:pointer; transition:all .2s; }
+      .rep-ins-btn.hl, .rep-ins-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); animation:pulse-b .8s ease 3; }
+      .rep-variant-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+      .rep-vc { border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel-soft); }
+      .rep-vc h4 { margin:0 0 5px; font-size:0.88rem; }
+      .rep-vc p { margin:0 0 10px; font-size:0.76rem; color:var(--muted); }
+      .rep-train-btn { width:100%; padding:8px; border-radius:9px; border:none; background:var(--accent); color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all .2s; }
+      .rep-train-btn.loading { background:#6b9de8; }
+      .rep-probe-row { display:flex; align-items:center; gap:9px; padding:9px 11px; border-radius:9px; margin-bottom:5px; background:var(--panel-soft); border:1px solid var(--line); opacity:0; transform:translateX(-9px); transition:all .5s; }
+      .rep-probe-row.vis { opacity:1; transform:none; }
+      .rep-probe-host { font-weight:700; font-size:0.83rem; flex:1; }
+      .rep-probe-conf { font-size:0.72rem; padding:2px 9px; border-radius:999px; font-weight:700; }
+      .rep-probe-conf.hi { background:rgba(29,107,87,.1); color:var(--success); }
+      .rep-probe-conf.md { background:rgba(139,90,16,.1); color:var(--warning); }
+      .rep-probe-conf.lo { background:rgba(179,38,30,.1); color:var(--danger); }
+      .rep-probe-pb { width:70px; height:5px; border-radius:3px; background:rgba(0,0,0,.08); overflow:hidden; }
+      .rep-probe-pf { height:100%; border-radius:3px; width:0%; transition:width 1s; }
+      .rep-probe-pf.hi { background:var(--success); } .rep-probe-pf.md { background:var(--warning); } .rep-probe-pf.lo { background:var(--danger); }
+      .rep-field { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+      .rep-field label { font-size:0.76rem; font-weight:600; color:var(--muted); }
+      .rep-field input,.rep-field select,.rep-field textarea { border:1px solid var(--line); border-radius:9px; padding:8px 11px; font-size:0.83rem; background:var(--panel); color:var(--text); font-family:inherit; transition:border-color .2s,box-shadow .2s; }
+      .rep-field input.typing,.rep-field input:focus,.rep-field textarea.typing { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(11,87,208,.1); }
+      .rep-primary-btn { padding:10px 20px; border-radius:11px; border:none; background:var(--accent); color:#fff; font-size:0.85rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:7px; transition:all .2s; }
+      .rep-primary-btn.loading { background:#6b9de8; }
+
+      /* ── Progress bar / spinner ─────────────────────────── */
+      .d-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:5px; }
+      .d-spinner.dark { border-color:rgba(11,87,208,.2); border-top-color:var(--accent); }
+      @keyframes spin { to { transform:rotate(360deg) } }
+      .d-bar-wrap { height:5px; background:rgba(11,87,208,.1); border-radius:3px; margin:8px 0; overflow:hidden; }
+      .d-bar { height:100%; background:linear-gradient(90deg,var(--accent),#4d90ff); border-radius:3px; width:0%; transition:width .35s; }
+      .d-bar.ind { width:40%!important; animation:ind 1.2s infinite; }
+      @keyframes ind { 0%{transform:translateX(-120%)} 100%{transform:translateX(400%)} }
+
+      /* ── Toasts ─────────────────────────────────────────── */
+      #d-toasts { position:fixed; top:18px; right:22px; z-index:9000; display:flex; flex-direction:column; gap:9px; pointer-events:none; }
+      .d-toast { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:13px 16px; max-width:330px; box-shadow:0 10px 32px rgba(15,23,42,.14); transform:translateX(130%); transition:transform .45s cubic-bezier(.34,1.3,.64,1),opacity .4s; opacity:0; pointer-events:none; }
+      .d-toast.show { transform:translateX(0); opacity:1; }
+      .d-toast.hide { transform:translateX(130%); opacity:0; }
+      .d-toast-hd { display:flex; align-items:center; gap:7px; font-weight:700; font-size:0.82rem; margin-bottom:4px; }
+      .d-toast-bd { font-size:0.77rem; color:var(--muted); line-height:1.5; }
+      .d-toast-bar { height:3px; border-radius:2px; background:var(--accent); margin-top:9px; animation:shrink linear forwards; }
+      @keyframes shrink { from{width:100%} to{width:0%} }
+
+      /* ── Cursor ─────────────────────────────────────────── */
+      #d-cursor { position:fixed; width:20px; height:20px; background:var(--accent); border:3px solid #fff; border-radius:50%; box-shadow:0 2px 10px rgba(11,87,208,.45); pointer-events:none; z-index:9100; opacity:0; transition:left .85s cubic-bezier(.34,1.4,.64,1),top .85s cubic-bezier(.34,1.4,.64,1),opacity .3s,transform .15s; }
+      #d-cursor.vis { opacity:1; }
+      #d-cursor.click { transform:scale(1.7); background:var(--accent-strong); }
+
+      /* ── Inspect modal ───────────────────────────────────── */
+      #d-inspect { position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(4px); z-index:8500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .4s; }
+      #d-inspect.show { opacity:1; pointer-events:auto; }
+      .d-inspect-inner { background:var(--panel); border-radius:22px; box-shadow:var(--shadow); padding:26px; max-width:560px; width:90%; transform:translateY(18px) scale(.97); transition:transform .4s cubic-bezier(.34,1.3,.64,1); }
+      #d-inspect.show .d-inspect-inner { transform:none; }
+      .d-inspect-url { font-size:0.75rem; color:var(--accent); margin-bottom:10px; word-break:break-all; }
+      .d-inspect-box { border:1px solid var(--line); border-radius:11px; overflow:hidden; margin-bottom:13px; }
+      .d-inspect-hd { background:rgba(11,87,208,.06); padding:9px 13px; font-size:0.75rem; font-weight:700; display:flex; justify-content:space-between; }
+      .d-inspect-code { background:#1e2130; color:#e2e8f0; font-family:monospace; font-size:0.72rem; padding:12px; max-height:110px; overflow-y:auto; line-height:1.6; }
+      .d-label-row { display:flex; gap:9px; margin-top:11px; }
+      .d-label-row button { flex:1; padding:11px; border-radius:11px; font-weight:700; font-size:0.87rem; cursor:pointer; border:2px solid transparent; transition:all .2s; }
+      .btn-t { background:rgba(29,107,87,.1); color:var(--success); border-color:rgba(29,107,87,.25); }
+      .btn-t.sel,.btn-t:hover { background:var(--success); color:#fff; }
+      .btn-f { background:rgba(179,38,30,.09); color:var(--danger); border-color:rgba(179,38,30,.2); }
+      .btn-f:hover { background:var(--danger); color:#fff; }
+      .d-prob-row { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+      .d-big-prob { font-size:1.7rem; font-weight:800; color:var(--success); font-family:"Space Grotesk","Segoe UI",sans-serif; }
+
+      /* ── Completion banner ──────────────────────────────── */
+      #d-complete { display:none; background:linear-gradient(135deg,#1d6b57,#0b4d3c); border-radius:24px; color:#fff; text-align:center; padding:40px 24px; margin-bottom:24px; }
+      #d-complete h2 { font-family:"Space Grotesk","Segoe UI",sans-serif; font-size:2.2rem; margin:0 0 10px; }
+      #d-complete p { opacity:.82; max-width:440px; margin:0 auto 22px; line-height:1.6; }
+      .d-comp-stats { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:24px; }
+      .d-comp-s { background:rgba(255,255,255,.12); border-radius:12px; padding:14px 20px; }
+      .d-comp-sv { font-size:1.8rem; font-weight:800; display:block; }
+      .d-comp-sl { font-size:0.68rem; opacity:.75; text-transform:uppercase; letter-spacing:.1em; }
+      .d-comp-btns { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+      .d-comp-btn { padding:13px 36px; border-radius:999px; background:#fff; color:var(--success); font-size:0.95rem; font-weight:800; border:none; cursor:pointer; text-decoration:none; display:inline-block; transition:all .2s; }
+      .d-comp-btn:hover { transform:translateY(-2px); }
+      .d-comp-btn.outline { background:rgba(255,255,255,.15); color:#fff; border:2px solid rgba(255,255,255,.4); }
+
+      @media(max-width:860px) {
+        .demo-layout { grid-template-columns:1fr; }
+        .demo-narrator { position:static; }
+      }
+    </style>
   </head>
   <body>
     <main class="app-shell">
@@ -17,97 +201,653 @@
       <section class="hero">
         <p class="eyebrow">Model Construction</p>
         <h1>Model Lab</h1>
-        <p class="lede">Train the two list-level candidate models, compare their feature reliance, score completed jobs, and upload site groups to see how trained models behave across the domains you have already scanned and labeled.</p>
+        <p class="lede">Train, evaluate, and score UGC detection models. Switch to the Demo Tour tab for an animated walkthrough.</p>
       </section>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Overview</h2>
-          <button id="refresh-modeling" class="secondary" type="button">Refresh</button>
-        </div>
-        <div id="model-overview" class="summary empty">Loading model overview...</div>
-      </section>
+      <!-- Page-level tabs -->
+      <div class="page-tabs" role="tablist">
+        <button class="page-tab active" id="ptab-lab" onclick="switchPageTab('lab')">Model Lab</button>
+        <button class="page-tab" id="ptab-demo" onclick="switchPageTab('demo')">▶ Demo Tour</button>
+      </div>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Train Variants</h2>
-        </div>
-        <p class="lede manual-lede">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates currently stored, or limit training to specific jobs by entering comma-separated job IDs.</p>
-        <div class="config-grid">
-          <label class="field">
-            <span>Job IDs Filter</span>
-            <input id="train-job-ids" type="text" placeholder="Optional: job-1, job-2">
-          </label>
-          <label class="field">
-            <span>Dataset Export</span>
-            <a id="download-all-dataset" class="link-button" href="#">Download Candidate Dataset CSV</a>
-          </label>
-        </div>
-        <div id="variant-cards" class="model-card-grid"></div>
-        <p id="train-message" class="message"></p>
-        <div id="train-result" class="model-card-grid"></div>
-      </section>
+      <!-- ══ MODEL LAB TAB ══════════════════════════════════ -->
+      <div id="tab-lab">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Overview</h2>
+            <button id="refresh-modeling" class="secondary" type="button">Refresh</button>
+          </div>
+          <div id="model-overview" class="summary empty">Loading model overview...</div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Trained Models</h2>
-        </div>
-        <p class="lede manual-lede">Use <code>Runtime JSON</code> when another browser component needs a compact deployable inference bundle. The full saved artifact remains available through the API for research and debugging.</p>
-        <div id="model-list" class="table-shell empty">No trained models saved yet.</div>
-      </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Train Variants</h2></div>
+          <p class="lede manual-lede">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates currently stored, or limit training to specific jobs by entering comma-separated job IDs.</p>
+          <div class="config-grid">
+            <label class="field">
+              <span>Job IDs Filter</span>
+              <input id="train-job-ids" type="text" placeholder="Optional: job-1, job-2">
+            </label>
+            <label class="field">
+              <span>Dataset Export</span>
+              <a id="download-all-dataset" class="link-button" href="#">Download Candidate Dataset CSV</a>
+            </label>
+          </div>
+          <div id="variant-cards" class="model-card-grid"></div>
+          <p id="train-message" class="message"></p>
+          <div id="train-result" class="model-card-grid"></div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Score Existing Job</h2>
-        </div>
-        <p class="lede manual-lede">Use a trained model against a completed job. This scores every stored candidate on the job, re-ranks each page, and shows whether the top candidate looks auto-acceptable or still needs manual review.</p>
-        <form id="score-job-form" class="model-form">
-          <label class="field">
-            <span>Model</span>
-            <select id="score-model-id"></select>
-          </label>
-          <label class="field">
-            <span>Job ID</span>
-            <input id="score-job-id" type="text" placeholder="Paste a completed job ID" required>
-          </label>
-          <button class="primary" type="submit">Score Job</button>
-        </form>
-        <div id="recent-jobs-model" class="table-shell empty">Loading recent jobs...</div>
-        <p id="score-job-message" class="message"></p>
-        <div id="score-job-summary" class="summary empty">Run a scored job to see item-level predictions.</div>
-        <div id="score-job-results" class="table-shell empty">No scored job loaded.</div>
-      </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Trained Models</h2></div>
+          <p class="lede manual-lede">Use <code>Runtime JSON</code> when another browser component needs a compact deployable inference bundle. The full saved artifact remains available through the API for research and debugging.</p>
+          <div id="model-list" class="table-shell empty">No trained models saved yet.</div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Site Group Probe</h2>
+        <section class="panel">
+          <div class="panel-header"><h2>Score Existing Job</h2></div>
+          <p class="lede manual-lede">Use a trained model against a completed job. This scores every stored candidate on the job, re-ranks each page, and shows whether the top candidate looks auto-acceptable or still needs manual review.</p>
+          <form id="score-job-form" class="model-form">
+            <label class="field">
+              <span>Model</span>
+              <select id="score-model-id"></select>
+            </label>
+            <label class="field">
+              <span>Job ID</span>
+              <input id="score-job-id" type="text" placeholder="Paste a completed job ID" required>
+            </label>
+            <button class="primary" type="submit">Score Job</button>
+          </form>
+          <div id="recent-jobs-model" class="table-shell empty">Loading recent jobs...</div>
+          <p id="score-job-message" class="message"></p>
+          <div id="score-job-summary" class="summary empty">Run a scored job to see item-level predictions.</div>
+          <div id="score-job-results" class="table-shell empty">No scored job loaded.</div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header"><h2>Site Group Probe</h2></div>
+          <p class="lede manual-lede">Paste or upload URLs or hostnames. The probe matches those sites against pages you have already scanned, scores them with the selected model, and groups the results by hostname so you can compare how the model behaves across site families.</p>
+          <form id="site-group-form" class="model-form site-group-form">
+            <label class="field">
+              <span>Model</span>
+              <select id="site-group-model-id"></select>
+            </label>
+            <label class="field">
+              <span>Optional Job IDs Filter</span>
+              <input id="site-group-job-ids" type="text" placeholder="Optional: limit probe to some jobs">
+            </label>
+            <label class="field site-group-wide">
+              <span>Upload CSV Or Text File</span>
+              <input id="site-group-file" type="file" accept=".csv,.txt,text/csv,text/plain">
+            </label>
+            <label class="field site-group-wide">
+              <span>URLs Or Hostnames</span>
+              <textarea id="site-group-text" rows="6" placeholder="https://example.com/post&#10;reddit.com&#10;tiktok.com"></textarea>
+            </label>
+            <button class="primary" type="submit">Run Site Probe</button>
+          </form>
+          <p id="site-group-message" class="message"></p>
+          <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
+        </section>
+      </div><!-- /tab-lab -->
+
+      <!-- ══ DEMO TOUR TAB ══════════════════════════════════ -->
+      <div id="tab-demo">
+        <!-- Fixed elements -->
+        <div id="d-cursor"></div>
+        <div id="d-toasts"></div>
+        <div id="d-inspect">
+          <div class="d-inspect-inner">
+            <h3 style="margin:0 0 7px;font-size:1rem">Candidate Inspection</h3>
+            <div class="d-inspect-url">https://nypost.com/2025/10/19/opinion/jane-fonda-pops-up-at-nycs-annual-animal-blessing/</div>
+            <div class="d-prob-row">
+              <span style="font-size:0.76rem;color:var(--muted)">Model confidence:</span>
+              <span class="d-big-prob">1.00</span>
+              <div style="flex:1;height:5px;background:rgba(0,0,0,.07);border-radius:3px;overflow:hidden">
+                <div id="d-prob-fill" style="height:100%;background:var(--success);border-radius:3px;width:0%;transition:width 1s"></div>
+              </div>
+            </div>
+            <div class="d-inspect-box">
+              <div class="d-inspect-hd"><span>Top Candidate — <code>.comments-section__inner</code></span><span style="color:var(--success);font-size:0.68rem">UGC ✓</span></div>
+              <div class="d-inspect-code">&lt;div class="comments-section__inner"&gt;
+  &lt;h2&gt;Comments (47)&lt;/h2&gt;
+  &lt;div class="comment-list"&gt;
+    &lt;article class="comment"&gt;
+      &lt;span class="comment-author"&gt;@JohnD&lt;/span&gt;
+      &lt;p&gt;Great article! Really informative.&lt;/p&gt;
+    &lt;/article&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</div>
+            </div>
+            <p style="font-size:0.8rem;color:var(--muted);margin:0 0 9px">Is this a real comment section? Label it to improve the model's training data.</p>
+            <div class="d-label-row">
+              <button class="btn-t" id="d-btn-true" onclick="dLabelTrue()">✓ True — This IS a comment section</button>
+              <button class="btn-f" onclick="dCloseInspect()">✗ False — Not a comment section</button>
+            </div>
+            <button style="background:none;border:1px solid var(--line);border-radius:7px;padding:5px 12px;margin-top:10px;cursor:pointer;font-size:0.78rem;color:var(--muted)" onclick="dCloseInspect()">Close</button>
+          </div>
         </div>
-        <p class="lede manual-lede">Paste or upload URLs or hostnames. The probe matches those sites against pages you have already scanned, scores them with the selected model, and groups the results by hostname so you can compare how the model behaves across site families.</p>
-        <form id="site-group-form" class="model-form site-group-form">
-          <label class="field">
-            <span>Model</span>
-            <select id="site-group-model-id"></select>
-          </label>
-          <label class="field">
-            <span>Optional Job IDs Filter</span>
-            <input id="site-group-job-ids" type="text" placeholder="Optional: limit probe to some jobs">
-          </label>
-          <label class="field site-group-wide">
-            <span>Upload CSV Or Text File</span>
-            <input id="site-group-file" type="file" accept=".csv,.txt,text/csv,text/plain">
-          </label>
-          <label class="field site-group-wide">
-            <span>URLs Or Hostnames</span>
-            <textarea id="site-group-text" rows="6" placeholder="https://example.com/post&#10;reddit.com&#10;tiktok.com"></textarea>
-          </label>
-          <button class="primary" type="submit">Run Site Probe</button>
-        </form>
-        <p id="site-group-message" class="message"></p>
-        <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
-      </section>
+
+        <!-- Start screen -->
+        <div class="demo-start-screen" id="d-start">
+          <h2>Model Lab — Demo Tour</h2>
+          <p>An animated walkthrough of every feature: training models, scoring jobs, inspecting candidates, and probing site groups. Perfect for presentations.</p>
+          <button class="demo-start-btn" onclick="dStart()">▶ &nbsp;Start Demo</button>
+          <div class="demo-feats">
+            <span>🎯 9 animated steps</span>
+            <span>📊 Live progress bars</span>
+            <span>🔍 Spotlight effects</span>
+            <span>💬 Custom alerts</span>
+            <span>🖱️ Animated cursor</span>
+          </div>
+        </div>
+
+        <!-- Completion banner -->
+        <div id="d-complete">
+          <div style="font-size:3.5rem;margin-bottom:14px">🎉</div>
+          <h2>Demo Complete!</h2>
+          <p>You've seen the full Model Lab workflow. Label more candidates, retrain, and your model gets smarter every cycle.</p>
+          <div class="d-comp-stats">
+            <div class="d-comp-s"><span class="d-comp-sv">332</span><span class="d-comp-sl">URLs Scanned</span></div>
+            <div class="d-comp-s"><span class="d-comp-sv">671</span><span class="d-comp-sl">Candidates</span></div>
+            <div class="d-comp-s"><span class="d-comp-sv">57</span><span class="d-comp-sl">Predicted UGC</span></div>
+            <div class="d-comp-s"><span class="d-comp-sv">8</span><span class="d-comp-sl">Sites Probed</span></div>
+          </div>
+          <div class="d-comp-btns">
+            <button class="d-comp-btn" onclick="switchPageTab('lab')">→ Open Model Lab</button>
+            <button class="d-comp-btn outline" onclick="dRestart()">↺ Replay Demo</button>
+          </div>
+        </div>
+
+        <!-- Demo layout (narrator + replica) -->
+        <div class="demo-layout" id="d-layout" style="display:none">
+          <!-- Narrator -->
+          <aside class="demo-narrator">
+            <div class="demo-step-meta">
+              <span class="demo-badge" id="d-badge">Overview</span>
+              <span class="demo-frac" id="d-frac">1 / 9</span>
+            </div>
+            <div class="demo-dots" id="d-dots"></div>
+            <div class="demo-prog-track"><div class="demo-prog-fill" id="d-prog" style="width:11%"></div></div>
+            <span class="demo-icon" id="d-icon">📊</span>
+            <h2 class="demo-step-title" id="d-title">Dataset Overview</h2>
+            <p class="demo-step-desc" id="d-desc">The Overview panel shows the current health of your dataset.</p>
+            <div id="d-tips"></div>
+            <div class="demo-controls">
+              <button onclick="dPrev()">← Prev</button>
+              <button id="d-play" onclick="dToggle()">⏸ Pause</button>
+              <button onclick="dNext()">Next →</button>
+            </div>
+          </aside>
+
+          <!-- Replica -->
+          <div id="d-replica">
+            <!-- 1. Overview -->
+            <div class="panel rep-section" id="rs-overview" style="margin-bottom:20px">
+              <div class="panel-header"><h2>Overview</h2><button style="padding:5px 12px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.7);font-size:0.78rem;cursor:pointer">Refresh</button></div>
+              <div class="rep-stat-grid">
+                <div class="rep-stat"><span class="rep-stat-v" id="ov-i">0</span><div class="rep-stat-l">Items Scanned</div></div>
+                <div class="rep-stat"><span class="rep-stat-v" id="ov-c">0</span><div class="rep-stat-l">Candidates Found</div></div>
+                <div class="rep-stat"><span class="rep-stat-v" id="ov-l">0</span><div class="rep-stat-l">Labeled Candidates</div></div>
+                <div class="rep-stat"><span class="rep-stat-v" id="ov-m">0</span><div class="rep-stat-l">Trained Models</div></div>
+              </div>
+              <div style="background:rgba(11,87,208,.05);border:1px solid rgba(11,87,208,.12);border-radius:11px;padding:11px 14px;font-size:0.8rem;margin-top:12px;display:flex;gap:9px">
+                <span style="font-size:1.05rem;flex-shrink:0">💡</span>
+                <p style="margin:0;line-height:1.5"><strong>Labeled Candidates</strong> is the most critical number — aim for <strong>50+</strong> (mix of True/False) before trusting the model's output.</p>
+              </div>
+            </div>
+            <!-- 2. Train -->
+            <div class="panel rep-section" id="rs-train" style="margin-bottom:20px">
+              <div class="panel-header"><h2>Train Variants</h2></div>
+              <div class="rep-variant-grid">
+                <div class="rep-vc">
+                  <h4>Keyword-Aware Model</h4>
+                  <p>Uses text keywords + structural HTML features. Most accurate for UGC detection.</p>
+                  <button class="rep-train-btn" id="d-train-kw">Train Keyword-Aware</button>
+                </div>
+                <div class="rep-vc">
+                  <h4>Structure-Only Model</h4>
+                  <p>Uses only DOM structure signals — no text. Good comparison baseline.</p>
+                  <button class="rep-train-btn" id="d-train-st">Train Structure-Only</button>
+                </div>
+              </div>
+              <div id="d-train-prog" style="display:none">
+                <div class="d-bar-wrap"><div class="d-bar ind"></div></div>
+                <p style="font-size:0.79rem;color:var(--muted);margin:3px 0 0" id="d-train-msg">Training…</p>
+              </div>
+              <div id="d-train-result" style="display:none" class="rep-model-card lit">
+                <div><span class="rep-tag">New</span><div style="font-size:0.82rem;font-weight:700;margin-top:5px">keyword-aware-2026-04-01T10-51-02-528Z</div></div>
+                <div class="rep-metrics">
+                  <div><span class="rep-metric-v">0.91</span><span class="rep-metric-l">Precision</span></div>
+                  <div><span class="rep-metric-v">0.87</span><span class="rep-metric-l">Recall</span></div>
+                  <div><span class="rep-metric-v" style="color:var(--accent)">0.89</span><span class="rep-metric-l">F1</span></div>
+                </div>
+              </div>
+            </div>
+            <!-- 3. Trained models -->
+            <div class="panel rep-section" id="rs-models" style="margin-bottom:20px">
+              <div class="panel-header"><h2>Trained Models</h2></div>
+              <div id="d-model-rows"></div>
+            </div>
+            <!-- 4. Score job -->
+            <div class="panel rep-section" id="rs-score" style="margin-bottom:20px">
+              <div class="panel-header"><h2>Score Existing Job</h2></div>
+              <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:10px;align-items:end;margin-bottom:14px">
+                <div class="rep-field" style="margin:0"><label>Model</label><select><option>keyword-aware-2026-04-01T10-51-02-528Z</option></select></div>
+                <div class="rep-field" style="margin:0"><label>Job ID</label><input id="d-job-input" type="text" placeholder="Paste a completed job ID"></div>
+                <button class="rep-primary-btn" id="d-score-btn">Score Job</button>
+              </div>
+              <div style="border:1px solid var(--line);border-radius:11px;padding:11px">
+                <div style="font-size:0.69rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:7px">Recent Jobs</div>
+                <div class="rep-job-row">
+                  <div class="rep-job-id">badffc6c-8464-4675-af85-1f4e3a762a31</div>
+                  <div class="rep-status run">running</div>
+                  <div style="font-size:0.78rem;color:var(--muted)">227/332</div>
+                  <button class="rep-use-btn" id="d-use-1">Use Job</button>
+                </div>
+                <div class="rep-job-row">
+                  <div class="rep-job-id">cc919aa8-d163-43c4-9fa9-ccdf799aab28</div>
+                  <div class="rep-status err">completed_with_errors</div>
+                  <div style="font-size:0.78rem;color:var(--muted)">77/79</div>
+                  <button class="rep-use-btn" id="d-use-2">Use Job</button>
+                </div>
+              </div>
+              <div id="d-score-prog" style="display:none;margin-top:12px">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px">
+                  <span class="d-spinner dark"></span>
+                  <span style="font-size:0.82rem;color:var(--muted)" id="d-score-msg">Scoring candidates…</span>
+                  <span style="margin-left:auto;font-size:0.79rem;font-weight:700;color:var(--accent)" id="d-score-pct">0%</span>
+                </div>
+                <div class="d-bar-wrap"><div class="d-bar" id="d-score-bar"></div></div>
+              </div>
+              <div id="d-results-area" style="display:none;margin-top:14px">
+                <div class="rep-scores">
+                  <div class="rep-score-s"><span class="rep-score-v" id="r-items">0</span><div class="rep-score-l">Items</div></div>
+                  <div class="rep-score-s"><span class="rep-score-v" id="r-cands">0</span><div class="rep-score-l">Candidates</div></div>
+                  <div class="rep-score-s"><span class="rep-score-v" id="r-pos">0</span><div class="rep-score-l">Pred. Positives</div></div>
+                  <div class="rep-score-s"><span class="rep-score-v" id="r-rev">0</span><div class="rep-score-l">Manual Review</div></div>
+                  <div class="rep-score-s"><span class="rep-score-v" id="r-prob">0.00</span><div class="rep-score-l">Mean Prob.</div></div>
+                </div>
+                <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
+                  <div class="rep-result-row hdr" style="padding:7px 11px"><span>Row</span><span>URL</span><span>Top Prob.</span><span>Label</span><span>Review</span><span>Action</span></div>
+                  <div id="d-result-rows" style="padding:0 11px"></div>
+                </div>
+              </div>
+            </div>
+            <!-- 5. Site probe -->
+            <div class="panel rep-section" id="rs-probe" style="margin-bottom:20px">
+              <div class="panel-header"><h2>Site Group Probe</h2></div>
+              <p style="font-size:0.83rem;color:var(--muted);margin:0 0 13px">Paste URLs or hostnames. The probe scores them against scanned data and groups by hostname.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                <div class="rep-field" style="margin:0"><label>Model</label><select><option>keyword-aware-2026-04-01T10-51-02-528Z</option></select></div>
+                <div class="rep-field" style="margin:0"><label>Optional Job IDs Filter</label><input type="text" placeholder="Optional"></div>
+              </div>
+              <div class="rep-field"><label>URLs Or Hostnames</label><textarea id="d-probe-ta" rows="5" placeholder="reddit.com&#10;nypost.com"></textarea></div>
+              <button class="rep-primary-btn" id="d-probe-btn" style="margin-bottom:10px">Run Site Probe</button>
+              <div id="d-probe-prog" style="display:none;margin-bottom:12px">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px"><span class="d-spinner dark"></span><span style="font-size:0.82rem;color:var(--muted)">Matching sites against scanned data…</span></div>
+                <div class="d-bar-wrap"><div class="d-bar ind"></div></div>
+              </div>
+              <div id="d-probe-results" style="display:none"></div>
+            </div>
+          </div><!-- /d-replica -->
+        </div><!-- /demo-layout -->
+      </div><!-- /tab-demo -->
+
     </main>
 
     <script src="./config.js"></script>
     <script src="./modeling.js"></script>
+    <script>
+    // ══════════════════════════════════════════════════════
+    //  PAGE TAB SWITCHER
+    // ══════════════════════════════════════════════════════
+    function switchPageTab(id) {
+      document.getElementById('tab-lab').style.display = id === 'lab' ? '' : 'none';
+      document.getElementById('tab-demo').style.display = id === 'demo' ? '' : 'none';
+      document.getElementById('ptab-lab').classList.toggle('active', id === 'lab');
+      document.getElementById('ptab-demo').classList.toggle('active', id === 'demo');
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  DEMO ENGINE
+    // ══════════════════════════════════════════════════════
+    const D_DATA = {
+      resultRows: [
+        { row:23,  url:'https://nypost.com/2025/10/19/opinion/jane-fonda/', prob:1.00, label:'unlabeled', review:'no' },
+        { row:28,  url:'https://news.slashdot.org/story/25/10/20/was-the-web-more-creative/', prob:1.00, label:'unlabeled', review:'no' },
+        { row:31,  url:'https://www.reddit.com/r/programming/comments/abc123', prob:0.97, label:'unlabeled', review:'no' },
+        { row:45,  url:'https://news.ycombinator.com/item?id=38291047', prob:0.94, label:'unlabeled', review:'no' },
+        { row:67,  url:'https://stackoverflow.com/questions/78234', prob:0.89, label:'unlabeled', review:'no' },
+        { row:72,  url:'https://theguardian.com/technology/2025/oct/20/ai-comments', prob:0.61, label:'unlabeled', review:'yes' },
+        { row:88,  url:'https://medium.com/@author/article-about-comments', prob:0.52, label:'unlabeled', review:'yes' },
+        { row:101, url:'https://news.bbc.co.uk/2/hi/science/article123.stm', prob:0.11, label:'unlabeled', review:'no' },
+      ],
+      probeUrls:['nypost.com','slashdot.org','reddit.com','news.ycombinator.com','stackoverflow.com','theguardian.com','medium.com','news.bbc.co.uk'],
+      probeResults:[
+        { host:'reddit.com',           prob:0.97, level:'hi', label:'UGC Detected ✓' },
+        { host:'slashdot.org',         prob:0.92, level:'hi', label:'UGC Detected ✓' },
+        { host:'news.ycombinator.com', prob:0.89, level:'hi', label:'UGC Detected ✓' },
+        { host:'stackoverflow.com',    prob:0.85, level:'hi', label:'UGC Detected ✓' },
+        { host:'nypost.com',           prob:0.61, level:'md', label:'Possibly UGC' },
+        { host:'theguardian.com',      prob:0.45, level:'md', label:'Uncertain' },
+        { host:'medium.com',           prob:0.38, level:'md', label:'Uncertain' },
+        { host:'news.bbc.co.uk',       prob:0.12, level:'lo', label:'No UGC Detected' },
+      ],
+    };
+
+    const D_STEPS = [
+      { id:'overview', icon:'📊', badge:'Overview', title:'Dataset Overview',
+        desc:'The Overview panel shows the current state of your dataset — how many URLs have been scanned, candidates found, and how many you\'ve labeled for training.',
+        tips:[{t:'info',h:'Why it matters',b:'Labeled Candidates is the key number. You need at least 20 balanced labels before training a useful model.'},{t:'warn',h:'Current state',b:'Only 9 labeled candidates so far. More labeling → better model accuracy.'}],
+        sec:'rs-overview', action:'aOverview' },
+      { id:'train', icon:'🏋️', badge:'Train', title:'Training a Model Variant',
+        desc:'Click "Train Keyword-Aware" to build a model from your labeled data. The system extracts ~40 HTML features from each candidate and fits a Logistic Regression classifier.',
+        tips:[{t:'info',h:'Two variants',b:'Keyword-Aware (text + structure) is more accurate. Structure-Only (DOM shape only) is a useful baseline.'},{t:'ok',h:'Result',b:'You get Precision, Recall, and F1 metrics so you can compare versions.'}],
+        sec:'rs-train', action:'aTrain' },
+      { id:'models', icon:'🗂️', badge:'Trained Models', title:'Viewing Trained Models',
+        desc:'Every model you save appears here with quality metrics. Use F1 to compare versions — higher is better. Download Runtime JSON for embedding in other browser tools.',
+        tips:[{t:'info',h:'Precision',b:'Of all pages the model flagged as UGC, what fraction actually were? High precision = few false alarms.'},{t:'info',h:'Recall',b:'Of all pages that truly have UGC, how many did the model catch? High recall = few misses.'},{t:'ok',h:'F1 Target',b:'Above 0.85 is solid. 1.0 is perfect. Our model is at 0.89 — good for 9 labels.'}],
+        sec:'rs-models', action:'aModels' },
+      { id:'score-sel', icon:'🎯', badge:'Score Job', title:'Selecting a Job to Score',
+        desc:'Pick a trained model and click "Use Job" on any completed scan batch. The Job ID fills automatically — no manual copying needed.',
+        tips:[{t:'info',h:'What is a job?',b:'A job is one batch scan of URLs. Each has a unique ID. Scoring applies the model to every candidate found during that scan.'},{t:'warn',h:'Tip',b:'You can score still-running jobs — it scores only the completed items so far.'}],
+        sec:'rs-score', action:'aScoreSel' },
+      { id:'score-run', icon:'⚙️', badge:'Scoring…', title:'Running the Score',
+        desc:'The API loads all candidates, extracts features, runs them through the model weights, and returns a probability for each candidate. Watch the progress bar fill up.',
+        tips:[{t:'info',h:'Under the hood',b:'Each candidate\'s HTML features are dot-multiplied with the model\'s learned weights to produce a 0–1 probability score.'}],
+        sec:'rs-score', action:'aScoreRun' },
+      { id:'score-res', icon:'📈', badge:'Results', title:'Reading Score Results',
+        desc:'Results are ranked by confidence. Top Probability of 1.0 = very confident UGC. "Manual Review: yes" means the model is uncertain (20–80%) and wants your help.',
+        tips:[{t:'ok',h:'57 Predicted Positives',b:'57 of 177 pages are ≥50% confident UGC sites.'},{t:'warn',h:'13 Need Manual Review',b:'Probability between 20–80%. Labeling these improves the model most.'},{t:'info',h:'Mean Probability: 0.323',b:'Low average confidence — reflects the small training set of only 9 labels.'}],
+        sec:'rs-score', action:'aScoreRes' },
+      { id:'inspect', icon:'🔍', badge:'Inspect', title:'Inspecting a Candidate',
+        desc:'Click Inspect on any result to see the exact HTML element the model flagged as a comment section. Label it True or False to feed your training data.',
+        tips:[{t:'ok',h:'How you build training data',b:'Every True/False label you assign here gets saved. Retrain the model afterward and it learns from your corrections.'},{t:'info',h:'What the model sees',b:'~40 features: CSS selectors, text keywords, DOM depth, sibling counts, ARIA labels, and more.'}],
+        sec:'rs-score', action:'aInspect' },
+      { id:'probe', icon:'🌐', badge:'Site Probe', title:'Site Group Probe',
+        desc:'Paste hostnames or URLs to query specific sites you care about. The probe matches them against everything you\'ve already scanned and shows model confidence grouped by site.',
+        tips:[{t:'info',h:'Use case',b:'Great for checking: "Does our model agree that Reddit, HackerNews, NYPost all have comment sections?"'},{t:'ok',h:'Grouped results',b:'Results group by hostname so you can compare UGC confidence across different site families.'}],
+        sec:'rs-probe', action:'aProbe' },
+      { id:'done', icon:'🎓', badge:'Complete', title:'The Full Workflow',
+        desc:'The cycle is: Scan URLs → Label Candidates → Train Model → Score Jobs → Inspect Results → Label More → Retrain. Each loop makes the model smarter.',
+        tips:[{t:'ok',h:'Your next action',b:'Open a completed job → click a row → Labeler tab → mark True/False → come back here and retrain.'},{t:'info',h:'Target',b:'Aim for 50+ balanced labels (25 True, 25 False) for a model you can present with confidence.'}],
+        sec:null, action:'aDone' },
+    ];
+
+    let dStep = 0, dPlaying = true, dRunning = false;
+
+    const dCursor = document.getElementById('d-cursor');
+    const dToasts = document.getElementById('d-toasts');
+
+    const ds = id => document.getElementById(id);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    function countUp(el, to, dur=1100, isF=false) {
+      return new Promise(res => {
+        const t0 = performance.now(), from = parseFloat(el.textContent)||0;
+        (function tick(now) {
+          const p = Math.min((now-t0)/dur,1), e = 1-Math.pow(1-p,3);
+          el.textContent = isF ? (from+(to-from)*e).toFixed(3) : Math.round(from+(to-from)*e);
+          if(p<1) requestAnimationFrame(tick); else res();
+        })(performance.now());
+      });
+    }
+
+    async function typeInto(el, text, spd=30) {
+      el.value=''; el.classList.add('typing');
+      for(let i=0;i<=text.length;i++){ el.value=text.slice(0,i); await sleep(spd); }
+      el.classList.remove('typing');
+    }
+
+    function moveCursor(el) {
+      if(!el) return;
+      const r = el.getBoundingClientRect();
+      dCursor.classList.add('vis');
+      dCursor.style.left = (r.left+r.width/2-10)+'px';
+      dCursor.style.top  = (r.top+r.height/2-10)+'px';
+    }
+    async function clickEl(el) {
+      moveCursor(el); await sleep(650);
+      dCursor.classList.add('click'); await sleep(180);
+      dCursor.classList.remove('click'); await sleep(180);
+    }
+    function hideCursor() { dCursor.classList.remove('vis'); }
+
+    function toast(title, body, icon='ℹ️', dur=5000) {
+      const t = document.createElement('div');
+      t.className='d-toast';
+      t.innerHTML=`<div class="d-toast-hd"><span>${icon}</span>${title}</div><div class="d-toast-bd">${body}</div><div class="d-toast-bar" style="animation-duration:${dur}ms"></div>`;
+      dToasts.appendChild(t);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+      setTimeout(()=>{ t.classList.add('hide'); setTimeout(()=>t.remove(),500); }, dur);
+    }
+
+    function clearToasts() { dToasts.innerHTML=''; }
+
+    function setLit(secId) {
+      document.querySelectorAll('.rep-section').forEach(s=>{
+        s.classList.remove('lit');
+        if(secId) s.classList.add('dimmed'); else s.classList.remove('dimmed');
+      });
+      if(secId){ const el=ds(secId); if(el){ el.classList.remove('dimmed'); el.classList.add('lit'); el.scrollIntoView({behavior:'smooth',block:'nearest'}); } }
+    }
+
+    function renderNarrator(idx) {
+      const s=D_STEPS[idx];
+      ['d-icon','d-title','d-desc','d-tips'].forEach(id=>{ const el=ds(id); if(el) el.style.opacity='0'; });
+      setTimeout(()=>{
+        ds('d-badge').textContent=s.badge;
+        ds('d-frac').textContent=`${idx+1} / ${D_STEPS.length}`;
+        ds('d-icon').textContent=s.icon;
+        ds('d-title').textContent=s.title;
+        ds('d-desc').textContent=s.desc;
+        ds('d-prog').style.width=`${((idx+1)/D_STEPS.length)*100}%`;
+        ds('d-tips').innerHTML=s.tips.map(t=>`<div class="demo-tip ${t.t==='ok'?'t-ok':t.t==='warn'?'t-warn':''}"><strong>${t.h}</strong>${t.b}</div>`).join('');
+        ds('d-dots').innerHTML=D_STEPS.map((_,i)=>`<div class="demo-dot ${i<idx?'done':i===idx?'active':''}"></div>`).join('');
+        ['d-icon','d-title','d-desc','d-tips'].forEach(id=>{ const el=ds(id); if(el) el.style.opacity='1'; });
+        setLit(s.sec);
+      },220);
+    }
+
+    // ── Step actions ──────────────────────────────────────
+    const DA = {
+      async aOverview() {
+        toast('Dataset Overview','Watch the numbers animate in — these are your real scan stats.','📊',4500);
+        await sleep(500);
+        await Promise.all([countUp(ds('ov-i'),177),countUp(ds('ov-c'),671)]);
+        await Promise.all([countUp(ds('ov-l'),9),countUp(ds('ov-m'),2)]);
+        await sleep(1800);
+        toast('⚠️ Only 9 labeled!','You have 9 labeled candidates. Aim for 50+ for a reliable model.','⚠️',5000);
+        await sleep(5000);
+      },
+      async aTrain() {
+        toast('Train Variants','Cursor will click "Train Keyword-Aware" — watch the progress.','🏋️',4000);
+        await sleep(1000);
+        const btn=ds('d-train-kw');
+        await clickEl(btn); btn.innerHTML='<span class="d-spinner"></span> Training…'; btn.classList.add('loading');
+        ds('d-train-prog').style.display='block';
+        const msgs=['Extracting features from 9 labeled candidates…','Fitting Logistic Regression model…','Computing Precision / Recall / F1…','Saving model artifact…'];
+        for(const m of msgs){ ds('d-train-msg').textContent=m; await sleep(1400); }
+        btn.innerHTML='✓ Trained'; btn.style.background='var(--success)'; btn.classList.remove('loading');
+        ds('d-train-prog').style.display='none'; ds('d-train-result').style.display='flex';
+        toast('Model Trained!','Precision: 0.91 — Recall: 0.87 — F1: 0.89. Solid starting point!','✅',5000);
+        hideCursor(); await sleep(4500);
+      },
+      async aModels() {
+        toast('Trained Models','Both model variants appear here. Compare them by F1 score.','🗂️',4000);
+        const rows=ds('d-model-rows'); rows.innerHTML='';
+        const models=[
+          {name:'keyword-aware-2026-04-01T10-51-02-528Z',p:'0.91',r:'0.87',f1:'0.89',isNew:true},
+          {name:'structure-only-2026-04-01T09-30-11-120Z',p:'0.78',r:'0.72',f1:'0.75',isNew:false},
+        ];
+        for(const m of models){
+          await sleep(450);
+          const d=document.createElement('div');
+          d.className=`rep-model-card ${m.isNew?'lit':''}`;
+          d.style.animation='none'; d.style.opacity='0'; d.style.transition='opacity .5s';
+          d.innerHTML=`<div style="flex:1">${m.isNew?'<span class="rep-tag">Latest</span><br>':''}<span style="font-size:0.79rem;font-weight:700">${m.name}</span></div><div class="rep-metrics"><div><span class="rep-metric-v">${m.p}</span><span class="rep-metric-l">Precision</span></div><div><span class="rep-metric-v">${m.r}</span><span class="rep-metric-l">Recall</span></div><div><span class="rep-metric-v" style="color:var(--accent)">${m.f1}</span><span class="rep-metric-l">F1</span></div></div><button class="rep-ins-btn" style="font-size:0.7rem">Runtime JSON</button>`;
+          rows.appendChild(d);
+          requestAnimationFrame(()=>{ d.style.opacity='1'; });
+        }
+        await sleep(2500);
+        toast('Keyword-Aware wins','F1: 0.89 vs 0.75 — text keywords help significantly.','📊',4500);
+        await sleep(4000);
+      },
+      async aScoreSel() {
+        toast('Select a Job','Watch the cursor click "Use Job" — it fills the Job ID automatically.','🎯',5000);
+        await sleep(1200);
+        const btn=ds('d-use-1'); btn.classList.add('hl');
+        await clickEl(btn); btn.classList.remove('hl');
+        await typeInto(ds('d-job-input'),'badffc6c-8464-4675-af85-1f4e3a762a31',20);
+        toast('Job ID filled!','No manual copying — "Use Job" does it for you.','✅',4000);
+        await sleep(2500);
+        moveCursor(ds('d-score-btn'));
+        toast('Next: click Score Job','The next step will run scoring and show results.','ℹ️',3000);
+        hideCursor(); await sleep(3000);
+      },
+      async aScoreRun() {
+        toast('Scoring in progress…','671 candidates running through the model. Watch the progress bar.','⚙️',6000);
+        const btn=ds('d-score-btn');
+        await clickEl(btn); btn.innerHTML='<span class="d-spinner"></span> Scoring…'; btn.classList.add('loading');
+        hideCursor();
+        ds('d-score-prog').style.display='block';
+        const bar=ds('d-score-bar'), pct=ds('d-score-pct'), msg=ds('d-score-msg');
+        const stages=[[15,'Loading job items from database…'],[35,'Extracting HTML features…'],[60,'Running model inference…'],[80,'Re-ranking by probability…'],[95,'Building results table…'],[100,'Complete!']];
+        for(const [p,m] of stages){ bar.style.width=p+'%'; pct.textContent=p+'%'; msg.textContent=m; await sleep(680); }
+        btn.innerHTML='✓ Scored'; btn.style.background='var(--success)'; btn.classList.remove('loading');
+        ds('d-score-prog').style.display='none'; await sleep(350);
+      },
+      async aScoreRes() {
+        ds('d-results-area').style.display='block';
+        toast('Results are in!','177 items scored — 57 predicted positives, 13 need manual review.','📈',5000);
+        await sleep(400);
+        await Promise.all([countUp(ds('r-items'),177,950),countUp(ds('r-cands'),671,1100)]);
+        await Promise.all([countUp(ds('r-pos'),57,800),countUp(ds('r-rev'),13,700)]);
+        await countUp(ds('r-prob'),0.323,900,true);
+        await sleep(500);
+        const rowsEl=ds('d-result-rows'); rowsEl.innerHTML='';
+        for(const r of D_DATA.resultRows){
+          const cl=r.prob>=.8?'hi':r.prob>=.5?'md':'';
+          const row=document.createElement('div'); row.className='rep-result-row';
+          row.innerHTML=`<span style="color:var(--muted);font-size:0.76rem">${r.row}</span><span class="rep-url" title="${r.url}">${r.url}</span><div class="rep-pbar"><span style="font-size:0.8rem;font-weight:700;min-width:26px">${r.prob.toFixed(2)}</span><div class="rep-pt"><div class="rep-pf ${cl}" style="width:0%"></div></div></div><span style="color:var(--muted);font-size:0.76rem">${r.label}</span><span style="font-size:0.76rem;${r.review==='yes'?'color:var(--warning);font-weight:700':'color:var(--muted)'}">${r.review}</span><button class="rep-ins-btn" onclick="dOpenInspect()">Inspect +</button>`;
+          rowsEl.appendChild(row);
+          await sleep(180); row.classList.add('vis');
+          setTimeout(()=>{ const f=row.querySelector('.rep-pf'); if(f) f.style.width=(r.prob*100)+'%'; },100);
+        }
+        await sleep(2500);
+        toast('Sorted by confidence','Top rows = highest probability UGC sites — start inspecting those first.','ℹ️',4500);
+        await sleep(4000);
+      },
+      async aInspect() {
+        toast('Click Inspect','Cursor will click the Inspect button on the top result.','🔍',4000);
+        await sleep(1000);
+        const first=document.querySelector('.rep-ins-btn'); if(first){ first.classList.add('hl'); await clickEl(first); first.classList.remove('hl'); }
+        hideCursor(); dOpenInspect(); await sleep(1200);
+        ds('d-prob-fill').style.width='100%';
+        await sleep(2200);
+        toast('The actual HTML element','The model found <code>.comments-section__inner</code> — a div with nested comment articles. Classic UGC pattern.','🔍',6000);
+        await sleep(4000);
+        const trueBtn=ds('d-btn-true'); moveCursor(trueBtn); await sleep(700);
+        dCursor.classList.add('click'); trueBtn.classList.add('sel'); await sleep(180); dCursor.classList.remove('click');
+        hideCursor();
+        toast('Labeled as True!','This is now saved as training data. Retrain the model to improve accuracy.','✅',5000);
+        await sleep(2200); dCloseInspect(); await sleep(2800);
+      },
+      async aProbe() {
+        toast('Site Group Probe','Paste hostnames to check sites you care about. URLs type in automatically.','🌐',5000);
+        await sleep(1200);
+        const ta=ds('d-probe-ta'); ta.focus();
+        for(const url of D_DATA.probeUrls){ await typeInto(ta,(ta.value?(ta.value+'\n'):'')+url,16); await sleep(100); }
+        await sleep(700);
+        toast('8 sites entered!','Clicking Run Site Probe will score all of them against your scanned data.','ℹ️',4000);
+        const btn=ds('d-probe-btn');
+        moveCursor(btn); await sleep(1000); await clickEl(btn); hideCursor();
+        btn.innerHTML='<span class="d-spinner"></span> Running probe…'; btn.classList.add('loading');
+        ds('d-probe-prog').style.display='block'; await sleep(2600);
+        btn.innerHTML='✓ Done'; btn.style.background='var(--success)'; btn.classList.remove('loading');
+        ds('d-probe-prog').style.display='none';
+        const res=ds('d-probe-results'); res.style.display='block';
+        res.innerHTML='<div style="font-size:0.69rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:9px">Results — Grouped by Hostname</div>';
+        for(const r of D_DATA.probeResults){
+          const row=document.createElement('div'); row.className='rep-probe-row';
+          row.innerHTML=`<span class="rep-probe-host">${r.host}</span><div class="rep-probe-pb"><div class="rep-probe-pf ${r.level}" style="width:0%"></div></div><span style="font-size:0.8rem;font-weight:700;min-width:34px">${r.prob.toFixed(2)}</span><span class="rep-probe-conf ${r.level}">${r.label}</span>`;
+          res.appendChild(row); await sleep(260); row.classList.add('vis');
+          setTimeout(()=>{ const f=row.querySelector('.rep-probe-pf'); if(f) f.style.width=(r.prob*100)+'%'; },100);
+        }
+        await sleep(1800);
+        toast('Reddit & HN = high confidence','Known UGC-heavy sites score ≥0.85. The model got these right.','✅',5000);
+        await sleep(3000);
+        toast('BBC = 0.12 (no UGC)','BBC has very different comment DOM structure — model correctly scores it low.','⚠️',5000);
+        await sleep(5000);
+      },
+      async aDone() {
+        hideCursor(); setLit(null);
+        await sleep(1200);
+        ds('d-layout').style.display='none';
+        ds('d-complete').style.display='block';
+        ds('d-complete').scrollIntoView({behavior:'smooth',block:'start'});
+      },
+    };
+
+    async function dRunStep(idx) {
+      if(dRunning) return;
+      dRunning=true;
+      renderNarrator(idx);
+      await sleep(500);
+      const s=D_STEPS[idx];
+      if(DA[s.action]) await DA[s.action]();
+      dRunning=false;
+      if(dPlaying && idx<D_STEPS.length-1){ dStep++; dRunStep(dStep); }
+    }
+
+    function dNext() {
+      if(dStep>=D_STEPS.length-1) return;
+      dPlaying=false; dRunning=false; dStep++;
+      ds('d-play').textContent='▶ Resume';
+      hideCursor(); clearToasts(); renderNarrator(dStep);
+    }
+    function dPrev() {
+      if(dStep<=0) return;
+      dPlaying=false; dRunning=false; dStep--;
+      ds('d-play').textContent='▶ Resume';
+      hideCursor(); clearToasts(); renderNarrator(dStep);
+    }
+    function dToggle() {
+      dPlaying=!dPlaying;
+      ds('d-play').textContent=dPlaying?'⏸ Pause':'▶ Resume';
+      if(dPlaying) dRunStep(dStep);
+    }
+
+    function dOpenInspect() { ds('d-inspect').classList.add('show'); ds('d-prob-fill').style.width='0%'; setTimeout(()=>ds('d-prob-fill').style.width='100%',300); }
+    function dCloseInspect() { ds('d-inspect').classList.remove('show'); }
+    function dLabelTrue() { const b=ds('d-btn-true'); b.classList.add('sel'); b.textContent='✓ Labeled True!'; }
+
+    function dStart() {
+      ds('d-start').style.display='none';
+      ds('d-layout').style.display='grid';
+      ds('d-dots').innerHTML=D_STEPS.map((_,i)=>`<div class="demo-dot ${i===0?'active':''}"></div>`).join('');
+      dPlaying=true; dStep=0;
+      ds('d-play').textContent='⏸ Pause';
+      dRunStep(0);
+    }
+
+    function dRestart() {
+      ds('d-complete').style.display='none';
+      ds('d-start').style.display='block';
+      // reset replica state
+      ['ov-i','ov-c','ov-l','ov-m'].forEach(id=>{ const el=ds(id); if(el) el.textContent='0'; });
+      ds('d-model-rows').innerHTML='';
+      ds('d-train-result').style.display='none';
+      ds('d-results-area').style.display='none';
+      ds('d-probe-results').style.display='none';
+      ds('d-job-input').value=''; ds('d-probe-ta').value='';
+      ds('d-train-kw').innerHTML='Train Keyword-Aware'; ds('d-train-kw').style.background='';
+      ds('d-score-btn').innerHTML='Score Job'; ds('d-score-btn').style.background='';
+      ds('d-probe-btn').innerHTML='Run Site Probe'; ds('d-probe-btn').style.background='';
+      document.querySelectorAll('.rep-section').forEach(s=>{ s.classList.remove('lit','dimmed'); });
+      clearToasts(); hideCursor(); dRunning=false; dPlaying=false;
+    }
+    </script>
   </body>
 </html>
