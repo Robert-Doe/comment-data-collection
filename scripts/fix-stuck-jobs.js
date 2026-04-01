@@ -1,14 +1,31 @@
 'use strict';
 
-// Fixes jobs stuck in 'running' status by force-completing them.
-// Run with: node scripts/fix-stuck-jobs.js
+// Fixes jobs stuck in 'running'/'queued' status by force-failing them.
+//
+// Usage (any OS):
+//   node scripts/fix-stuck-jobs.js --url postgresql://postgres:PASSWORD@localhost:5432/comment_data_collection
+//
+// Or via env var (Linux/Mac):
+//   DATABASE_URL=postgresql://... node scripts/fix-stuck-jobs.js
+//
+// Or via env var (Windows PowerShell):
+//   $env:DATABASE_URL="postgresql://..."; node scripts/fix-stuck-jobs.js
 
 const { Pool } = require('pg');
 
+function getDbUrl() {
+  const flagIndex = process.argv.indexOf('--url');
+  if (flagIndex !== -1 && process.argv[flagIndex + 1]) {
+    return process.argv[flagIndex + 1];
+  }
+  return process.env.DATABASE_URL;
+}
+
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getDbUrl();
   if (!databaseUrl) {
-    console.error('DATABASE_URL is not set');
+    console.error('No database URL found.');
+    console.error('Pass it as:  node scripts/fix-stuck-jobs.js --url postgresql://postgres:PASSWORD@localhost:5432/comment_data_collection');
     process.exit(1);
   }
 
@@ -39,7 +56,7 @@ async function main() {
   await pool.query(`
     UPDATE job_items
     SET status = 'failed',
-        error_message = 'Force-failed: item was stuck in ${'"'}${'" + "running/queued"'}${"'"} for over 30 minutes',
+        error_message = 'Force-failed: stuck in running/queued for over 30 minutes',
         completed_at = now(),
         updated_at = now()
     WHERE id = ANY($1)
@@ -53,10 +70,10 @@ async function main() {
     await pool.query(`
       UPDATE jobs
       SET
-        running_count  = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'running'),
-        queued_count   = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'queued'),
-        pending_count  = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'pending'),
-        failed_count   = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'failed'),
+        running_count   = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'running'),
+        queued_count    = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'queued'),
+        pending_count   = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'pending'),
+        failed_count    = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'failed'),
         completed_count = (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status = 'completed'),
         status = CASE
           WHEN (SELECT COUNT(*) FROM job_items WHERE job_id = $1 AND status IN ('running','queued','pending')) = 0
