@@ -1084,9 +1084,44 @@ async function listAllEvents(options, databaseUrl) {
   return result.rows;
 }
 
+async function clearJobArtifactPaths(jobId, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) throw new Error('jobId is required');
+  const db = getPool(databaseUrl);
+  // Clear file path/url columns on all items for this job
+  await db.query(
+    `UPDATE job_items SET
+       screenshot_path = NULL,
+       screenshot_url = NULL,
+       manual_uploaded_screenshot_path = NULL,
+       manual_uploaded_screenshot_url = NULL,
+       manual_html_path = NULL,
+       manual_html_url = NULL,
+       manual_raw_html_path = NULL,
+       manual_raw_html_url = NULL
+     WHERE job_id = $1`,
+    [normalizedJobId],
+  );
+  // Clear candidate_screenshot_path/url inside the candidates JSONB array
+  await db.query(
+    `UPDATE job_items
+     SET candidates = (
+       SELECT jsonb_agg(
+         elem
+           || jsonb_build_object('candidate_screenshot_path', '')
+           || jsonb_build_object('candidate_screenshot_url', '')
+       )
+       FROM jsonb_array_elements(candidates) AS elem
+     )
+     WHERE job_id = $1 AND jsonb_array_length(candidates) > 0`,
+    [normalizedJobId],
+  );
+}
+
 module.exports = {
   getPool,
   ensureSchema,
+  clearJobArtifactPaths,
   createJob,
   replaceJobRecords,
   restartJob,

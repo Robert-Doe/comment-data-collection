@@ -123,6 +123,13 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Disk Cleanup</div>
+      <button class="cbtn danger" id="btn-purge" onclick="purgeArtifacts()">&#x1F5D1; Purge Old Artifacts</button>
+      <p class="note" style="margin-top:8px">Deletes screenshots, HTML snapshots, and candidate images for all completed jobs <strong>except the most recent one</strong>. Frees disk space without affecting job results or CSV exports.</p>
+      <div id="purge-result" style="margin-top:8px;font-size:11px;color:var(--green);display:none"></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">ML Model Training</div>
       <p class="note">Uses Logistic Regression on human-labeled candidates.</p>
       <div class="mbox">
@@ -268,6 +275,23 @@ function restartWorker() {
     .then(function(r){ return r.json(); })
     .then(function(d){ showToast(d.message||'Restart signal sent'); setTimeout(function(){ btn.disabled=false; doRefresh(); },5000); })
     .catch(function(){ showToast('Failed to send restart signal',true); btn.disabled=false; });
+}
+
+function purgeArtifacts() {
+  if (!confirm('Delete screenshots and HTML snapshots for all completed jobs except the most recent one?\n\nThis cannot be undone. CSV/Excel exports and job results are not affected.')) return;
+  var btn=document.getElementById('btn-purge'); btn.disabled=true;
+  var res=document.getElementById('purge-result'); res.style.display='none';
+  fetch(API+'/api/admin/purge-artifacts?keepRecentJobs=1',{method:'POST',headers:{'Content-Type':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.disabled=false;
+      var mb=d.totalBytesFreed?Math.round(d.totalBytesFreed/1048576)+' MB freed':'0 MB freed';
+      res.textContent='Done — '+d.purged+' job(s) cleaned, '+mb+'.';
+      res.style.display='block';
+      showToast('Artifacts purged: '+mb);
+      setTimeout(doRefresh, 1000);
+    })
+    .catch(function(){ showToast('Purge failed',true); btn.disabled=false; });
 }
 
 doRefresh();

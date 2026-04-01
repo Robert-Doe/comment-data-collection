@@ -41,6 +41,7 @@ const {
   resumeJob,
   deleteJob,
   clearAllJobs,
+  clearJobArtifactPaths,
   listJobs,
   getJob,
   getJobItem,
@@ -214,6 +215,27 @@ async function listAllJobItemsForAction(jobId, config) {
     offset: 0,
   }, config.databaseUrl);
   return { job, items };
+}
+
+async function purgeJobArtifactFiles(jobId, artifactRoot, databaseUrl) {
+  const path = require('path');
+  const { execSync } = require('child_process');
+  const subDirs = ['screenshots', 'candidate-screenshots', 'html-snapshots', 'manual-captures'];
+  let bytesFreed = 0;
+  let dirsRemoved = 0;
+  for (const dir of subDirs) {
+    const dirPath = path.join(artifactRoot, dir, jobId);
+    try {
+      try {
+        const sizeOut = execSync(`du -sb "${dirPath}" 2>/dev/null`, { timeout: 5000 }).toString().trim();
+        bytesFreed += Number(sizeOut.split(/\s/)[0]) || 0;
+      } catch (_) {}
+      await fs.rm(dirPath, { recursive: true, force: true });
+      dirsRemoved++;
+    } catch (_) {}
+  }
+  await clearJobArtifactPaths(jobId, databaseUrl);
+  return { bytesFreed, dirsRemoved };
 }
 
 function createApp(config = getConfig()) {
@@ -556,6 +578,8 @@ function createApp(config = getConfig()) {
         await removeQueueItems(queue, items.map((item) => item.id));
       }
 
+      // Clean up artifact files before removing DB record
+      await purgeJobArtifactFiles(req.params.jobId, config.artifactRoot, config.databaseUrl).catch(() => {});
       await deleteJob(req.params.jobId, config.databaseUrl);
       res.json({
         ok: true,
@@ -1250,6 +1274,42 @@ function createApp(config = getConfig()) {
   app.get('/monitor', (_req, res) => {
     const path = require('path');
     res.sendFile(path.join(__dirname, 'monitor.html'));
+  });
+
+  // Purge artifact files for a single job and clear their DB paths
+  app.post('/api/jobs/:jobId/purge-artifacts', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+      const result = await purgeJobArtifactFiles(req.params.jobId, config.artifactRoot, config.databaseUrl);
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Purge artifacts for all completed jobs, keeping the N most recent
+  app.post('/api/admin/purge-artifacts', async (req, res, next) => {
+    try {
+      const keepRecentJobs = Math.max(0, Number(req.query.keepRecentJobs != null ? req.query.keepRecentJobs : req.body && req.body.keepRecentJobs) || 1);
+      const jobs = await listJobs(100, config.databaseUrl);
+      const completedJobs = jobs.filter((j) => j.status === 'completed' || j.status === 'completed_with_errors');
+      // Sort newest first (listJobs already returns newest first, but be explicit)
+      completedJobs.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      const toClean = completedJobs.slice(keepRecentJobs);
+      const results = [];
+      for (const job of toClean) {
+        const r = await purgeJobArtifactFiles(job.id, config.artifactRoot, config.databaseUrl);
+        results.push({ jobId: job.id, ...r });
+      }
+      const totalBytesFreed = results.reduce((s, r) => s + (r.bytesFreed || 0), 0);
+      res.json({ ok: true, purged: results.length, totalBytesFreed, jobs: results });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.use((error, _req, res, _next) => {
