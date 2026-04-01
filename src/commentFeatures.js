@@ -1662,6 +1662,17 @@ function collectSampleText(root) {
   };
 }
 
+function collectCandidateMarkup(root, _maxChars = 8000) {
+  const outerHtml = String(root && root.outerHTML ? root.outerHTML : '');
+  const text = String(textOf(root) || '').replace(/\s+/g, ' ').trim();
+  return {
+    candidate_outer_html_excerpt: outerHtml,
+    candidate_outer_html_length: outerHtml.length,
+    candidate_outer_html_truncated: false,
+    candidate_text_excerpt: text.slice(0, 1200),
+  };
+}
+
 function inferUgcType(features) {
   if (features.star_rating_present && features.has_text_content && !features.add_to_cart_present) {
     return 'product_review';
@@ -2019,8 +2030,9 @@ function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {
   const results = roots.map((root) => {
     const features = extractAllFeatures(root, rawHTML, responseHeaders);
     const summary = collectSampleText(root);
+    const markup = collectCandidateMarkup(root);
     const scoring = scoreFeatures(features);
-    return Object.assign({}, features, summary, scoring);
+    return Object.assign({}, features, summary, markup, scoring);
   });
 
   results.sort((left, right) => (

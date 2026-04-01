@@ -23,32 +23,46 @@ const {
   buildJobReportWorkbook,
 } = require('../shared/output');
 const { analyzeManualCapture } = require('../shared/manualCapture');
-const { buildHtmlSnapshotDot } = require('../shared/scanner');
+const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
+const { createModelingRouter } = require('../modeling/common/routes');
+const { listModelArtifacts } = require('../modeling/common/artifacts');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
   summarizeCandidateReviews,
+  upsertCandidateReview: upsertCandidateReviewArray,
 } = require('../shared/candidateReviews');
 const {
   ensureSchema,
   createJob,
+  replaceJobRecords,
+  restartJob,
+  resumeJob,
+  deleteJob,
+  clearAllJobs,
   listJobs,
   getJob,
   getJobItem,
   getJobItems,
+  appendJobEvent,
+  listAllEvents,
+  listJobEvents,
+  listItemsForModeling,
   listManualReviewCandidates,
   setManualReviewTarget,
   getManualReviewTarget,
   markItemCompleted,
   markItemFailed,
-  upsertCandidateReview,
+  upsertCandidateReview: persistCandidateReview,
   recomputeJob,
 } = require('../shared/store');
 const {
   getSharedQueue,
+  removeQueueItems,
 } = require('../shared/queue');
 const { fillQueueForJob } = require('../shared/jobQueue');
+const { sendStartedNotification } = require('../shared/notifications');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -67,6 +81,7 @@ const manualCaptureUpload = multer({
 
 function createCorsOptions(config) {
   return {
+    exposedHeaders: ['Content-Disposition', 'Content-Type'],
     origin(origin, callback) {
       if (!origin || config.frontendOrigin === '*' || origin === config.frontendOrigin) {
         callback(null, true);
@@ -110,6 +125,7 @@ function materializeItem(item, req) {
     candidate_reviews: candidateReviews,
     candidate_review_summary: summarizeCandidateReviews(candidateReviews),
     screenshot_url: versionedAssetUrl(req, item.screenshot_url || '', assetVersion),
+    manual_uploaded_screenshot_url: versionedAssetUrl(req, item.manual_uploaded_screenshot_url || '', assetVersion),
     manual_html_url: versionedAssetUrl(req, item.manual_html_url || '', assetVersion),
     manual_raw_html_url: versionedAssetUrl(req, item.manual_raw_html_url || '', assetVersion),
   };
@@ -128,13 +144,19 @@ function materializeLookupItem(item, req) {
   };
 }
 
-async function readSnapshotHtmlForItem(item) {
-  const candidates = [
-    item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
-    item && item.manual_html_path ? item.manual_html_path : '',
-  ].filter(Boolean);
+async function readSnapshotHtmlForItem(item, options = {}) {
+  const preferRendered = options.preferRendered !== false;
+  const candidates = preferRendered
+    ? [
+      item && item.manual_html_path ? item.manual_html_path : '',
+      item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
+    ]
+    : [
+      item && item.manual_raw_html_path ? item.manual_raw_html_path : '',
+      item && item.manual_html_path ? item.manual_html_path : '',
+    ];
 
-  for (const filePath of candidates) {
+  for (const filePath of candidates.filter(Boolean)) {
     try {
       const value = await fs.readFile(filePath, 'utf8');
       if (String(value || '').trim()) {
@@ -171,12 +193,45 @@ async function buildGraphForItem(item, config) {
   });
 }
 
+function queueFillCountForJob(job, config) {
+  if (!job) return 0;
+  const pendingCount = Math.max(0, Number(job.pending_count) || 0);
+  const totalUrls = Math.max(0, Number(job.total_urls) || 0);
+  return Math.min(config.initialQueueFill, pendingCount || totalUrls);
+}
+
+async function listAllJobItemsForAction(jobId, config) {
+  const job = await getJob(jobId, config.databaseUrl);
+  if (!job) {
+    return {
+      job: null,
+      items: [],
+    };
+  }
+
+  const items = await getJobItems(jobId, {
+    limit: Math.max(1, Number(job.total_urls) || 1),
+    offset: 0,
+  }, config.databaseUrl);
+  return { job, items };
+}
+
 function createApp(config = getConfig()) {
   const app = express();
   app.set('trust proxy', true);
   app.use(cors(createCorsOptions(config)));
   app.use(express.json({ limit: '1mb' }));
   app.use(config.artifactUrlBasePath, express.static(config.artifactRoot));
+  app.use('/api/modeling', createModelingRouter({
+    artifactRoot: config.modelArtifactRoot,
+    listModelArtifacts: () => listModelArtifacts(config.modelArtifactRoot),
+    listItemsForModeling: (options) => listItemsForModeling(options, config.databaseUrl),
+    getJob: (jobId) => getJob(jobId, config.databaseUrl),
+    getItemsForJob: async (jobId, job) => getJobItems(jobId, {
+      limit: Math.max(1, Number(job && job.total_urls) || 100),
+      offset: 0,
+    }, config.databaseUrl),
+  }));
 
   app.get('/api/health', async (_req, res) => {
     res.json({ ok: true });
@@ -235,12 +290,276 @@ function createApp(config = getConfig()) {
         queue,
       );
 
+      const createdEvent = await appendJobEvent({
+        jobId: job.id,
+        scope: 'job',
+        eventType: 'job_created',
+        eventKey: 'job_created',
+        message: `Job created with ${job.totalUrls} row(s) from ${sourceFilename || 'upload.csv'}.`,
+        details: {
+          total_urls: job.totalUrls,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+        },
+      }, config.databaseUrl);
+      if (createdEvent) {
+        sendStartedNotification(config, {
+          id: job.id,
+          total_urls: job.totalUrls,
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+        }, {
+          sourceFilename,
+          sourceColumn: parsed.urlColumn,
+        }).catch(async (notificationError) => {
+          const message = notificationError && notificationError.message ? notificationError.message : String(notificationError);
+          console.error(`job start notification failed for ${job.id}: ${message}`);
+          await appendJobEvent({
+            jobId: job.id,
+            scope: 'notification',
+            level: 'warn',
+            eventType: 'notification_error',
+            message: `Failed to send job-start email: ${message}`,
+          }, config.databaseUrl).catch(() => {});
+        });
+      }
+
       res.status(202).json({
         jobId: job.id,
         totalUrls: job.totalUrls,
         sourceColumn: parsed.urlColumn,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/clear', async (_req, res, next) => {
+    try {
+      const jobs = await listJobs(10000, config.databaseUrl);
+      const itemIds = [];
+      for (const job of jobs) {
+        const items = await getJobItems(job.id, {
+          limit: Math.max(1, Number(job.total_urls) || 1),
+          offset: 0,
+        }, config.databaseUrl);
+        itemIds.push(...items.map((item) => item.id));
+      }
+
+      if (itemIds.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, itemIds);
+      }
+      const deletedCount = await clearAllJobs(config.databaseUrl);
+      res.json({
+        ok: true,
+        deletedCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/resume', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const staleItemIds = items
+        .filter((item) => ['pending', 'queued', 'running'].includes(item.status))
+        .map((item) => item.id);
+      if (staleItemIds.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, staleItemIds);
+      }
+
+      const resumed = await resumeJob(req.params.jobId, {
+        batchSize: config.ingestBatchSize,
+      }, config.databaseUrl);
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(resumed && resumed.job ? resumed.job : job, config),
+        config.databaseUrl,
+        queue,
+      );
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_resumed',
+        eventKey: `job_resumed:${Date.now()}`,
+        message: resumed && resumed.replacedCount
+          ? `Resumed ${resumed.replacedCount} unfinished row(s).`
+          : 'Resume requested. No unfinished rows required replacement.',
+        details: {
+          replaced_count: resumed && resumed.replacedCount ? resumed.replacedCount : 0,
+          queued_fill_count: queueFillCountForJob(updatedJob, config),
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: updatedJob,
+        replacedCount: resumed && resumed.replacedCount ? resumed.replacedCount : 0,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/restart', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      const restartedJob = await restartJob(req.params.jobId, {
+        batchSize: config.ingestBatchSize,
+      }, config.databaseUrl);
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(restartedJob, config),
+        config.databaseUrl,
+        queue,
+      );
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_restarted',
+        message: `Job restarted with ${updatedJob ? updatedJob.total_urls : job.total_urls} row(s).`,
+        details: {
+          total_urls: updatedJob ? updatedJob.total_urls : job.total_urls,
+          scan_delay_ms: updatedJob ? updatedJob.scan_delay_ms : job.scan_delay_ms,
+          screenshot_delay_ms: updatedJob ? updatedJob.screenshot_delay_ms : job.screenshot_delay_ms,
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: updatedJob,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/replace', upload.single('file'), async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
+      const sourceFilename = req.file ? req.file.originalname : (req.body.filename || job.source_filename || 'upload.csv');
+      const preferredColumn = req.body.urlColumn || '';
+      if (!uploadedText.trim()) {
+        res.status(400).json({ error: 'Upload a CSV file or provide csvText' });
+        return;
+      }
+
+      const parsed = parseCsvText(uploadedText, preferredColumn);
+      const records = parsed.records.filter((record) => record.__normalized_url);
+      if (!records.length) {
+        res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
+        return;
+      }
+
+      const jobSettings = normalizeJobScanSettings({
+        scanDelayMs: req.body.scanDelayMs,
+        screenshotDelayMs: req.body.screenshotDelayMs,
+      }, {
+        scanDelayMs: job.scan_delay_ms,
+        screenshotDelayMs: job.screenshot_delay_ms,
+      });
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      await replaceJobRecords(req.params.jobId, {
+        sourceFilename,
+        sourceColumn: parsed.urlColumn,
+        records,
+        batchSize: config.ingestBatchSize,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+      }, config.databaseUrl);
+
+      const queue = getSharedQueue(config.redisUrl);
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(updatedJob, config),
+        config.databaseUrl,
+        queue,
+      );
+      const refreshedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_replaced',
+        message: `Job updated with ${records.length} row(s) from ${sourceFilename || 'upload.csv'}.`,
+        details: {
+          total_urls: records.length,
+          source_filename: sourceFilename || '',
+          source_column: parsed.urlColumn || '',
+          scan_delay_ms: jobSettings.scanDelayMs,
+          screenshot_delay_ms: jobSettings.screenshotDelayMs,
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: refreshedJob,
+        totalUrls: records.length,
+        sourceColumn: parsed.urlColumn,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/jobs/:jobId', async (req, res, next) => {
+    try {
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      if (items.length) {
+        const queue = getSharedQueue(config.redisUrl);
+        await removeQueueItems(queue, items.map((item) => item.id));
+      }
+
+      await deleteJob(req.params.jobId, config.databaseUrl);
+      res.json({
+        ok: true,
+        deletedJobId: req.params.jobId,
       });
     } catch (error) {
       next(error);
@@ -267,6 +586,26 @@ function createApp(config = getConfig()) {
           total: job.total_urls,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/jobs/:jobId/events', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const limit = Math.max(1, Math.min(250, Number(req.query.limit) || 80));
+      const itemId = String(req.query.itemId || '').trim();
+      const events = await listJobEvents(req.params.jobId, {
+        limit,
+        itemId: itemId || undefined,
+      }, config.databaseUrl);
+      res.json({ events });
     } catch (error) {
       next(error);
     }
@@ -445,6 +784,23 @@ function createApp(config = getConfig()) {
           await markItemCompleted(req.params.itemId, scanResult, config.databaseUrl);
         }
         await recomputeJob(req.params.jobId, config.databaseUrl);
+        await appendJobEvent({
+          jobId: req.params.jobId,
+          itemId: req.params.itemId,
+          rowNumber: item.row_number,
+          scope: 'manual_capture',
+          level: scanResult.error ? 'warn' : 'info',
+          eventType: scanResult.error ? 'manual_capture_failed' : 'manual_capture_processed',
+          message: scanResult.error
+            ? `Manual snapshot failed for row ${item.row_number}: ${scanResult.error}`
+            : `Manual snapshot processed for row ${item.row_number}.`,
+          details: {
+            analysis_source: scanResult.analysis_source || 'manual_snapshot',
+            manual_capture_url: scanResult.manual_capture_url || item.manual_capture_url || item.normalized_url || '',
+            ugc_detected: !!scanResult.ugc_detected,
+            candidate_count: Array.isArray(scanResult.candidates) ? scanResult.candidates.length : 0,
+          },
+        }, config.databaseUrl).catch(() => {});
 
         const updated = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
         res.json({
@@ -459,12 +815,6 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/review', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
-      if (!job) {
-        res.status(404).json({ error: 'Job not found' });
-        return;
-      }
-
       const item = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
       if (!item) {
         res.status(404).json({ error: 'Job item not found' });
@@ -488,7 +838,7 @@ function createApp(config = getConfig()) {
         return;
       }
 
-      await upsertCandidateReview(req.params.jobId, req.params.itemId, {
+      const nextReviews = await persistCandidateReview(req.params.jobId, req.params.itemId, {
         candidate_key: candidateKey,
         label: clear ? '' : label,
         notes,
@@ -496,12 +846,152 @@ function createApp(config = getConfig()) {
         css_path: candidate.css_path || '',
         candidate_rank: candidate.candidate_rank || 0,
         source: 'web_review',
-      }, config.databaseUrl);
+      }, config.databaseUrl, item);
 
-      const updated = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
+      const includeItem = !(
+        req.body
+        && (req.body.includeItem === false || String(req.body.includeItem || '').toLowerCase() === 'false')
+      );
+
+      if (!includeItem) {
+        res.json({
+          ok: true,
+          candidate_key: candidateKey,
+          candidate_review_summary: summarizeCandidateReviews(nextReviews || []),
+        });
+        return;
+      }
+
+      const updatedItem = {
+        ...item,
+        candidate_reviews: Array.isArray(nextReviews) ? nextReviews : upsertCandidateReviewArray(item.candidate_reviews || [], {
+          candidate_key: candidateKey,
+          label: clear ? '' : label,
+          notes,
+          xpath: candidate.xpath || '',
+          css_path: candidate.css_path || '',
+          candidate_rank: candidate.candidate_rank || 0,
+          source: 'web_review',
+        }),
+        updated_at: new Date().toISOString(),
+      };
       res.json({
         ok: true,
-        item: materializeItem(updated, req),
+        item: materializeItem(updatedItem, req),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/markup', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const item = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
+      if (!item) {
+        res.status(404).json({ error: 'Job item not found' });
+        return;
+      }
+
+      const candidateKey = String(req.params.candidateKey || '').trim();
+      const candidates = Array.isArray(item.candidates) ? item.candidates : [];
+      const candidate = candidates.find((entry) => String(entry.candidate_key || '') === candidateKey);
+      if (!candidate) {
+        res.status(404).json({ error: 'Candidate not found on this item' });
+        return;
+      }
+
+      const hasStoredMarkup = !!(
+        (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
+        || candidate.candidate_markup_error
+      );
+
+      if (hasStoredMarkup) {
+        res.json({
+          markup: {
+            candidate_outer_html_excerpt: candidate.candidate_outer_html_excerpt || '',
+            candidate_outer_html_length: candidate.candidate_outer_html_length || 0,
+            candidate_outer_html_truncated: !!candidate.candidate_outer_html_truncated,
+            candidate_text_excerpt: candidate.candidate_text_excerpt || '',
+            candidate_markup_error: candidate.candidate_markup_error || '',
+            candidate_resolved_tag_name: candidate.candidate_resolved_tag_name || '',
+            candidate_markup_source: 'stored_candidate',
+          },
+        });
+        return;
+      }
+
+      const html = await readSnapshotHtmlForItem(item, { preferRendered: true });
+      const snapshot = {
+        html,
+        raw_html: html,
+        normalized_url: item.final_url || item.manual_capture_url || item.normalized_url || 'about:blank',
+        final_url: item.final_url || item.normalized_url || '',
+        capture_url: item.manual_capture_url || item.final_url || item.normalized_url || '',
+        title: item.manual_capture_title || item.title || '',
+      };
+
+      let markup = null;
+      let markupSource = 'snapshot_backfill';
+      try {
+        markup = await hydrateCandidateMarkupFromSnapshot(snapshot, candidate, {
+          timeoutMs: config.scanTimeoutMs,
+        });
+      } catch (directError) {
+        const fallbackResult = await analyzeHtmlSnapshot(snapshot, {
+          timeoutMs: config.scanTimeoutMs,
+          postLoadDelayMs: 0,
+          captureScreenshots: false,
+          maxCandidates: Math.max(config.maxCandidates, 25),
+          maxResults: Math.max(config.maxResults, 25),
+        });
+        const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
+        const matched = fallbackCandidates.find((entry) => (
+          (candidate.candidate_key && entry.candidate_key && entry.candidate_key === candidate.candidate_key)
+          || (
+            entry.xpath === candidate.xpath
+            && entry.css_path === candidate.css_path
+          )
+          || (
+            entry.node_id
+            && candidate.node_id
+            && entry.node_id === candidate.node_id
+            && entry.structural_signature === candidate.structural_signature
+          )
+        ));
+
+        if (!matched) {
+          throw directError;
+        }
+
+        markup = {
+          candidate_outer_html_excerpt: matched.candidate_outer_html_excerpt || '',
+          candidate_outer_html_length: matched.candidate_outer_html_length || 0,
+          candidate_outer_html_truncated: !!matched.candidate_outer_html_truncated,
+          candidate_text_excerpt: matched.candidate_text_excerpt || '',
+          candidate_markup_error: matched.candidate_markup_error || '',
+          candidate_resolved_tag_name: matched.candidate_resolved_tag_name || matched.tag_name || '',
+        };
+        markupSource = 'snapshot_redetect';
+      }
+
+      const normalizedMarkup = {
+        candidate_outer_html_excerpt: markup && markup.candidate_outer_html_excerpt ? markup.candidate_outer_html_excerpt : '',
+        candidate_outer_html_length: markup && markup.candidate_outer_html_length ? markup.candidate_outer_html_length : 0,
+        candidate_outer_html_truncated: !!(markup && markup.candidate_outer_html_truncated),
+        candidate_text_excerpt: markup && markup.candidate_text_excerpt ? markup.candidate_text_excerpt : '',
+        candidate_markup_error: markup && markup.candidate_markup_error ? markup.candidate_markup_error : '',
+        candidate_resolved_tag_name: markup && markup.candidate_resolved_tag_name ? markup.candidate_resolved_tag_name : '',
+        candidate_markup_source: markupSource,
+      };
+
+      res.json({
+        markup: normalizedMarkup,
       });
     } catch (error) {
       next(error);
@@ -682,6 +1172,84 @@ function createApp(config = getConfig()) {
     } catch (error) {
       next(error);
     }
+  });
+
+  // Global events feed across all jobs
+  app.get('/api/events', async (req, res, next) => {
+    try {
+      const limit = Math.min(250, Math.max(1, Number(req.query.limit) || 100));
+      const since = req.query.since ? String(req.query.since) : '';
+      const events = await listAllEvents({ limit, since: since || undefined }, config.databaseUrl);
+      res.json({ events });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Detailed system health
+  app.get('/api/health/detailed', async (req, res, next) => {
+    try {
+      const { execSync } = require('child_process');
+      let diskFree = null;
+      let diskTotal = null;
+      try {
+        const df = execSync("df -k / | tail -1 | awk '{print $2,$4}'", { timeout: 5000 }).toString().trim();
+        const parts = df.split(' ');
+        diskTotal = Number(parts[0]) * 1024;
+        diskFree = Number(parts[1]) * 1024;
+      } catch (_) {}
+
+      const { getSharedRedis: _getRedis } = require('../shared/queue');
+      let redisOk = false;
+      try {
+        const r = _getRedis(config.redisUrl);
+        await r.ping();
+        redisOk = true;
+      } catch (_) {}
+
+      const jobs = await listJobs(10, config.databaseUrl);
+      const activeJobs = jobs.filter((j) => j.status === 'running');
+
+      res.json({
+        ok: true,
+        redis: redisOk,
+        diskFree,
+        diskTotal,
+        diskUsedPct: diskTotal ? Math.round((1 - diskFree / diskTotal) * 100) : null,
+        activeJobCount: activeJobs.length,
+        activeJobs: activeJobs.map((j) => ({
+          id: j.id,
+          status: j.status,
+          total_urls: j.total_urls,
+          completed_count: j.completed_count,
+          running_count: j.running_count,
+          failed_count: j.failed_count,
+          pending_count: j.pending_count,
+          detected_count: j.detected_count,
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Restart worker via Redis control signal
+  app.post('/api/admin/restart-worker', async (req, res, next) => {
+    try {
+      const { createRedisConnection } = require('../shared/queue');
+      const controlPub = createRedisConnection(config.redisUrl);
+      await controlPub.publish('ugc:control', 'restart');
+      await controlPub.quit().catch(() => {});
+      res.json({ ok: true, message: 'Restart signal sent to worker' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Serve monitoring dashboard
+  app.get('/monitor', (_req, res) => {
+    const path = require('path');
+    res.sendFile(path.join(__dirname, 'monitor.html'));
   });
 
   app.use((error, _req, res, _next) => {

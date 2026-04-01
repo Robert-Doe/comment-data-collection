@@ -20,7 +20,11 @@ Current sequence:
 8. `008_candidate_review_pagination_and_export.md`
 9. `009_comment_list_semantics_and_dot_export.md`
 10. `010_svg_graph_rendering.md`
-11. `011_latest_automated_html_snapshot_persistence.md`
+11. `011_automated_html_snapshot_persistence.md`
+12. `012_model_construction_blueprint.md`
+13. `013_beginner_evaluation_metrics_guide.md`
+14. `014_training_feature_set_for_modeling.md`
+15. `015_latest_comment_list_block_element_modeling_plan.md`
 
 Use this folder for:
 

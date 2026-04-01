@@ -35,6 +35,21 @@ Evaluate separately at:
 - PR-AUC
 - false-positive rate
 
+## Deployment artifact metrics
+
+Because the learned detector is meant to move into a browser
+extension, the paper should also measure the deployment artifact
+itself.
+
+Important deployment metrics:
+
+- browser-runtime model bundle size
+- browser-runtime model load time
+- browser-side inference latency per candidate
+- parity between server-side and browser-side probabilities
+- parity between server-side and browser-side top-1 ranking
+- parity between server-side and browser-side page-level decisions
+
 ## Dataset split rule
 
 Always split by domain or eTLD+1.
@@ -48,3 +63,21 @@ This matters because random page splits leak template identity.
 - remove expanded time/date features
 - remove direct-text-local features
 - compare hash-only similarity versus hybrid similarity
+
+## Deployment parity check
+
+The evaluation should explicitly compare:
+
+1. the full server-side training artifact
+2. the distilled browser-runtime JSON bundle
+
+For a held-out set of pages:
+
+1. score candidates on the server
+2. score the same candidates using the browser runtime bundle
+3. compare probabilities and rankings
+
+This matters because the research claim is stronger if the trained
+model is not only accurate offline, but also deployable as a compact
+browser inference bundle without changing the underlying decision
+behavior.

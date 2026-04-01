@@ -25,8 +25,17 @@ const {
   buildJobReportWorkbook,
 } = require('../shared/output');
 const { renderDotToSvg } = require('../shared/graphviz');
-const { scanUrl, buildHtmlSnapshotDot, deriveManualCaptureState, closeBrowser } = require('../shared/scanner');
+const {
+  scanUrl,
+  buildHtmlSnapshotDot,
+  deriveManualCaptureState,
+  hydrateCandidateMarkupFromSnapshot,
+  analyzeHtmlSnapshot,
+  closeBrowser,
+} = require('../shared/scanner');
 const { analyzeManualCapture } = require('../shared/manualCapture');
+const { createModelingRouter } = require('../modeling/common/routes');
+const { listModelArtifacts } = require('../modeling/common/artifacts');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -198,6 +207,58 @@ function createLocalRuntime(options = {}) {
 
   function getItem(jobId, itemId) {
     return state.items.find((item) => item.job_id === jobId && item.id === itemId) || null;
+  }
+
+  function createPendingItems(jobId, records, now) {
+    return records.map((record) => ({
+      id: crypto.randomUUID(),
+      job_id: jobId,
+      row_number: record.__row_number,
+      input_url: record.__input_url,
+      normalized_url: record.__normalized_url,
+      status: 'pending',
+      attempts: 0,
+      title: '',
+      final_url: '',
+      ugc_detected: null,
+      best_score: null,
+      best_confidence: '',
+      best_ugc_type: '',
+      best_xpath: '',
+      best_css_path: '',
+      best_sample_text: '',
+      screenshot_path: '',
+      screenshot_url: '',
+      analysis_source: 'automated',
+      manual_capture_required: false,
+      manual_capture_reason: '',
+      manual_capture_mode: '',
+      manual_html_path: '',
+      manual_html_url: '',
+      manual_raw_html_path: '',
+      manual_raw_html_url: '',
+      manual_capture_url: '',
+      manual_capture_title: '',
+      manual_capture_notes: '',
+      manual_captured_at: null,
+      candidate_reviews: [],
+      best_candidate: null,
+      candidates: null,
+      scan_result: null,
+      error_message: '',
+      created_at: now,
+      updated_at: now,
+      started_at: null,
+      completed_at: null,
+    }));
+  }
+
+  function dropQueuedTasksForJob(jobId) {
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      if (queue[index] && queue[index].jobId === jobId) {
+        queue.splice(index, 1);
+      }
+    }
   }
 
   function recomputeJob(jobId) {
@@ -396,54 +457,144 @@ function createLocalRuntime(options = {}) {
     };
 
     state.jobs.unshift(job);
-    records.forEach((record) => {
-      state.items.push({
-        id: crypto.randomUUID(),
-        job_id: jobId,
-        row_number: record.__row_number,
-        input_url: record.__input_url,
-        normalized_url: record.__normalized_url,
-        status: 'pending',
-        attempts: 0,
-        title: '',
-        final_url: '',
-        ugc_detected: null,
-        best_score: null,
-        best_confidence: '',
-        best_ugc_type: '',
-        best_xpath: '',
-        best_css_path: '',
-        best_sample_text: '',
-        screenshot_path: '',
-        screenshot_url: '',
-        analysis_source: 'automated',
-        manual_capture_required: false,
-        manual_capture_reason: '',
-        manual_capture_mode: '',
-        manual_html_path: '',
-        manual_html_url: '',
-        manual_raw_html_path: '',
-        manual_raw_html_url: '',
-        manual_capture_url: '',
-        manual_capture_title: '',
-        manual_capture_notes: '',
-        manual_captured_at: null,
-        candidate_reviews: [],
-        best_candidate: null,
-        candidates: null,
-        scan_result: null,
-        error_message: '',
-        created_at: now,
-        updated_at: now,
-        started_at: null,
-        completed_at: null,
-      });
-    });
+    state.items.push(...createPendingItems(jobId, records, now));
 
     recomputeJob(jobId);
     persist();
     refillQueue(jobId, Math.min(config.initialQueueFill, records.length));
     return job;
+  }
+
+  function replaceJobRecords(jobId, options = {}) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const records = Array.isArray(options.records)
+      ? options.records.filter((record) => record && record.__normalized_url)
+      : [];
+    if (!records.length) {
+      throw new Error('At least one normalized record is required');
+    }
+
+    const now = new Date().toISOString();
+    dropQueuedTasksForJob(jobId);
+    state.items = state.items.filter((item) => item.job_id !== jobId);
+    state.items.push(...createPendingItems(jobId, records, now));
+
+    if (state.manual_review_target && state.manual_review_target.job_id === jobId) {
+      state.manual_review_target = null;
+    }
+
+    job.source_filename = options.sourceFilename !== undefined ? String(options.sourceFilename || '') : String(job.source_filename || '');
+    job.source_column = options.sourceColumn !== undefined ? String(options.sourceColumn || '') : String(job.source_column || '');
+    job.scan_delay_ms = Number.isFinite(Number(options.scanDelayMs)) ? Number(options.scanDelayMs) : job.scan_delay_ms;
+    job.screenshot_delay_ms = Number.isFinite(Number(options.screenshotDelayMs)) ? Number(options.screenshotDelayMs) : job.screenshot_delay_ms;
+    job.status = 'pending';
+    job.total_urls = records.length;
+    job.pending_count = records.length;
+    job.queued_count = 0;
+    job.running_count = 0;
+    job.completed_count = 0;
+    job.failed_count = 0;
+    job.detected_count = 0;
+    job.error_message = '';
+    job.updated_at = now;
+    job.finished_at = null;
+
+    recomputeJob(jobId);
+    persist();
+    refillQueue(jobId, Math.min(config.initialQueueFill, records.length));
+    return job;
+  }
+
+  function restartJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const records = getItemsForJob(jobId).map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    }));
+
+    return replaceJobRecords(jobId, {
+      sourceFilename: job.source_filename || '',
+      sourceColumn: job.source_column || '',
+      records,
+      scanDelayMs: job.scan_delay_ms,
+      screenshotDelayMs: job.screenshot_delay_ms,
+    });
+  }
+
+  function resumeJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const unfinishedItems = getItemsForJob(jobId).filter((item) => ['pending', 'queued', 'running'].includes(item.status));
+    if (!unfinishedItems.length) {
+      return {
+        job,
+        replacedCount: 0,
+      };
+    }
+
+    const staleIds = new Set(unfinishedItems.map((item) => item.id));
+    const now = new Date().toISOString();
+    dropQueuedTasksForJob(jobId);
+    state.items = state.items.filter((item) => !staleIds.has(item.id));
+    state.items.push(...createPendingItems(jobId, unfinishedItems.map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    })), now));
+
+    if (state.manual_review_target && staleIds.has(state.manual_review_target.item_id)) {
+      state.manual_review_target = null;
+    }
+
+    job.error_message = '';
+    job.updated_at = now;
+    job.finished_at = null;
+    recomputeJob(jobId);
+    persist();
+    refillQueue(jobId, Math.min(config.initialQueueFill, unfinishedItems.length));
+
+    return {
+      job,
+      replacedCount: unfinishedItems.length,
+    };
+  }
+
+  function deleteJob(jobId) {
+    const job = getJob(jobId);
+    if (!job) {
+      return false;
+    }
+
+    dropQueuedTasksForJob(jobId);
+    state.jobs = state.jobs.filter((entry) => entry.id !== jobId);
+    state.items = state.items.filter((item) => item.job_id !== jobId);
+    if (state.manual_review_target && state.manual_review_target.job_id === jobId) {
+      state.manual_review_target = null;
+    }
+    persist();
+    return true;
+  }
+
+  function clearJobs() {
+    const deletedCount = state.jobs.length;
+    queue.length = 0;
+    state.jobs = [];
+    state.items = [];
+    state.manual_review_target = null;
+    persist();
+    return deletedCount;
   }
 
   function resumeIncompleteJobs() {
@@ -477,6 +628,7 @@ function createLocalRuntime(options = {}) {
   return {
     config,
     statePath,
+    state,
     listJobs(limit = 25) {
       return state.jobs.slice(0, limit);
     },
@@ -484,6 +636,20 @@ function createLocalRuntime(options = {}) {
     getItem,
     getJobItems(jobId, limit = 100, offset = 0) {
       return getItemsForJob(jobId).slice(offset, offset + limit);
+    },
+    resumeJob,
+    restartJob,
+    replaceJobRecords,
+    deleteJob,
+    clearJobs,
+    listItemsForModeling(options = {}) {
+      const jobIds = Array.isArray(options.jobIds)
+        ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+      const requireCandidates = options.requireCandidates !== false;
+      return state.items
+        .filter((item) => !jobIds.length || jobIds.includes(item.job_id))
+        .filter((item) => !requireCandidates || (Array.isArray(item.candidates) && item.candidates.length > 0));
     },
     getManualReviewTarget() {
       return state.manual_review_target || null;
@@ -600,6 +766,13 @@ function createLocalApp(options = {}) {
   app.set('trust proxy', true);
   app.use(cors({ origin: true }));
   app.use(express.json({ limit: '1mb' }));
+  app.use('/api/modeling', createModelingRouter({
+    artifactRoot: runtime.config.modelArtifactRoot,
+    listModelArtifacts: () => listModelArtifacts(runtime.config.modelArtifactRoot),
+    listItemsForModeling: (options) => runtime.listItemsForModeling(options),
+    getJob: (jobId) => runtime.getJob(jobId),
+    getItemsForJob: (jobId, job) => runtime.getJobItems(jobId, Math.max(1, Number(job && job.total_urls) || 100), 0),
+  }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, mode: 'local' });
@@ -652,6 +825,105 @@ function createLocalApp(options = {}) {
     });
   });
 
+  app.post('/api/jobs/clear', (_req, res) => {
+    const deletedCount = runtime.clearJobs();
+    res.json({
+      ok: true,
+      deletedCount,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/resume', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const result = runtime.resumeJob(req.params.jobId);
+    res.json({
+      ok: true,
+      job: result.job,
+      replacedCount: result.replacedCount,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/restart', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const updated = runtime.restartJob(req.params.jobId);
+    res.json({
+      ok: true,
+      job: updated,
+    });
+  });
+
+  app.post('/api/jobs/:jobId/replace', upload.single('file'), (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
+    const sourceFilename = req.file ? req.file.originalname : (req.body.filename || job.source_filename || 'upload.csv');
+    const preferredColumn = req.body.urlColumn || '';
+
+    if (!uploadedText.trim()) {
+      res.status(400).json({ error: 'Upload a CSV file or provide csvText' });
+      return;
+    }
+
+    const parsed = parseCsvText(uploadedText, preferredColumn);
+    const records = parsed.records.filter((record) => record.__normalized_url);
+    if (!records.length) {
+      res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
+      return;
+    }
+
+    const jobSettings = normalizeJobScanSettings({
+      scanDelayMs: req.body.scanDelayMs,
+      screenshotDelayMs: req.body.screenshotDelayMs,
+    }, {
+      scanDelayMs: job.scan_delay_ms,
+      screenshotDelayMs: job.screenshot_delay_ms,
+    });
+
+    const updated = runtime.replaceJobRecords(req.params.jobId, {
+      sourceFilename,
+      sourceColumn: parsed.urlColumn,
+      records,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
+    });
+
+    res.json({
+      ok: true,
+      job: updated,
+      totalUrls: records.length,
+      sourceColumn: parsed.urlColumn,
+      scanDelayMs: jobSettings.scanDelayMs,
+      screenshotDelayMs: jobSettings.screenshotDelayMs,
+    });
+  });
+
+  app.delete('/api/jobs/:jobId', (req, res) => {
+    const deleted = runtime.deleteJob(req.params.jobId);
+    if (!deleted) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      deletedJobId: req.params.jobId,
+    });
+  });
+
   app.get('/api/jobs/:jobId', (req, res) => {
     const limit = Math.max(1, Number(req.query.limit) || runtime.config.apiResultsPageSize);
     const offset = Math.max(0, Number(req.query.offset) || 0);
@@ -690,6 +962,16 @@ function createLocalApp(options = {}) {
         total: job.total_urls,
       },
     });
+  });
+
+  app.get('/api/jobs/:jobId/events', (req, res) => {
+    const job = runtime.getJob(req.params.jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Job not found' });
+      return;
+    }
+
+    res.json({ events: [] });
   });
 
   app.get('/api/jobs/:jobId/items/:itemId', (req, res) => {
@@ -820,12 +1102,6 @@ function createLocalApp(options = {}) {
   );
 
   app.post('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/review', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
-
     const item = runtime.getItem(req.params.jobId, req.params.itemId);
     if (!item) {
       res.status(404).json({ error: 'Job item not found' });
@@ -858,10 +1134,138 @@ function createLocalApp(options = {}) {
       source: 'web_review',
     });
 
+    const includeItem = !(
+      req.body
+      && (req.body.includeItem === false || String(req.body.includeItem || '').toLowerCase() === 'false')
+    );
+
+    if (!includeItem) {
+      res.json({
+        ok: true,
+        candidate_key: candidateKey,
+        candidate_review_summary: summarizeCandidateReviews(updated.candidate_reviews || []),
+      });
+      return;
+    }
+
     res.json({
       ok: true,
       item: materializeItem(updated, req),
     });
+  });
+
+  app.get('/api/jobs/:jobId/items/:itemId/candidates/:candidateKey/markup', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const item = runtime.getItem(req.params.jobId, req.params.itemId);
+      if (!item) {
+        res.status(404).json({ error: 'Job item not found' });
+        return;
+      }
+
+      const candidateKey = String(req.params.candidateKey || '').trim();
+      const candidates = Array.isArray(item.candidates) ? item.candidates : [];
+      const candidate = candidates.find((entry) => String(entry.candidate_key || '') === candidateKey);
+      if (!candidate) {
+        res.status(404).json({ error: 'Candidate not found on this item' });
+        return;
+      }
+
+      const hasStoredMarkup = !!(
+        (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
+        || candidate.candidate_markup_error
+      );
+
+      if (hasStoredMarkup) {
+        res.json({
+          markup: {
+            candidate_outer_html_excerpt: candidate.candidate_outer_html_excerpt || '',
+            candidate_outer_html_length: candidate.candidate_outer_html_length || 0,
+            candidate_outer_html_truncated: !!candidate.candidate_outer_html_truncated,
+            candidate_text_excerpt: candidate.candidate_text_excerpt || '',
+            candidate_markup_error: candidate.candidate_markup_error || '',
+            candidate_resolved_tag_name: candidate.candidate_resolved_tag_name || '',
+            candidate_markup_source: 'stored_candidate',
+          },
+        });
+        return;
+      }
+
+      const html = await readSnapshotHtmlForItem(item);
+      const snapshot = {
+        html,
+        raw_html: html,
+        normalized_url: item.final_url || item.manual_capture_url || item.normalized_url || 'about:blank',
+        final_url: item.final_url || item.normalized_url || '',
+        capture_url: item.manual_capture_url || item.final_url || item.normalized_url || '',
+        title: item.manual_capture_title || item.title || '',
+      };
+
+      let markup = null;
+      let markupSource = 'snapshot_backfill';
+      try {
+        markup = await hydrateCandidateMarkupFromSnapshot(snapshot, candidate, {
+          timeoutMs: runtime.config.scanTimeoutMs,
+        });
+      } catch (directError) {
+        const fallbackResult = await analyzeHtmlSnapshot(snapshot, {
+          timeoutMs: runtime.config.scanTimeoutMs,
+          postLoadDelayMs: 0,
+          captureScreenshots: false,
+          maxCandidates: Math.max(runtime.config.maxCandidates, 25),
+          maxResults: Math.max(runtime.config.maxResults, 25),
+        });
+        const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
+        const matched = fallbackCandidates.find((entry) => (
+          (candidate.candidate_key && entry.candidate_key && entry.candidate_key === candidate.candidate_key)
+          || (
+            entry.xpath === candidate.xpath
+            && entry.css_path === candidate.css_path
+          )
+          || (
+            entry.node_id
+            && candidate.node_id
+            && entry.node_id === candidate.node_id
+            && entry.structural_signature === candidate.structural_signature
+          )
+        ));
+
+        if (!matched) {
+          throw directError;
+        }
+
+        markup = {
+          candidate_outer_html_excerpt: matched.candidate_outer_html_excerpt || '',
+          candidate_outer_html_length: matched.candidate_outer_html_length || 0,
+          candidate_outer_html_truncated: !!matched.candidate_outer_html_truncated,
+          candidate_text_excerpt: matched.candidate_text_excerpt || '',
+          candidate_markup_error: matched.candidate_markup_error || '',
+          candidate_resolved_tag_name: matched.candidate_resolved_tag_name || matched.tag_name || '',
+        };
+        markupSource = 'snapshot_redetect';
+      }
+
+      const normalizedMarkup = {
+        candidate_outer_html_excerpt: markup && markup.candidate_outer_html_excerpt ? markup.candidate_outer_html_excerpt : '',
+        candidate_outer_html_length: markup && markup.candidate_outer_html_length ? markup.candidate_outer_html_length : 0,
+        candidate_outer_html_truncated: !!(markup && markup.candidate_outer_html_truncated),
+        candidate_text_excerpt: markup && markup.candidate_text_excerpt ? markup.candidate_text_excerpt : '',
+        candidate_markup_error: markup && markup.candidate_markup_error ? markup.candidate_markup_error : '',
+        candidate_resolved_tag_name: markup && markup.candidate_resolved_tag_name ? markup.candidate_resolved_tag_name : '',
+        candidate_markup_source: markupSource,
+      };
+
+      res.json({
+        markup: normalizedMarkup,
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/jobs/:jobId/items/:itemId/graph.dot', async (req, res, next) => {
@@ -1022,11 +1426,23 @@ function createLocalApp(options = {}) {
 
   app.get('/config.js', (_req, res) => {
     res.type('application/javascript');
+    res.setHeader('Cache-Control', 'no-store');
     res.send('window.__APP_CONFIG__ = {"apiBaseUrl": ""};\n');
   });
 
   app.use(runtime.config.artifactUrlBasePath, express.static(runtime.config.artifactRoot));
-  app.use(express.static(webRoot));
+  app.use(express.static(webRoot, {
+    etag: true,
+    setHeaders(res, filePath) {
+      if (/\.(?:js|css)$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        return;
+      }
+      if (/\.html$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
   app.use((error, _req, res, _next) => {
     console.error(error);
     res.status(500).json({
@@ -1034,6 +1450,7 @@ function createLocalApp(options = {}) {
     });
   });
   app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webRoot, 'index.html'));
   });
 
