@@ -1449,6 +1449,9 @@ function createLocalApp(options = {}) {
       error: error && error.message ? error.message : 'Internal server error',
     });
   });
+  app.get('/monitor', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../api/monitor.html'));
+  });
   app.get('*', (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webRoot, 'index.html'));

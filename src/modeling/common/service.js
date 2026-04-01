@@ -217,7 +217,8 @@ function groupScoredRowsByItem(scoredRows) {
       });
     }
 
-    groups.get(row.item_id).candidates.push(row);
+    const { candidate: _c, item: _i, ...rowData } = row;
+    groups.get(row.item_id).candidates.push(rowData);
   });
 
   groups.forEach((group) => {
