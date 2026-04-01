@@ -81,15 +81,23 @@ const manualCaptureUpload = multer({
 });
 
 function createCorsOptions(config) {
+  const allowedOrigins = new Set(
+    (Array.isArray(config.frontendOrigins) ? config.frontendOrigins : [config.frontendOrigin])
+      .map((origin) => String(origin || '').trim().replace(/\/+$/g, ''))
+      .filter(Boolean),
+  );
+  const allowAllOrigins = allowedOrigins.has('*');
+
   return {
     exposedHeaders: ['Content-Disposition', 'Content-Type'],
     origin(origin, callback) {
-      if (!origin || config.frontendOrigin === '*' || origin === config.frontendOrigin) {
+      const normalizedOrigin = String(origin || '').trim().replace(/\/+$/g, '');
+      if (!normalizedOrigin || allowAllOrigins || allowedOrigins.has(normalizedOrigin)) {
         callback(null, true);
         return;
       }
 
-      if (/^chrome-extension:\/\//i.test(origin) || /^moz-extension:\/\//i.test(origin)) {
+      if (/^chrome-extension:\/\//i.test(normalizedOrigin) || /^moz-extension:\/\//i.test(normalizedOrigin)) {
         callback(null, true);
         return;
       }

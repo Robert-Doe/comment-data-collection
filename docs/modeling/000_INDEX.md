@@ -11,3 +11,4 @@ Read in this order:
 5. [005_beginner_modeling_codebase_guide.md](./005_beginner_modeling_codebase_guide.md)
 6. [006_beginner_model_lab_training_walkthrough.md](./006_beginner_model_lab_training_walkthrough.md)
 7. [007_beginner_logistic_regression_guide.md](./007_beginner_logistic_regression_guide.md)
+8. [008_model_artifacts_and_detector_extension_integration.md](./008_model_artifacts_and_detector_extension_integration.md)

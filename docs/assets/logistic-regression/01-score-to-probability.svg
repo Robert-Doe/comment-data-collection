@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="320" viewBox="0 0 1000 320">
+  <rect width="1000" height="320" fill="#f6f4ef"/>
+  <text x="40" y="38" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#17324d">Logistic Regression Pipeline</text>
+  <text x="40" y="66" font-family="Arial, sans-serif" font-size="16" fill="#425466">Features -&gt; weighted score -&gt; sigmoid -&gt; probability</text>
+
+  <rect x="40" y="100" width="210" height="160" rx="18" fill="#ffffff" stroke="#d3d9df"/>
+  <text x="62" y="132" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Input Features</text>
+  <text x="62" y="166" font-family="Courier New, monospace" font-size="16" fill="#2c3e50">x1 = repeated blocks</text>
+  <text x="62" y="192" font-family="Courier New, monospace" font-size="16" fill="#2c3e50">x2 = author signal</text>
+  <text x="62" y="218" font-family="Courier New, monospace" font-size="16" fill="#2c3e50">x3 = timestamp signal</text>
+  <text x="62" y="244" font-family="Courier New, monospace" font-size="16" fill="#2c3e50">x4 = buy button</text>
+
+  <line x1="250" y1="180" x2="345" y2="180" stroke="#17324d" stroke-width="4"/>
+  <polygon points="345,180 331,172 331,188" fill="#17324d"/>
+
+  <rect x="355" y="100" width="235" height="160" rx="18" fill="#eef6ff" stroke="#8cb3d9"/>
+  <text x="377" y="132" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Weighted Sum</text>
+  <text x="377" y="166" font-family="Courier New, monospace" font-size="18" fill="#17324d">z = b + w1x1 + w2x2</text>
+  <text x="377" y="192" font-family="Courier New, monospace" font-size="18" fill="#17324d">    + w3x3 + w4x4</text>
+  <text x="377" y="226" font-family="Arial, sans-serif" font-size="16" fill="#425466">One raw score collects all evidence.</text>
+
+  <line x1="590" y1="180" x2="685" y2="180" stroke="#17324d" stroke-width="4"/>
+  <polygon points="685,180 671,172 671,188" fill="#17324d"/>
+
+  <rect x="695" y="100" width="130" height="160" rx="18" fill="#fff6e8" stroke="#e0b46b"/>
+  <text x="724" y="132" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Sigmoid</text>
+  <path d="M722 225 C722 210, 730 200, 750 190 C775 177, 778 165, 778 145 C778 125, 792 115, 810 113"
+        fill="none" stroke="#b06a00" stroke-width="5"/>
+  <text x="720" y="248" font-family="Courier New, monospace" font-size="16" fill="#7a4a00">p = 1 / (1 + e^-z)</text>
+
+  <line x1="825" y1="180" x2="910" y2="180" stroke="#17324d" stroke-width="4"/>
+  <polygon points="910,180 896,172 896,188" fill="#17324d"/>
+
+  <rect x="820" y="100" width="140" height="160" rx="18" fill="#ebfbef" stroke="#86c28b"/>
+  <text x="839" y="132" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Probability</text>
+  <text x="853" y="187" font-family="Courier New, monospace" font-size="28" font-weight="700" fill="#0d6a2f">0.91</text>
+  <text x="845" y="222" font-family="Arial, sans-serif" font-size="16" fill="#425466">Positive class</text>
+</svg>

@@ -30,6 +30,54 @@ function normalizeBasePath(value, fallback) {
   return `/${base.replace(/^\/+|\/+$/g, '')}`;
 }
 
+function normalizeOrigin(value) {
+  const origin = String(value || '').trim().replace(/\/+$/g, '');
+  return origin;
+}
+
+function expandFrontendOrigins(value) {
+  const raw = String(value || '*').trim();
+  if (!raw) return ['*'];
+
+  const origins = raw
+    .split(',')
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean);
+
+  if (!origins.length) return ['*'];
+  if (origins.includes('*')) return ['*'];
+
+  const expanded = new Set(origins);
+
+  for (const origin of origins) {
+    try {
+      const parsed = new URL(origin);
+      if (!/^https?:$/i.test(parsed.protocol)) {
+        continue;
+      }
+
+      const alias = new URL(parsed.origin);
+      if (parsed.hostname.startsWith('www.')) {
+        const hostname = parsed.hostname.slice(4);
+        if (!hostname) {
+          continue;
+        }
+        alias.hostname = hostname;
+      } else if (parsed.hostname.includes('.')) {
+        alias.hostname = `www.${parsed.hostname}`;
+      } else {
+        continue;
+      }
+
+      expanded.add(alias.origin);
+    } catch (_) {
+      continue;
+    }
+  }
+
+  return Array.from(expanded);
+}
+
 function getRuntimeProfile() {
   const cpuCount = Math.max(1, Number(os.cpus().length) || 1);
   const totalMemoryMb = Math.max(256, Math.round(os.totalmem() / (1024 * 1024)));
@@ -48,6 +96,7 @@ function getRuntimeProfile() {
 
 function getConfig() {
   const runtimeProfile = getRuntimeProfile();
+  const frontendOrigins = expandFrontendOrigins(process.env.FRONTEND_ORIGIN || '*');
   const requestedWorkerConcurrency = Math.max(1, integerFromEnv('WORKER_CONCURRENCY', 2));
   const workerConcurrency = clamp(
     requestedWorkerConcurrency,
@@ -86,7 +135,8 @@ function getConfig() {
     port: numberFromEnv('PORT', 3000),
     databaseUrl: process.env.DATABASE_URL || '',
     redisUrl: process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL || '',
-    frontendOrigin: process.env.FRONTEND_ORIGIN || '*',
+    frontendOrigin: frontendOrigins[0] || '*',
+    frontendOrigins,
     scanTimeoutMs,
     postLoadDelayMs,
     preScreenshotDelayMs,

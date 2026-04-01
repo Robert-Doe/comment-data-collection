@@ -1,0 +1,13 @@
+diff --git a/src/shared/store.js b/src/shared/store.js
+index d7d3b74..6b89a87 100644
+--- a/src/shared/store.js
++++ b/src/shared/store.js
+@@ -1067,7 +1067,7 @@ async function listAllEvents(options, databaseUrl) {
+ 
+   if (opts.since) {
+     params.push(String(opts.since));
+-    clauses.push(`created_at > \$${params.length}`);
++    clauses.push(`je.created_at > \$${params.length}`);
+   }
+ 
+   params.push(Math.max(1, Math.min(500, Number(opts.limit) || 100)));

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PseudoDOM Guard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3a;
+      --text:      #e2e4ed;
+      --muted:     #7a7f94;
+      --accent:    #4f8ef7;
+      --green:     #3ecf8e;
+      --yellow:    #f0b429;
+      --red:       #e55353;
+      --radius:    6px;
+      --font:      'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      width: 380px;
+      min-height: 480px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      width: 24px; height: 24px;
+      background: var(--accent);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .header h1 { font-size: 14px; font-weight: 600; }
+    .header .version { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+    /* ── Status pill ─────────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .pill {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .pill.active  { background: rgba(62,207,142,0.15); color: var(--green); }
+    .pill.inactive { background: rgba(240,180,41,0.15); color: var(--yellow); }
+    .pill.blocked  { background: rgba(229,83,83,0.15);  color: var(--red); }
+    .status-label { color: var(--muted); font-size: 12px; }
+
+    /* ── Tabs ────────────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1;
+      padding: 9px 0;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    /* ── Panel ───────────────────────────────────────────────────────────── */
+    .panel { display: none; padding: 12px 16px; }
+    .panel.visible { display: block; }
+
+    /* ── Overview panel ──────────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .stat-card .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Candidate list ──────────────────────────────────────────────────── */
+    .candidate-list { display: flex; flex-direction: column; gap: 6px; }
+    .candidate-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .candidate-card:hover { border-color: var(--accent); }
+    .candidate-card.ugc-high  { border-left: 3px solid var(--green); }
+    .candidate-card.ugc-med   { border-left: 3px solid var(--yellow); }
+    .candidate-card.ugc-low   { border-left: 3px solid var(--border); }
+    .candidate-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .candidate-tag {
+      font-size: 11px;
+      font-family: monospace;
+      background: rgba(79,142,247,0.12);
+      color: var(--accent);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .candidate-score { margin-left: auto; font-size: 12px; font-weight: 600; }
+    .candidate-score.high  { color: var(--green); }
+    .candidate-score.med   { color: var(--yellow); }
+    .candidate-score.low   { color: var(--muted); }
+    .candidate-meta { font-size: 11px; color: var(--muted); }
+
+    /* ── Security events ─────────────────────────────────────────────────── */
+    .event-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+    .event-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+    }
+    .event-card.block { border-left: 3px solid var(--red); }
+    .event-card.flag  { border-left: 3px solid var(--yellow); }
+    .event-header { display: flex; align-items: center; gap: 6px; }
+    .event-type { font-size: 11px; font-family: monospace; color: var(--muted); }
+    .event-reason {
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .event-reason.block { color: var(--red); }
+    .event-reason.flag  { color: var(--yellow); }
+    .event-url { font-size: 10px; color: var(--muted); margin-top: 3px;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .event-sample { font-size: 10px; color: var(--muted); margin-top: 4px;
+                    font-family: monospace; word-break: break-all;
+                    max-height: 40px; overflow: hidden; }
+    .empty-state { text-align: center; color: var(--muted); padding: 40px 0; font-size: 12px; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+    .btn {
+      flex: 1;
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: #3a7de6; }
+    .btn.danger { border-color: var(--red); color: var(--red); }
+    .btn.danger:hover { background: rgba(229,83,83,0.1); }
+
+    /* ── Scrollbar ───────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">🛡</div>
+    <h1>PseudoDOM Guard</h1>
+    <span class="version">v0.1.0</span>
+  </div>
+
+  <div class="status-row">
+    <span id="status-pill" class="pill active">ACTIVE</span>
+    <span class="status-label" id="status-label">Monitoring DOM mutations</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="candidates">UGC Regions</div>
+    <div class="tab" data-tab="events">Security Log</div>
+  </div>
+
+  <!-- Overview panel -->
+  <div class="panel visible" id="panel-overview">
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="value" id="stat-mutations">—</div>
+        <div class="label">Mutations intercepted</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="stat-ugc-regions">—</div>
+        <div class="label">UGC regions detected</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="stat-blocked">—</div>
+        <div class="label">Mutations blocked</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="stat-candidates">—</div>
+        <div class="label">Candidates scored</div>
+      </div>
+    </div>
+
+    <div id="page-signals-section"></div>
+
+    <div class="btn-row">
+      <button class="btn primary" id="btn-export">Export Dataset</button>
+      <button class="btn" id="btn-snapshot">Snapshot DOM</button>
+    </div>
+  </div>
+
+  <!-- Candidates panel -->
+  <div class="panel" id="panel-candidates">
+    <div class="candidate-list" id="candidate-list">
+      <div class="empty-state">No UGC candidates detected yet.<br>Visit a page with comments or reviews.</div>
+    </div>
+  </div>
+
+  <!-- Security log panel -->
+  <div class="panel" id="panel-events">
+    <div class="event-list" id="event-list">
+      <div class="empty-state">No security events recorded.<br>All mutations passing clean.</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn danger" id="btn-clear-events">Clear Log</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

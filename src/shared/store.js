@@ -1067,7 +1067,7 @@ async function listAllEvents(options, databaseUrl) {
 
   if (opts.since) {
     params.push(String(opts.since));
-    clauses.push(`created_at > \$${params.length}`);
+    clauses.push(`je.created_at > \$${params.length}`);
   }
 
   params.push(Math.max(1, Math.min(500, Number(opts.limit) || 100)));

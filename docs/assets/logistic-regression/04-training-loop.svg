@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="320" viewBox="0 0 1000 320">
+  <rect width="1000" height="320" fill="#f6f4ef"/>
+  <text x="36" y="38" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#17324d">How Training Works</text>
+  <text x="36" y="66" font-family="Arial, sans-serif" font-size="16" fill="#425466">The model keeps correcting its weights based on prediction error.</text>
+
+  <rect x="40" y="112" width="170" height="92" rx="18" fill="#ffffff" stroke="#d3d9df"/>
+  <text x="73" y="147" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Labeled Data</text>
+  <text x="63" y="177" font-family="Arial, sans-serif" font-size="16" fill="#425466">features + true label</text>
+
+  <rect x="280" y="112" width="160" height="92" rx="18" fill="#eef6ff" stroke="#8cb3d9"/>
+  <text x="316" y="147" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Model</text>
+  <text x="306" y="177" font-family="Arial, sans-serif" font-size="16" fill="#425466">current weights</text>
+
+  <rect x="510" y="112" width="180" height="92" rx="18" fill="#ebfbef" stroke="#86c28b"/>
+  <text x="538" y="147" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Prediction</text>
+  <text x="558" y="177" font-family="Courier New, monospace" font-size="18" fill="#0d6a2f">p = 0.27</text>
+
+  <rect x="760" y="112" width="180" height="92" rx="18" fill="#fff6e8" stroke="#e0b46b"/>
+  <text x="799" y="147" font-family="Arial, sans-serif" font-size="20" font-weight="700" fill="#17324d">Loss</text>
+  <text x="789" y="177" font-family="Arial, sans-serif" font-size="16" fill="#425466">how wrong was that?</text>
+
+  <line x1="210" y1="158" x2="280" y2="158" stroke="#17324d" stroke-width="4"/>
+  <polygon points="280,158 266,150 266,166" fill="#17324d"/>
+  <line x1="440" y1="158" x2="510" y2="158" stroke="#17324d" stroke-width="4"/>
+  <polygon points="510,158 496,150 496,166" fill="#17324d"/>
+  <line x1="690" y1="158" x2="760" y2="158" stroke="#17324d" stroke-width="4"/>
+  <polygon points="760,158 746,150 746,166" fill="#17324d"/>
+
+  <path d="M850 210 C850 264, 170 264, 170 212" fill="none" stroke="#17324d" stroke-width="4"/>
+  <polygon points="170,212 178,226 162,226" fill="#17324d"/>
+  <text x="404" y="287" font-family="Arial, sans-serif" font-size="18" fill="#17324d">Update weights and repeat</text>
+</svg>
