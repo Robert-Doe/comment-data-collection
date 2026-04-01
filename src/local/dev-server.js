@@ -1443,14 +1443,14 @@ function createLocalApp(options = {}) {
       }
     },
   }));
+  app.get('/monitor', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../api/monitor.html'));
+  });
   app.use((error, _req, res, _next) => {
     console.error(error);
     res.status(500).json({
       error: error && error.message ? error.message : 'Internal server error',
     });
-  });
-  app.get('/monitor', (_req, res) => {
-    res.sendFile(path.join(__dirname, '../api/monitor.html'));
   });
   app.get('*', (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
