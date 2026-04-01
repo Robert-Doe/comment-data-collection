@@ -4,7 +4,7 @@
 
 - `comment list`: the container/subgraph that holds repeated user-generated units
 - `comment block`: one repeated unit inside that list, usually one comment/reply/review item
-- `comment block element`: a leaf or near-leaf inside the block, such as the comment text node itself
+- `comment block element`: the text-bearing leaf or near-leaf inside the block that holds the user's actual comment/review/reply message
 
 ## What The Candidate Screenshots Mean
 
@@ -29,13 +29,13 @@ For the current system:
 
 1. detect a `comment list` candidate
 2. infer the repeated child family inside it as `comment blocks`
-3. treat text/media/actions inside each block as `comment block elements`
+3. treat the actual text-bearing message node inside each block as the `comment block element`
 
 This keeps the screenshot and graph workflows aligned:
 
 - screenshot = list candidate for human review
 - repeated child units in the graph = block-level structure
-- text leaf nodes remain available in the DOM tree but are not the primary screenshot target
+- the actual text leaf nodes remain available in the DOM tree but are not the primary screenshot target
 
 ## DOT Export
 

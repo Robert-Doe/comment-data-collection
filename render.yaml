@@ -8,6 +8,70 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ugc-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ugc-queue
+          property: connectionString
+      - key: FRONTEND_ORIGIN
+        fromService:
+          type: web
+          name: ugc-ui
+          property: url
+      - key: INGEST_BATCH_SIZE
+        value: 100
+      - key: INITIAL_QUEUE_FILL
+        value: 2
+      - key: API_RESULTS_PAGE_SIZE
+        value: 50
+      - key: SCAN_TIMEOUT_MS
+        value: 90000
+      - key: POST_LOAD_DELAY_MS
+        value: 6000
+      - key: PRE_SCREENSHOT_DELAY_MS
+        value: 1500
+      - key: NAVIGATION_RETRIES
+        value: 2
+      - key: LOAD_SETTLE_PASSES
+        value: 2
+      - key: NEGATIVE_RETRY_SETTLE_PASSES
+        value: 2
+      - key: ACTION_SETTLE_MS
+        value: 1250
+
+  - type: worker
+    name: ugc-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile.worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ugc-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ugc-queue
+          property: connectionString
+      - key: SCAN_TIMEOUT_MS
+        value: 90000
+      - key: POST_LOAD_DELAY_MS
+        value: 6000
+      - key: PRE_SCREENSHOT_DELAY_MS
+        value: 1500
+      - key: NAVIGATION_RETRIES
+        value: 2
+      - key: LOAD_SETTLE_PASSES
+        value: 2
+      - key: NEGATIVE_RETRY_SETTLE_PASSES
+        value: 2
+      - key: ACTION_SETTLE_MS
+        value: 1250
       - key: WORKER_CONCURRENCY
         value: 1
       - key: INITIAL_QUEUE_FILL

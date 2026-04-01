@@ -9,6 +9,7 @@
   const screenshotDelayInput = document.getElementById('screenshot-delay-ms');
   const formMessage = document.getElementById('form-message');
   const jobSummary = document.getElementById('job-summary');
+  const jobEvents = document.getElementById('job-events');
   const jobItems = document.getElementById('job-items');
   const recentJobs = document.getElementById('recent-jobs');
   const refreshJobsButton = document.getElementById('refresh-jobs');
@@ -37,23 +38,62 @@
   const manualCopyConfigButton = document.getElementById('manual-copy-config');
   const candidateReview = document.getElementById('candidate-review');
   const candidateMessage = document.getElementById('candidate-message');
+  const jobLabelerReview = document.getElementById('job-labeler-review');
+  const jobLabelerMessage = document.getElementById('job-labeler-message');
+  const jobLabelerReloadButton = document.getElementById('job-labeler-reload');
+  const jobLabelerPrevButton = document.getElementById('job-labeler-prev');
+  const jobLabelerNextButton = document.getElementById('job-labeler-next');
+  const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
   const scoringBreakdown = document.getElementById('scoring-breakdown');
   const viewSvgGraphLink = document.getElementById('view-svg-graph');
   const downloadSvgGraphLink = document.getElementById('download-svg-graph');
   const downloadDotGraphLink = document.getElementById('download-dot-graph');
   const downloadCandidateJsonButton = document.getElementById('download-candidate-json');
   const downloadCandidateCsvButton = document.getElementById('download-candidate-csv');
+  const managerSelection = document.getElementById('manager-selection');
+  const managerForm = document.getElementById('manager-replace-form');
+  const managerJobId = document.getElementById('manager-job-id');
+  const managerSourceColumn = document.getElementById('manager-source-column');
+  const managerScanDelayInput = document.getElementById('manager-scan-delay-ms');
+  const managerScreenshotDelayInput = document.getElementById('manager-screenshot-delay-ms');
+  const managerReplaceFile = document.getElementById('manager-replace-file');
+  const managerMessage = document.getElementById('manager-message');
+  const managerResumeButton = document.getElementById('manager-resume-job');
+  const managerRestartButton = document.getElementById('manager-restart-job');
+  const managerDeleteButton = document.getElementById('manager-delete-job');
+  const managerClearJobsButton = document.getElementById('manager-clear-jobs');
+  const confirmDialog = document.getElementById('confirm-dialog');
+  const confirmTitle = document.getElementById('confirm-title');
+  const confirmDescription = document.getElementById('confirm-description');
+  const confirmAccept = document.getElementById('confirm-accept');
+  const toastStack = document.getElementById('toast-stack');
 
   let currentJobId = new URLSearchParams(window.location.search).get('jobId') || '';
+  let currentJob = null;
   let currentOffset = 0;
   let selectedManualItemId = '';
   let activeWorkspaceTab = 'queue';
   let currentCandidatePage = 0;
   let currentItemsById = new Map();
+  let managerFormJobId = '';
+  let confirmResolver = null;
+  let jobLabelerLoadingJobId = '';
+  let jobLabelerLoadingPromise = null;
+  let jobLabelerTransition = null;
+  let jobLabelerTransitionTimer = null;
   const pageSize = 50;
   const candidatePageSize = 1;
+  const activePollIntervalMs = 4000;
+  const terminalPollIntervalMs = 12000;
+  const actionStateDurationMs = 1400;
+  const jobLabelerTransitionMs = 140;
   let pollHandle = null;
+  let pollJobId = '';
+  let pollIntervalMs = 0;
+  const candidateMarkupCache = new Map();
+  const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
+  const jobLabelerCache = new Map();
 
   function apiUrl(path) {
     return `${apiBase}${path}`;
@@ -61,6 +101,39 @@
 
   function absoluteApiBase() {
     return apiBase || window.location.origin;
+  }
+
+  function stopPolling() {
+    if (pollHandle) {
+      clearInterval(pollHandle);
+    }
+    pollHandle = null;
+    pollJobId = '';
+    pollIntervalMs = 0;
+  }
+
+  function startPolling(jobId, intervalMs) {
+    if (!jobId) {
+      stopPolling();
+      return;
+    }
+    if (pollHandle && pollJobId === jobId && pollIntervalMs === intervalMs) {
+      return;
+    }
+    stopPolling();
+    pollJobId = jobId;
+    pollIntervalMs = intervalMs;
+    pollHandle = setInterval(() => {
+      refreshJob(jobId).catch((error) => {
+        console.error(error);
+      });
+    }, intervalMs);
+  }
+
+  function pollIntervalForStatus(status) {
+    return ['completed', 'completed_with_errors', 'failed'].includes(status)
+      ? terminalPollIntervalMs
+      : activePollIntervalMs;
   }
 
   function setResourceDownloads() {
@@ -83,6 +156,35 @@
       .replace(/'/g, '&#39;');
   }
 
+  async function copyText(value) {
+    const text = String(value ?? '');
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.setAttribute('readonly', 'readonly');
+    input.style.position = 'fixed';
+    input.style.top = '-9999px';
+    input.style.left = '-9999px';
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } finally {
+      input.remove();
+    }
+
+    if (!copied) {
+      throw new Error('Copy failed. Use HTTPS or copy the text manually.');
+    }
+  }
+
   function setMessage(text, isError) {
     formMessage.textContent = text || '';
     formMessage.className = isError ? 'message error' : 'message';
@@ -96,6 +198,155 @@
   function setCandidateMessage(text, isError) {
     candidateMessage.textContent = text || '';
     candidateMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function setJobLabelerMessage(text, isError) {
+    jobLabelerMessage.textContent = text || '';
+    jobLabelerMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function setManagerMessage(text, isError) {
+    managerMessage.textContent = text || '';
+    managerMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function showToast(text, options = {}) {
+    if (!toastStack || !text) return;
+    const tone = options.tone || 'info';
+    const timeoutMs = Math.max(1800, Number(options.timeoutMs) || (tone === 'error' ? 5200 : 3200));
+    const toast = document.createElement('div');
+    const copy = document.createElement('div');
+    toast.className = `toast toast-${tone}`;
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    copy.className = 'toast-copy';
+    copy.textContent = text;
+    toast.appendChild(copy);
+    toastStack.appendChild(toast);
+
+    const dismiss = () => {
+      toast.classList.remove('visible');
+      toast.classList.add('leaving');
+      window.setTimeout(() => {
+        toast.remove();
+      }, 220);
+    };
+
+    requestAnimationFrame(() => {
+      toast.classList.add('visible');
+    });
+    const timer = window.setTimeout(dismiss, timeoutMs);
+    toast.addEventListener('click', () => {
+      window.clearTimeout(timer);
+      dismiss();
+    }, { once: true });
+  }
+
+  function setBusyState(element, busy) {
+    if (!element) return;
+
+    if (busy) {
+      element.dataset.busy = 'true';
+      if ('disabled' in element) {
+        element.dataset.wasDisabled = element.disabled ? 'true' : 'false';
+        element.disabled = true;
+      } else {
+        element.dataset.hadDisabledClass = element.classList.contains('disabled') ? 'true' : 'false';
+      }
+      return;
+    }
+
+    delete element.dataset.busy;
+    if ('disabled' in element) {
+      if (element.dataset.wasDisabled !== 'true') {
+        element.disabled = false;
+      }
+      delete element.dataset.wasDisabled;
+    } else {
+      delete element.dataset.hadDisabledClass;
+    }
+  }
+
+  function flashActionState(element, state) {
+    if (!element) return;
+    const attribute = state === 'error' ? 'error' : 'success';
+    element.dataset[attribute] = 'true';
+    window.setTimeout(() => {
+      delete element.dataset[attribute];
+    }, actionStateDurationMs);
+  }
+
+  async function runElementAction(element, action) {
+    setBusyState(element, true);
+    try {
+      const result = await action();
+      flashActionState(element, 'success');
+      return result;
+    } catch (error) {
+      flashActionState(element, 'error');
+      throw error;
+    } finally {
+      setBusyState(element, false);
+    }
+  }
+
+  function confirmAction(options = {}) {
+    const title = options.title || 'Confirm action';
+    const description = options.description || '';
+    const acceptLabel = options.acceptLabel || 'Continue';
+    const danger = options.danger !== false;
+
+    if (!confirmDialog || typeof confirmDialog.showModal !== 'function') {
+      return Promise.resolve(window.confirm(description || title));
+    }
+
+    if (confirmResolver) {
+      confirmResolver(false);
+      confirmResolver = null;
+    }
+
+    confirmTitle.textContent = title;
+    confirmDescription.textContent = description;
+    confirmAccept.textContent = acceptLabel;
+    confirmAccept.classList.toggle('danger-button', danger);
+    confirmDialog.returnValue = 'cancel';
+    confirmDialog.showModal();
+
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+    });
+  }
+
+  function canResumeJob(job) {
+    if (!job) return false;
+    return (Number(job.pending_count) || 0) > 0
+      || (Number(job.queued_count) || 0) > 0
+      || (Number(job.running_count) || 0) > 0;
+  }
+
+  function resetCurrentJobSelection(options = {}) {
+    currentJob = null;
+    currentJobId = '';
+    currentOffset = 0;
+    selectedManualItemId = '';
+    currentItemsById = new Map();
+    managerFormJobId = '';
+    stopPolling();
+    stopJobLabelerTransition();
+    window.history.replaceState({}, '', window.location.pathname);
+    renderSummary(null);
+    renderItems([], null);
+    renderWorkspaceSelection(null);
+    renderCandidateReview(null);
+    renderJobLabelerReview();
+    renderScoringBreakdown(null);
+    renderJobEvents([], { message: options.eventsMessage || 'Select a job to view recent events.' });
+    renderJobManager(null);
+    setDownloads('');
+    setMessage(options.formMessage || '', false);
+    setManualMessage('', false);
+    setCandidateMessage('', false);
+    setJobLabelerMessage('', false);
+    setManagerMessage(options.managerMessage || '', false);
   }
 
   function selectedItem() {
@@ -139,6 +390,17 @@
       const isActive = panel.getAttribute('data-workspace-panel') === activeWorkspaceTab;
       panel.classList.toggle('active', isActive);
     });
+    if (activeWorkspaceTab === 'candidates') {
+      renderCandidateReview(selectedItem());
+      return;
+    }
+    if (activeWorkspaceTab === 'scoring') {
+      renderScoringBreakdown(selectedItem());
+      return;
+    }
+    if (activeWorkspaceTab === 'labeler') {
+      renderJobLabelerReview();
+    }
   }
 
   function applyScoreDetailState() {
@@ -202,6 +464,58 @@
     ].join('');
   }
 
+  function formatEventTimestamp(value) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return '';
+    }
+    return parsed.toLocaleString();
+  }
+
+  function renderJobEvents(events, options = {}) {
+    const message = options.message || (currentJobId ? 'No events recorded yet for this job.' : 'Select a job to view recent events.');
+    if (!events || !events.length) {
+      jobEvents.className = options.isError ? 'event-list empty error' : 'event-list empty';
+      jobEvents.textContent = message;
+      return;
+    }
+
+    const rows = events.map((event) => {
+      const level = String(event.level || 'info').toLowerCase();
+      const scope = String(event.scope || 'job').replace(/_/g, ' ');
+      const detailBits = [];
+      if (event.row_number) {
+        detailBits.push(`row ${event.row_number}`);
+      }
+      if (event.details && event.details.normalized_url) {
+        detailBits.push(String(event.details.normalized_url));
+      }
+      if (event.details && event.details.manual_capture_url) {
+        detailBits.push(String(event.details.manual_capture_url));
+      }
+      if (event.details && Number.isFinite(Number(event.details.max_attempts))) {
+        detailBits.push(`max attempts ${event.details.max_attempts}`);
+      }
+      return `
+        <article class="event-item level-${escapeHtml(level)}">
+          <div class="event-item-top">
+            <div class="event-badges">
+              <span class="event-level ${escapeHtml(level)}">${escapeHtml(level)}</span>
+              <span class="event-scope">${escapeHtml(scope)}</span>
+              ${event.event_type ? `<span class="event-type mono">${escapeHtml(event.event_type)}</span>` : ''}
+            </div>
+            <time class="event-time" datetime="${escapeHtml(event.created_at || '')}">${escapeHtml(formatEventTimestamp(event.created_at))}</time>
+          </div>
+          <div class="event-message">${escapeHtml(event.message || '')}</div>
+          ${detailBits.length ? `<div class="event-meta">${escapeHtml(detailBits.join(' | '))}</div>` : ''}
+        </article>
+      `;
+    }).join('');
+
+    jobEvents.className = 'event-list';
+    jobEvents.innerHTML = rows;
+  }
+
   function reviewChip(item) {
     const chips = [];
     const candidateCount = Array.isArray(item.candidates) ? item.candidates.length : 0;
@@ -224,6 +538,499 @@
     }
 
     return chips.join(' ');
+  }
+
+  function renderManualArtifactLinks(item, emptyText = '') {
+    if (!item) return emptyText;
+
+    const links = [];
+    const hasSeparateUploadedScreenshot = !!item.manual_uploaded_screenshot_url;
+
+    if (item.manual_uploaded_screenshot_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_uploaded_screenshot_url))}" target="_blank" rel="noreferrer">Uploaded Screenshot</a>`);
+    }
+    if (item.screenshot_url) {
+      const screenshotLabel = item.analysis_source === 'manual_snapshot'
+        ? (hasSeparateUploadedScreenshot ? 'Rendered Snapshot' : 'Screenshot')
+        : 'Screenshot';
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.screenshot_url))}" target="_blank" rel="noreferrer">${screenshotLabel}</a>`);
+    }
+    if (item.manual_html_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_html_url))}" target="_blank" rel="noreferrer">Styled Snapshot HTML</a>`);
+    }
+    if (item.manual_raw_html_url) {
+      links.push(`<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(item.manual_raw_html_url))}" target="_blank" rel="noreferrer">Raw DOM HTML</a>`);
+    }
+
+    if (!links.length) {
+      return emptyText;
+    }
+
+    return `<div class="action-stack">${links.join('')}</div>`;
+  }
+
+  function renderCandidateScreenshotFallback(candidate, heading) {
+    const previewText = escapeHtml(candidate && candidate.sample_text
+      ? candidate.sample_text
+      : 'No sample text is available for this candidate.');
+    const errorText = escapeHtml(candidate && candidate.candidate_screenshot_error
+      ? candidate.candidate_screenshot_error
+      : 'Candidate screenshot was not captured for this candidate.');
+    return `
+      <div class="candidate-shot-fallback">
+        <strong>${escapeHtml(heading || 'Text Preview')}</strong>
+        <span>${previewText}</span>
+        <small>${errorText}</small>
+      </div>
+    `;
+  }
+
+  function renderCandidateVisual(candidate, options = {}) {
+    const assetUrl = candidate && candidate.candidate_screenshot_url
+      ? resolveAssetUrl(candidate.candidate_screenshot_url)
+      : '';
+    const imageClass = escapeHtml(options.imageClass || 'candidate-shot');
+    if (assetUrl) {
+      const linkClass = options.linkClass ? ` class="${escapeHtml(options.linkClass)}"` : '';
+      return `
+        <a${linkClass} href="${escapeHtml(assetUrl)}" target="_blank" rel="noreferrer">
+          <img class="${imageClass}" src="${escapeHtml(assetUrl)}" alt="Candidate ${escapeHtml(candidate && candidate.candidate_rank)} screenshot">
+        </a>
+      `;
+    }
+    return `
+      <div class="${imageClass} empty">
+        ${renderCandidateScreenshotFallback(candidate, options.fallbackHeading || 'Text Preview')}
+      </div>
+    `;
+  }
+
+  function buildMarkupPreviewDocument(value, mode) {
+    const content = mode === 'inner'
+      ? `<section class="preview-shell">${value}</section>`
+      : value;
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; media-src data: https: http:; style-src 'unsafe-inline'; font-src data: https: http:; connect-src 'none'; frame-src 'none';">
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #111827;
+        font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+      }
+      body {
+        padding: 12px;
+      }
+      .preview-shell {
+        min-height: 100%;
+      }
+      img, video, canvas, svg, iframe {
+        max-width: 100%;
+      }
+      a, button, input, select, textarea, summary, details {
+        pointer-events: none !important;
+      }
+    </style>
+  </head>
+  <body>${value ? content : '<div></div>'}</body>
+</html>`;
+  }
+
+  function renderCandidateMarkupSection(label, value, meta, mode) {
+    if (!value) return '';
+    const previewDocument = buildMarkupPreviewDocument(value, mode);
+    return `
+      <details class="score-details candidate-markup-details" open>
+        <summary>
+          <span>${escapeHtml(label)}</span>
+          ${meta ? `<span class="candidate-markup-meta">${escapeHtml(meta)}</span>` : ''}
+        </summary>
+        <div class="score-details-body candidate-markup-body">
+          <div class="candidate-markup-preview-shell">
+            <iframe
+              class="candidate-markup-preview"
+              loading="lazy"
+              sandbox="allow-same-origin"
+              referrerpolicy="no-referrer"
+              srcdoc="${escapeHtml(previewDocument)}"
+              title="${escapeHtml(label)} preview"></iframe>
+          </div>
+          <details class="candidate-markup-source-toggle">
+            <summary>HTML Source</summary>
+            <div class="score-details-body">
+              <pre class="candidate-markup mono">${escapeHtml(value)}</pre>
+            </div>
+          </details>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderCandidateMarkupDetails(candidate) {
+    if (!candidate) return '';
+    const markupSections = [];
+    const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
+    const outerMeta = candidate.candidate_outer_html_length
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
+      : '';
+
+    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta, 'outer'));
+
+    const content = markupSections.filter(Boolean).join('');
+    const loadingCopy = candidate.candidate_markup_loading
+      ? '<p class="candidate-copy"><strong>Markup:</strong> loading stored candidate HTML...</p>'
+      : '';
+
+    if (!content && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
+      return '';
+    }
+
+    return `
+      <div class="candidate-markup-stack">
+        ${loadingCopy}
+        ${content}
+        ${candidate.candidate_markup_error
+          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+          : ''}
+      </div>
+    `;
+  }
+
+  function renderCandidateMarkupDetails(candidate) {
+    if (!candidate) return '';
+    const markupSections = [];
+    const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
+    const outerMeta = candidate.candidate_outer_html_length
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
+      : '';
+
+    markupSections.push(renderCandidateMarkupSection('Outer HTML', candidate.candidate_outer_html_excerpt || '', outerMeta, 'outer'));
+
+    const content = markupSections.filter(Boolean).join('');
+    const loadingCopy = candidate.candidate_markup_loading
+      ? '<p class="candidate-copy"><strong>Markup:</strong> loading stored candidate HTML...</p>'
+      : '';
+
+    if (!content && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
+      return '';
+    }
+
+    return `
+      <div class="candidate-markup-stack">
+        ${loadingCopy}
+        ${content}
+        ${candidate.candidate_markup_error
+          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+          : ''}
+      </div>
+    `;
+  }
+
+  function candidateMarkupCacheKey(item, candidate) {
+    const jobId = currentJobId || (item && item.job_id) || '';
+    const itemId = item && item.id ? item.id : '';
+    const candidateKey = candidate && candidate.candidate_key ? candidate.candidate_key : '';
+    return `${jobId}:${itemId}:${candidateKey}`;
+  }
+
+  function mergeCandidateMarkup(item, candidate) {
+    if (!candidate) return candidate;
+    const cached = candidateMarkupCache.get(candidateMarkupCacheKey(item, candidate));
+    return cached ? { ...candidate, ...cached } : candidate;
+  }
+
+  function candidateHasMarkup(candidate) {
+    return !!(candidate && (
+      (candidate.candidate_outer_html_excerpt && !candidate.candidate_outer_html_truncated)
+      || candidate.candidate_markup_error
+      || candidate.candidate_markup_loading
+    ));
+  }
+
+  async function ensureCandidateMarkup(item, candidate) {
+    if (!item || !candidate || candidateHasMarkup(candidate)) return;
+    const cacheKey = candidateMarkupCacheKey(item, candidate);
+    if (!cacheKey || candidateMarkupPending.has(cacheKey)) return;
+
+    candidateMarkupPending.add(cacheKey);
+    candidateMarkupCache.set(cacheKey, { candidate_markup_loading: true });
+    const selected = selectedItem();
+    if (selected && selected.id === item.id) {
+      renderCandidateReview(selected);
+      renderScoringBreakdown(selected);
+    }
+
+    try {
+      const response = await fetchJson(`/api/jobs/${currentJobId || item.job_id}/items/${item.id}/candidates/${candidate.candidate_key}/markup`);
+      candidateMarkupCache.set(cacheKey, {
+        ...(response && response.markup ? response.markup : {}),
+        candidate_markup_loading: false,
+      });
+    } catch (error) {
+      candidateMarkupCache.set(cacheKey, {
+        candidate_markup_loading: false,
+        candidate_markup_error: error && error.message ? error.message : String(error),
+      });
+    } finally {
+      candidateMarkupPending.delete(cacheKey);
+      const selectedCurrent = selectedItem();
+      if (selectedCurrent && selectedCurrent.id === item.id) {
+        renderCandidateReview(selectedCurrent);
+        renderScoringBreakdown(selectedCurrent);
+      }
+      const labelerState = currentJobLabelerState();
+      const activeEntry = currentJobLabelerEntry();
+      if (
+        activeWorkspaceTab === 'labeler'
+        && labelerState
+        && activeEntry
+        && activeEntry.itemId === item.id
+        && activeEntry.candidateKey === candidate.candidate_key
+      ) {
+        renderJobLabelerReview();
+      }
+    }
+  }
+
+  function currentJobLabelerState() {
+    return currentJobId ? (jobLabelerCache.get(currentJobId) || null) : null;
+  }
+
+  function currentJobLabelerEntry() {
+    const state = currentJobLabelerState();
+    if (!state || !state.entries.length) return null;
+    state.index = Math.max(0, Math.min(state.index || 0, state.entries.length - 1));
+    return state.entries[state.index] || null;
+  }
+
+  function jobLabelerEntryKey(entry) {
+    if (!entry) return '';
+    return `${entry.itemId || ''}:${entry.candidateKey || ''}`;
+  }
+
+  function jobLabelerCandidateForEntry(state, entry) {
+    if (!state || !entry) return { item: null, candidate: null };
+    const item = state.itemsById.get(entry.itemId) || null;
+    const candidates = Array.isArray(item && item.candidates) ? item.candidates : [];
+    const candidate = candidates.find((value) => String(value.candidate_key || '') === entry.candidateKey) || null;
+    return {
+      item,
+      candidate: candidate ? mergeCandidateMarkup(item, candidate) : null,
+    };
+  }
+
+  function candidateReviewStatus(candidate) {
+    const label = String(candidate && candidate.human_label || '').trim();
+    if (!label) return 'unreviewed';
+    return label;
+  }
+
+  function patchCandidateInItemMap(itemMap, itemId, candidateKey, updater) {
+    if (!itemMap || typeof itemMap.get !== 'function' || typeof itemMap.set !== 'function') return null;
+    const item = itemMap.get(itemId);
+    if (!item) return null;
+    const candidates = Array.isArray(item.candidates) ? item.candidates : [];
+    const candidateIndex = candidates.findIndex((entry) => String(entry.candidate_key || '') === candidateKey);
+    if (candidateIndex < 0) return null;
+    const previousCandidate = candidates[candidateIndex];
+    const patch = typeof updater === 'function' ? updater(previousCandidate) : updater;
+    const nextCandidate = {
+      ...previousCandidate,
+      ...(patch || {}),
+    };
+    const nextCandidates = candidates.slice();
+    nextCandidates[candidateIndex] = nextCandidate;
+    const nextItem = {
+      ...item,
+      candidates: nextCandidates,
+    };
+    itemMap.set(itemId, nextItem);
+    return {
+      item: nextItem,
+      candidate: nextCandidate,
+      previousCandidate,
+    };
+  }
+
+  function snapshotCandidateReviewState(candidate) {
+    return {
+      human_label: candidate && candidate.human_label ? candidate.human_label : '',
+      human_notes: candidate && candidate.human_notes ? candidate.human_notes : '',
+      human_reviewed_at: candidate && candidate.human_reviewed_at ? candidate.human_reviewed_at : '',
+      human_review_source: candidate && candidate.human_review_source ? candidate.human_review_source : '',
+      job_labeler_pending_save: !!(candidate && candidate.job_labeler_pending_save),
+    };
+  }
+
+  function applyCandidateReviewSnapshot(itemMap, itemId, candidateKey, snapshot) {
+    return patchCandidateInItemMap(itemMap, itemId, candidateKey, snapshot);
+  }
+
+  function rowSortValue(value) {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) return asNumber;
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  function buildJobLabelerEntries(items) {
+    return (items || [])
+      .slice()
+      .sort((left, right) => {
+        const rowDelta = rowSortValue(left.row_number) - rowSortValue(right.row_number);
+        if (rowDelta !== 0) return rowDelta;
+        return String(left.id || '').localeCompare(String(right.id || ''));
+      })
+      .flatMap((item) => {
+        const candidates = Array.isArray(item && item.candidates) ? item.candidates : [];
+        return candidates.map((candidate, index) => ({
+          itemId: item.id,
+          candidateKey: String(candidate.candidate_key || ''),
+          rowNumber: item.row_number,
+          candidateRank: Number(candidate.candidate_rank) || (index + 1),
+        }));
+      })
+      .filter((entry) => entry.itemId && entry.candidateKey)
+      .sort((left, right) => {
+        const rowDelta = rowSortValue(left.rowNumber) - rowSortValue(right.rowNumber);
+        if (rowDelta !== 0) return rowDelta;
+        const itemDelta = String(left.itemId || '').localeCompare(String(right.itemId || ''));
+        if (itemDelta !== 0) return itemDelta;
+        return left.candidateRank - right.candidateRank;
+      });
+  }
+
+  function findNextUnreviewedLabelerIndex(state, startIndex) {
+    if (!state || !state.entries.length) return -1;
+    const start = Math.max(0, Number(startIndex) || 0);
+    for (let index = start; index < state.entries.length; index += 1) {
+      const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
+      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  function setJobLabelerNavState(state) {
+    const disabled = !state || !state.entries.length;
+    const transitioning = !!(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId);
+    jobLabelerPrevButton.disabled = disabled || transitioning || state.index <= 0;
+    jobLabelerNextButton.disabled = disabled || transitioning || state.index >= (state.entries.length - 1);
+  }
+
+  function stopJobLabelerTransition() {
+    if (jobLabelerTransitionTimer) {
+      window.clearTimeout(jobLabelerTransitionTimer);
+    }
+    jobLabelerTransitionTimer = null;
+    jobLabelerTransition = null;
+  }
+
+  function startJobLabelerTransition(message) {
+    stopJobLabelerTransition();
+    jobLabelerTransition = {
+      jobId: currentJobId,
+      message: message || 'Saving label...',
+    };
+    renderJobLabelerReview();
+    jobLabelerTransitionTimer = window.setTimeout(() => {
+      jobLabelerTransitionTimer = null;
+      jobLabelerTransition = null;
+      renderJobLabelerReview();
+    }, jobLabelerTransitionMs);
+  }
+
+  function moveJobLabelerEntryToRetryPosition(state, entryKey) {
+    if (!state || !entryKey) return;
+    const fromIndex = state.entries.findIndex((entry) => jobLabelerEntryKey(entry) === entryKey);
+    if (fromIndex < 0) return;
+    const [entry] = state.entries.splice(fromIndex, 1);
+    if (fromIndex < state.index) {
+      state.index = Math.max(0, (state.index || 0) - 1);
+    }
+    const insertAt = Math.min(state.entries.length, (state.index || 0) + 1);
+    state.entries.splice(insertAt, 0, entry);
+  }
+
+  function invalidateJobLabelerCache(jobId) {
+    if (!jobId) return;
+    jobLabelerCache.delete(jobId);
+    if (jobLabelerLoadingJobId === jobId) {
+      jobLabelerLoadingJobId = '';
+      jobLabelerLoadingPromise = null;
+    }
+    if (jobLabelerTransition && jobLabelerTransition.jobId === jobId) {
+      stopJobLabelerTransition();
+    }
+  }
+
+  async function loadJobLabelerState(jobId, force) {
+    if (!jobId) return null;
+    if (!force && jobLabelerCache.has(jobId)) {
+      return jobLabelerCache.get(jobId);
+    }
+    if (!force && jobLabelerLoadingJobId === jobId && jobLabelerLoadingPromise) {
+      return jobLabelerLoadingPromise;
+    }
+
+    const existing = jobLabelerCache.get(jobId);
+    const existingEntry = existing && existing.entries[existing.index || 0]
+      ? `${existing.entries[existing.index || 0].itemId}:${existing.entries[existing.index || 0].candidateKey}`
+      : '';
+    const total = Math.max(0, Number(currentJob && currentJob.id === jobId ? currentJob.total_urls : 0) || 0);
+    const requestLimit = 100;
+    jobLabelerLoadingJobId = jobId;
+    jobLabelerLoadingPromise = (async () => {
+      const items = [];
+      let offset = 0;
+      let expectedTotal = total;
+      do {
+        const body = await fetchJson(`/api/jobs/${jobId}?limit=${requestLimit}&offset=${offset}`);
+        const batch = Array.isArray(body && body.items) ? body.items : [];
+        items.push(...batch);
+        expectedTotal = Math.max(expectedTotal, Number(body && body.pagination && body.pagination.total) || 0);
+        if (!batch.length || items.length >= expectedTotal) break;
+        offset += requestLimit;
+      } while (true);
+
+      const itemsById = new Map(items.map((item) => [item.id, item]));
+      const entries = buildJobLabelerEntries(items);
+      const state = {
+        itemsById,
+        entries,
+        index: 0,
+      };
+      if (existingEntry) {
+        const preservedIndex = entries.findIndex((entry) => `${entry.itemId}:${entry.candidateKey}` === existingEntry);
+        if (preservedIndex >= 0) {
+          state.index = preservedIndex;
+        }
+      } else {
+        const firstUnreviewed = findNextUnreviewedLabelerIndex(state, 0);
+        state.index = firstUnreviewed >= 0 ? firstUnreviewed : 0;
+      }
+      jobLabelerCache.set(jobId, state);
+      return state;
+    })();
+
+    try {
+      return await jobLabelerLoadingPromise;
+    } finally {
+      if (jobLabelerLoadingJobId === jobId) {
+        jobLabelerLoadingJobId = '';
+        jobLabelerLoadingPromise = null;
+      }
+    }
   }
 
   function humanLabelText(label) {
@@ -373,6 +1180,10 @@
 
   function triggerDownload(filename, content, type) {
     const blob = new Blob([content], { type });
+    triggerBlobDownload(filename, blob);
+  }
+
+  function triggerBlobDownload(filename, blob) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -381,6 +1192,77 @@
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function extractFilenameFromDisposition(disposition, fallbackFilename) {
+    const value = String(disposition || '');
+    const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match && utf8Match[1]) {
+      try {
+        return decodeURIComponent(utf8Match[1].trim());
+      } catch (_) {
+        return utf8Match[1].trim();
+      }
+    }
+
+    const plainMatch = value.match(/filename="?([^"]+)"?/i);
+    if (plainMatch && plainMatch[1]) {
+      return plainMatch[1].trim();
+    }
+
+    return fallbackFilename;
+  }
+
+  function buildGraphDownloadFilename(item, extension) {
+    const rowSegment = toFileSafeSegment(item && item.row_number, 'item');
+    const urlSource = item && (item.final_url || item.manual_capture_url || item.normalized_url || '');
+    let hostSegment = 'graph';
+    try {
+      hostSegment = toFileSafeSegment(new URL(urlSource).hostname, 'graph');
+    } catch (_) {
+      hostSegment = toFileSafeSegment(urlSource, 'graph');
+    }
+    return `${hostSegment}-${rowSegment}.${extension}`;
+  }
+
+  async function downloadRemoteFile(url, fallbackFilename) {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'omit',
+    });
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const filename = extractFilenameFromDisposition(
+      response.headers.get('Content-Disposition'),
+      fallbackFilename,
+    );
+    triggerBlobDownload(filename, blob);
+  }
+
+  async function handleGraphDownload(event, link, extension, successText) {
+    event.preventDefault();
+    if (!link || link.classList.contains('disabled')) {
+      return;
+    }
+
+    const href = String(link.getAttribute('href') || '').trim();
+    if (!href || href === '#') {
+      return;
+    }
+
+    const item = selectedItem();
+    try {
+      await runElementAction(link, () => downloadRemoteFile(href, buildGraphDownloadFilename(item, extension)));
+      setCandidateMessage(successText, false);
+      showToast(successText, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setCandidateMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
   }
 
   function normalizeCandidateExportValue(value) {
@@ -431,6 +1313,12 @@
       'matched_signals',
       'penalty_signals',
       'candidate_screenshot_url',
+      'candidate_outer_html_excerpt',
+      'candidate_outer_html_length',
+      'candidate_outer_html_truncated',
+      'candidate_text_excerpt',
+      'candidate_markup_error',
+      'candidate_resolved_tag_name',
       'human_label',
       'human_notes',
       'human_reviewed_at',
@@ -465,6 +1353,8 @@
     const fileBase = toFileSafeSegment(`${item.row_number || 'row'}-${item.id || 'item'}-candidates`, 'candidates');
     triggerDownload(`${fileBase}.json`, `${JSON.stringify(payload, null, 2)}\n`, 'application/json');
     setCandidateMessage('Candidate JSON downloaded.', false);
+    flashActionState(downloadCandidateJsonButton, 'success');
+    showToast('Candidate JSON downloaded.', { tone: 'success' });
   }
 
   function downloadCandidateCsv(item) {
@@ -478,6 +1368,8 @@
     const fileBase = toFileSafeSegment(`${item.row_number || 'row'}-${item.id || 'item'}-candidates`, 'candidates');
     triggerDownload(`${fileBase}.csv`, `${lines.join('\n')}\n`, 'text/csv;charset=utf-8');
     setCandidateMessage('Candidate CSV downloaded.', false);
+    flashActionState(downloadCandidateCsvButton, 'success');
+    showToast('Candidate CSV downloaded.', { tone: 'success' });
   }
 
   function renderCandidateReview(item) {
@@ -502,7 +1394,13 @@
     const totalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
     currentCandidatePage = Math.min(currentCandidatePage, totalPages - 1);
     const startIndex = currentCandidatePage * candidatePageSize;
-    const visibleCandidates = candidates.slice(startIndex, startIndex + candidatePageSize);
+    const visibleCandidates = candidates
+      .slice(startIndex, startIndex + candidatePageSize)
+      .map((candidate) => {
+        const merged = mergeCandidateMarkup(item, candidate);
+        ensureCandidateMarkup(item, merged).catch((error) => console.error(error));
+        return merged;
+      });
 
     const cards = visibleCandidates.map((candidate) => {
       const noteId = `candidate-notes-${candidate.candidate_key || candidate.candidate_rank || 'x'}`;
@@ -510,12 +1408,12 @@
       const labelClass = humanLabelClass(candidate.human_label);
       const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
       const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
-      const candidateScreenshotEmptyMessage = escapeHtml(candidate.candidate_screenshot_error || 'No candidate screenshot was captured for this candidate.');
       return `
         <article class="candidate-card ${candidate.human_label ? 'active-review' : ''}">
-          ${candidate.candidate_screenshot_url
-            ? `<a href="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" target="_blank" rel="noreferrer"><img class="candidate-shot" src="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" alt="Candidate ${escapeHtml(candidate.candidate_rank)} screenshot"></a>`
-            : `<div class="candidate-shot empty">${candidateScreenshotEmptyMessage}</div>`}
+          ${renderCandidateVisual(candidate, {
+            imageClass: 'candidate-shot',
+            fallbackHeading: 'Text Preview',
+          })}
           <div class="candidate-meta">
             <div class="candidate-meta-row">
               <span class="candidate-pill">rank ${escapeHtml(candidate.candidate_rank)}</span>
@@ -529,6 +1427,7 @@
             </div>
             <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available for this candidate.')}</p>
             <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+            ${renderCandidateMarkupDetails(candidate)}
             ${matchedSignals ? `<div><p class="candidate-copy"><strong>Positive Signals</strong></p>${matchedSignals}</div>` : ''}
             ${penaltySignals ? `<div><p class="candidate-copy"><strong>Penalty Signals</strong></p>${penaltySignals}</div>` : ''}
             <label class="field">
@@ -559,6 +1458,8 @@
       </div>
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
+      <p class="candidate-copy"><strong>Artifact note:</strong> the image below is an element-level crop resolved from the candidate's stored xpath/CSS path, not the raw page screenshot uploaded by the extension. The HTML panels show the candidate's stored markup so you can inspect the suspected DOM region even when the crop is misleading.</p>
+      ${renderManualArtifactLinks(item, '')}
       <div class="candidate-toolbar">
         <span class="candidate-page-copy">Reviewing candidate ${escapeHtml(startIndex + 1)} of ${escapeHtml(candidates.length)}</span>
         <div class="candidate-pager">
@@ -572,17 +1473,301 @@
     setCandidateExportState(item);
   }
 
+  function renderJobLabelerSummary(state) {
+    const itemsWithCandidates = new Set();
+    let reviewed = 0;
+    let commentRegion = 0;
+    let notComment = 0;
+    let uncertain = 0;
+
+    state.entries.forEach((entry) => {
+      itemsWithCandidates.add(entry.itemId);
+      const { candidate } = jobLabelerCandidateForEntry(state, entry);
+      const status = candidateReviewStatus(candidate);
+      if (status === 'unreviewed') return;
+      reviewed += 1;
+      if (status === 'comment_region') commentRegion += 1;
+      if (status === 'not_comment_region') notComment += 1;
+      if (status === 'uncertain') uncertain += 1;
+    });
+
+    return `
+      <div class="summary">
+        <div><strong>Rows With Candidates:</strong> ${escapeHtml(itemsWithCandidates.size)}</div>
+        <div><strong>Total Candidates:</strong> ${escapeHtml(state.entries.length)}</div>
+        <div><strong>Reviewed:</strong> ${escapeHtml(reviewed)}</div>
+        <div><strong>Remaining:</strong> ${escapeHtml(state.entries.length - reviewed)}</div>
+        <div><strong>Comment Region:</strong> ${escapeHtml(commentRegion)}</div>
+        <div><strong>Not Comment:</strong> ${escapeHtml(notComment)}</div>
+        <div><strong>Uncertain:</strong> ${escapeHtml(uncertain)}</div>
+        <div><strong>Current Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>
+      </div>
+    `;
+  }
+
+  function renderJobLabelerReview() {
+    if (!jobLabelerReview) return;
+    if (!currentJobId) {
+      jobLabelerReview.className = 'candidate-review empty';
+      jobLabelerReview.textContent = 'Select a job, then open Labeler to build a review queue from every row in that job.';
+      setJobLabelerNavState(null);
+      return;
+    }
+
+    if (jobLabelerLoadingJobId === currentJobId && jobLabelerLoadingPromise) {
+      jobLabelerReview.className = 'candidate-review empty';
+      jobLabelerReview.textContent = 'Loading candidates across the selected job...';
+      setJobLabelerNavState(null);
+      return;
+    }
+
+    const state = currentJobLabelerState();
+    if (!state) {
+      jobLabelerReview.className = 'candidate-review empty';
+      jobLabelerReview.textContent = 'Open Labeler to load a job-wide review queue.';
+      setJobLabelerNavState(null);
+      return;
+    }
+
+    if (!state.entries.length) {
+      jobLabelerReview.className = 'candidate-review empty';
+      jobLabelerReview.textContent = 'This job does not have candidate screenshots to label yet.';
+      setJobLabelerNavState(state);
+      return;
+    }
+
+    if (jobLabelerTransition && jobLabelerTransition.jobId === currentJobId) {
+      jobLabelerReview.className = 'candidate-review';
+      jobLabelerReview.innerHTML = `
+        ${renderJobLabelerSummary(state)}
+        <div class="job-labeler-transition-card">
+          <div class="job-labeler-transition-spinner" aria-hidden="true"></div>
+          <p class="candidate-copy"><strong>${escapeHtml(jobLabelerTransition.message || 'Saving label...')}</strong></p>
+          <p class="candidate-copy">Preparing the next candidate...</p>
+        </div>
+      `;
+      setJobLabelerNavState(state);
+      return;
+    }
+
+    state.index = Math.max(0, Math.min(state.index || 0, state.entries.length - 1));
+    const entry = state.entries[state.index];
+    const { item, candidate } = jobLabelerCandidateForEntry(state, entry);
+    if (!item || !candidate) {
+      jobLabelerReview.className = 'candidate-review empty';
+      jobLabelerReview.textContent = 'The current candidate could not be resolved from the loaded job cache. Reload the queue and try again.';
+      setJobLabelerNavState(state);
+      return;
+    }
+
+    ensureCandidateMarkup(item, candidate).catch((error) => console.error(error));
+    const noteId = 'job-labeler-notes';
+    const label = humanLabelText(candidate.human_label);
+    const labelClass = humanLabelClass(candidate.human_label);
+    const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
+    const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
+
+    jobLabelerReview.className = 'candidate-review';
+    jobLabelerReview.innerHTML = `
+      ${renderJobLabelerSummary(state)}
+      <div class="candidate-toolbar job-labeler-toolbar">
+        <span class="candidate-page-copy">Row ${escapeHtml(item.row_number || '')} • Candidate rank ${escapeHtml(candidate.candidate_rank || entry.candidateRank || '')}</span>
+        <div class="candidate-pager">
+          <span class="candidate-page-copy">${escapeHtml(item.analysis_source || 'automated')}</span>
+          <span class="candidate-page-copy">${escapeHtml(item.final_url || item.normalized_url || '')}</span>
+        </div>
+      </div>
+      <div class="candidate-grid">
+        <article class="candidate-card ${candidate.human_label ? 'active-review' : ''}">
+          <div class="job-labeler-stage">
+            ${renderCandidateVisual(candidate, {
+              imageClass: 'candidate-shot job-labeler-shot',
+              fallbackHeading: 'Text Preview',
+            })}
+            <div class="job-labeler-links">
+              ${item.final_url || item.normalized_url
+                ? `<a class="link-button compact" href="${escapeHtml(item.final_url || item.normalized_url)}" target="_blank" rel="noreferrer">Open Page</a>`
+                : ''}
+              ${candidate.candidate_screenshot_url
+                ? `<a class="link-button compact" href="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" target="_blank" rel="noreferrer">Open Screenshot</a>`
+                : ''}
+            </div>
+          </div>
+          <div class="candidate-meta">
+            <div class="candidate-meta-row">
+              <span class="candidate-pill">row ${escapeHtml(item.row_number || '')}</span>
+              <span class="candidate-pill">rank ${escapeHtml(candidate.candidate_rank || entry.candidateRank || '')}</span>
+              <span class="candidate-pill">${escapeHtml(candidate.confidence || 'unknown')}</span>
+              <span class="candidate-pill">${escapeHtml(candidate.ugc_type || 'candidate')}</span>
+              <span class="candidate-pill ${candidate.acceptance_gate_passed ? 'good' : 'bad'}">gate ${candidate.acceptance_gate_passed ? 'pass' : 'fail'}</span>
+              ${candidate.job_labeler_pending_save ? '<span class="candidate-pill warn">saving</span>' : ''}
+              ${candidate.detected ? '<span class="candidate-pill good">detected</span>' : ''}
+              ${label ? `<span class="candidate-pill ${labelClass}">${escapeHtml(label)}</span>` : '<span class="candidate-pill">unreviewed</span>'}
+            </div>
+            <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available for this candidate.')}</p>
+            <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+            <p class="candidate-copy"><strong>URL:</strong> ${escapeHtml(item.final_url || item.normalized_url || '')}</p>
+            ${renderCandidateMarkupDetails(candidate)}
+            ${matchedSignals ? `<div><p class="candidate-copy"><strong>Positive Signals</strong></p>${matchedSignals}</div>` : ''}
+            ${penaltySignals ? `<div><p class="candidate-copy"><strong>Penalty Signals</strong></p>${penaltySignals}</div>` : ''}
+            <label class="field">
+              <span>Review Notes</span>
+              <textarea id="${noteId}" class="candidate-notes" rows="3" placeholder="Optional reason for the label">${escapeHtml(candidate.human_notes || '')}</textarea>
+            </label>
+            <div class="candidate-actions">
+              <button class="compact" type="button" data-job-labeler-review="${escapeHtml(candidate.candidate_key || '')}" data-item-id="${escapeHtml(item.id || '')}" data-label-value="comment_region">Comment Region</button>
+              <button class="compact" type="button" data-job-labeler-review="${escapeHtml(candidate.candidate_key || '')}" data-item-id="${escapeHtml(item.id || '')}" data-label-value="not_comment_region">Not Comment</button>
+              <button class="compact" type="button" data-job-labeler-review="${escapeHtml(candidate.candidate_key || '')}" data-item-id="${escapeHtml(item.id || '')}" data-label-value="uncertain">Uncertain</button>
+              <button class="secondary compact" type="button" data-job-labeler-clear="${escapeHtml(candidate.candidate_key || '')}" data-item-id="${escapeHtml(item.id || '')}">Clear</button>
+            </div>
+            <p class="candidate-copy job-labeler-shortcuts"><strong>Shortcuts:</strong> left/right arrows move through the queue. Press <code>1</code>, <code>2</code>, or <code>3</code> to apply a label.</p>
+          </div>
+        </article>
+      </div>
+    `;
+    setJobLabelerNavState(state);
+  }
+
+  async function ensureJobLabelerLoaded(force) {
+    if (!currentJobId || !jobLabelerReview) {
+      renderJobLabelerReview();
+      return;
+    }
+    renderJobLabelerReview();
+    try {
+      await loadJobLabelerState(currentJobId, !!force);
+      renderJobLabelerReview();
+    } catch (error) {
+      renderJobLabelerReview();
+      throw error;
+    }
+  }
+
+  function stepJobLabeler(direction) {
+    const state = currentJobLabelerState();
+    if (!state || !state.entries.length) return;
+    const nextIndex = Math.max(0, Math.min((state.index || 0) + direction, state.entries.length - 1));
+    if (nextIndex === state.index) return;
+    state.index = nextIndex;
+    setJobLabelerMessage('', false);
+    renderJobLabelerReview();
+  }
+
+  function advanceJobLabelerAfterSave(state, previousIndex) {
+    if (!state || !state.entries.length) return;
+    const startIndex = Math.min(previousIndex + 1, state.entries.length - 1);
+    if (jobLabelerAutoAdvance && jobLabelerAutoAdvance.checked) {
+      const nextUnreviewed = findNextUnreviewedLabelerIndex(state, startIndex);
+      if (nextUnreviewed >= 0) {
+        state.index = nextUnreviewed;
+        return;
+      }
+    }
+    state.index = Math.min(startIndex, state.entries.length - 1);
+  }
+
+  function applyOptimisticJobLabelerReview(state, entry, label, notes, clear) {
+    if (!state || !entry) return null;
+    const snapshotState = currentJobLabelerState();
+    const current = jobLabelerCandidateForEntry(state, entry);
+    if (!current.candidate) return null;
+    const snapshot = snapshotCandidateReviewState(current.candidate);
+    const nextPatch = {
+      human_label: clear ? '' : label,
+      human_notes: notes || '',
+      human_reviewed_at: clear ? '' : new Date().toISOString(),
+      human_review_source: clear ? '' : 'web_review',
+      job_labeler_pending_save: true,
+    };
+    applyCandidateReviewSnapshot(state.itemsById, entry.itemId, entry.candidateKey, nextPatch);
+    if (currentItemsById.has(entry.itemId)) {
+      applyCandidateReviewSnapshot(currentItemsById, entry.itemId, entry.candidateKey, nextPatch);
+    }
+    return {
+      entryKey: jobLabelerEntryKey(entry),
+      previousIndex: snapshotState ? (snapshotState.index || 0) : 0,
+      snapshot,
+    };
+  }
+
+  function finalizeOptimisticJobLabelerReview(state, entry) {
+    if (!state || !entry) return;
+    applyCandidateReviewSnapshot(state.itemsById, entry.itemId, entry.candidateKey, {
+      job_labeler_pending_save: false,
+    });
+    if (currentItemsById.has(entry.itemId)) {
+      applyCandidateReviewSnapshot(currentItemsById, entry.itemId, entry.candidateKey, {
+        job_labeler_pending_save: false,
+      });
+    }
+  }
+
+  function rollbackOptimisticJobLabelerReview(state, entry, optimisticState) {
+    if (!state || !entry || !optimisticState) return;
+    const rollbackPatch = {
+      ...optimisticState.snapshot,
+      job_labeler_pending_save: false,
+    };
+    applyCandidateReviewSnapshot(state.itemsById, entry.itemId, entry.candidateKey, rollbackPatch);
+    if (currentItemsById.has(entry.itemId)) {
+      applyCandidateReviewSnapshot(currentItemsById, entry.itemId, entry.candidateKey, rollbackPatch);
+    }
+    moveJobLabelerEntryToRetryPosition(state, optimisticState.entryKey);
+  }
+
+  function submitJobLabelerReview(entry, label, notes, clear) {
+    const state = currentJobLabelerState();
+    if (!state || !entry) return Promise.resolve();
+    const optimisticState = applyOptimisticJobLabelerReview(state, entry, label, notes, clear);
+    if (!optimisticState) {
+      return Promise.reject(new Error('Candidate could not be prepared for review.'));
+    }
+
+    if (!clear) {
+      advanceJobLabelerAfterSave(state, optimisticState.previousIndex);
+      startJobLabelerTransition('Saving label...');
+    } else {
+      renderJobLabelerReview();
+    }
+
+    return saveCandidateReview(entry.candidateKey, label, notes, clear, {
+      itemId: entry.itemId,
+      setMessage: setJobLabelerMessage,
+      scopeElement: jobLabelerReview,
+      syncSelectedItem: false,
+      includeItemResponse: false,
+      silentSuccess: true,
+      silentError: true,
+      onSaved() {
+        finalizeOptimisticJobLabelerReview(state, entry);
+        if (activeWorkspaceTab === 'labeler' && !(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId)) {
+          renderJobLabelerReview();
+        }
+      },
+    }).catch((error) => {
+      stopJobLabelerTransition();
+      rollbackOptimisticJobLabelerReview(state, entry, optimisticState);
+      renderJobLabelerReview();
+      const message = 'Label save failed. Candidate returned to the queue.';
+      setJobLabelerMessage(message, true);
+      showToast(message, { tone: 'error' });
+      throw error;
+    });
+  }
+
   function explanationCandidate(item) {
     const candidates = Array.isArray(item && item.candidates) ? item.candidates : [];
     if (!candidates.length) return null;
     if (currentCandidatePage >= 0 && currentCandidatePage < candidates.length) {
-      return candidates[currentCandidatePage];
+      return mergeCandidateMarkup(item, candidates[currentCandidatePage]);
     }
     const best = item && item.best_candidate ? item.best_candidate : null;
-    if (!best) return candidates[0];
-    return candidates.find((candidate) => candidate.candidate_key && candidate.candidate_key === best.candidate_key)
+    if (!best) return mergeCandidateMarkup(item, candidates[0]);
+    return mergeCandidateMarkup(item, (
+      candidates.find((candidate) => candidate.candidate_key && candidate.candidate_key === best.candidate_key)
       || candidates.find((candidate) => candidate.xpath === best.xpath && candidate.css_path === best.css_path)
-      || candidates[0];
+      || candidates[0]
+    ));
   }
 
   function explainFeatureBuckets(candidate) {
@@ -600,6 +1785,12 @@
       'human_reviewed_at',
       'candidate_screenshot_url',
       'candidate_screenshot_error',
+      'candidate_outer_html_excerpt',
+      'candidate_outer_html_length',
+      'candidate_outer_html_truncated',
+      'candidate_text_excerpt',
+      'candidate_markup_error',
+      'candidate_resolved_tag_name',
       'base_detected',
       'acceptance_gate_passed',
       'keyword_evidence_present',
@@ -671,6 +1862,7 @@
       scoringBreakdown.textContent = 'This row has no candidate regions yet, so there is no feature breakdown to explain.';
       return;
     }
+    ensureCandidateMarkup(item, candidate).catch((error) => console.error(error));
 
     const buckets = explainFeatureBuckets(candidate);
     const matchedSignalsArray = Array.isArray(candidate.matched_signals) ? candidate.matched_signals.filter(Boolean) : [];
@@ -777,13 +1969,11 @@
       verdictTitle = 'Raw score passed, but the keyword gate rejected this candidate';
       verdictCopy = `Candidate #${candidate.candidate_rank} cleared the raw score threshold at score ${formatMetricValue(candidate.score)}, but the acceptance gate blocked it. ${candidate.acceptance_gate_reason || ''}`;
     }
-    const candidateScreenshot = candidate.candidate_screenshot_url
-      ? `
-        <a class="score-shot-link" href="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" target="_blank" rel="noreferrer">
-          <img class="score-shot" src="${escapeHtml(resolveAssetUrl(candidate.candidate_screenshot_url))}" alt="Candidate ${escapeHtml(candidate.candidate_rank)} screenshot">
-        </a>
-      `
-      : `<div class="candidate-shot empty">${escapeHtml(candidate.candidate_screenshot_error || 'No candidate screenshot was captured for this candidate.')}</div>`;
+    const candidateScreenshot = renderCandidateVisual(candidate, {
+      linkClass: 'score-shot-link',
+      imageClass: 'score-shot',
+      fallbackHeading: 'Candidate Text Preview',
+    });
     const candidateSummary = candidates.slice(0, 5).map((entry) => `
       <tr>
         <td>${escapeHtml(entry.candidate_rank)}</td>
@@ -839,6 +2029,7 @@
               <h4>Selected Candidate</h4>
               <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available.')}</p>
               <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+              ${renderCandidateMarkupDetails(candidate)}
               ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
             </div>
           </article>
@@ -982,6 +2173,7 @@
       `<div><strong>Candidate Reviews:</strong> ${escapeHtml(item.candidate_review_summary ? item.candidate_review_summary.total : 0)}</div>`,
       `<div><strong>URL:</strong> ${escapeHtml(item.final_url || item.normalized_url || '')}</div>`,
       `<div><strong>Reason:</strong> ${escapeHtml(item.manual_capture_reason || item.error_message || '')}</div>`,
+      `<div><strong>Artifacts:</strong>${renderManualArtifactLinks(item, '<p class="candidate-copy">No stored manual artifacts yet.</p>')}</div>`,
     ].join('');
     renderCandidateReview(item);
     renderScoringBreakdown(item);
@@ -992,8 +2184,13 @@
 
   function renderItems(items, pagination) {
     currentItemsById = new Map((items || []).map((item) => [item.id, item]));
-    if (selectedManualItemId && currentItemsById.has(selectedManualItemId)) {
-      selectManualItem(currentItemsById.get(selectedManualItemId) || null);
+    if (selectedManualItemId) {
+      if (currentItemsById.has(selectedManualItemId)) {
+        selectManualItem(currentItemsById.get(selectedManualItemId) || null);
+      } else {
+        selectedManualItemId = '';
+        selectManualItem(null);
+      }
     }
 
     if (!items || !items.length) {
@@ -1063,6 +2260,56 @@
     `;
   }
 
+  function renderJobManager(job) {
+    const replaceButton = managerForm ? managerForm.querySelector('button[type="submit"]') : null;
+    if (!job) {
+      managerSelection.className = 'summary empty';
+      managerSelection.textContent = 'Select a job from Job Status or Recent Jobs to manage it here.';
+      managerJobId.value = '';
+      managerSourceColumn.value = '';
+      managerScanDelayInput.value = '';
+      managerScreenshotDelayInput.value = '';
+      managerReplaceFile.value = '';
+      managerResumeButton.disabled = true;
+      managerRestartButton.disabled = true;
+      managerDeleteButton.disabled = true;
+      if (replaceButton) {
+        replaceButton.disabled = true;
+      }
+      return;
+    }
+
+    managerSelection.className = 'summary tight-summary';
+    managerSelection.innerHTML = [
+      `<div><strong>Job:</strong> ${escapeHtml(job.id)}</div>`,
+      `<div><strong>Source:</strong> ${escapeHtml(job.source_filename || 'upload.csv')}</div>`,
+      `<div><strong>Column:</strong> ${escapeHtml(job.source_column || '(auto)')}</div>`,
+      `<div><strong>Status:</strong> ${escapeHtml(job.status || '')}</div>`,
+      `<div><strong>Progress:</strong> ${escapeHtml(job.completed_count || 0)}/${escapeHtml(job.total_urls || 0)}</div>`,
+      `<div><strong>Pending:</strong> ${escapeHtml(job.pending_count || 0)}</div>`,
+      `<div><strong>Queued:</strong> ${escapeHtml(job.queued_count || 0)}</div>`,
+      `<div><strong>Running:</strong> ${escapeHtml(job.running_count || 0)}</div>`,
+    ].join('');
+
+    if (managerFormJobId !== job.id) {
+      managerJobId.value = job.id || '';
+      managerSourceColumn.value = job.source_column || '';
+      managerScanDelayInput.value = job.scan_delay_ms ?? '';
+      managerScreenshotDelayInput.value = job.screenshot_delay_ms ?? '';
+      managerReplaceFile.value = '';
+      managerFormJobId = job.id;
+    } else {
+      managerJobId.value = job.id || '';
+    }
+
+    managerResumeButton.disabled = !canResumeJob(job);
+    managerRestartButton.disabled = false;
+    managerDeleteButton.disabled = false;
+    if (replaceButton) {
+      replaceButton.disabled = false;
+    }
+  }
+
   function renderRecentJobs(jobs) {
     if (!jobs || !jobs.length) {
       recentJobs.className = 'table-shell empty';
@@ -1071,12 +2318,20 @@
     }
 
     const rows = jobs.map((job) => `
-      <tr data-job-id="${escapeHtml(job.id)}">
+      <tr data-job-id="${escapeHtml(job.id)}" class="${currentJobId === job.id ? 'is-current' : ''}">
         <td class="mono">${escapeHtml(job.id)}</td>
         <td>${escapeHtml(job.status)}</td>
         <td>${escapeHtml(job.completed_count)}/${escapeHtml(job.total_urls)}</td>
         <td>${escapeHtml(job.detected_count)}</td>
-        <td><button class="secondary compact" type="button" data-open-job="${escapeHtml(job.id)}">Open</button></td>
+        <td>
+          <div class="job-action-grid">
+            <button class="secondary compact" type="button" data-open-job="${escapeHtml(job.id)}">Open</button>
+            <button class="secondary compact" type="button" data-manage-job="${escapeHtml(job.id)}">Manage</button>
+            <button class="secondary compact" type="button" data-resume-job="${escapeHtml(job.id)}" ${canResumeJob(job) ? '' : 'disabled'}>Resume</button>
+            <button class="secondary compact" type="button" data-restart-job="${escapeHtml(job.id)}">Restart</button>
+            <button class="secondary compact danger-button" type="button" data-delete-job="${escapeHtml(job.id)}">Delete</button>
+          </div>
+        </td>
       </tr>
     `).join('');
 
@@ -1097,13 +2352,36 @@
     `;
   }
 
-  async function fetchJson(path) {
-    const response = await fetch(apiUrl(path));
+  async function fetchJson(path, options = {}) {
+    const response = await fetch(apiUrl(path), {
+      cache: 'no-store',
+      ...options,
+    });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Request failed: ${response.status}`);
     }
     return response.json();
+  }
+
+  async function fetchJobEvents(jobId) {
+    if (!jobId) {
+      renderJobEvents([], { message: 'Select a job to view recent events.' });
+      return [];
+    }
+
+    try {
+      const body = await fetchJson(`/api/jobs/${jobId}/events?limit=80`);
+      const events = Array.isArray(body && body.events) ? body.events : [];
+      renderJobEvents(events);
+      return events;
+    } catch (error) {
+      renderJobEvents([], {
+        message: error && error.message ? error.message : 'Failed to load job events.',
+        isError: true,
+      });
+      return [];
+    }
   }
 
   async function refreshSelectedItem() {
@@ -1141,135 +2419,350 @@
     return body.target || null;
   }
 
+  async function postJobAction(jobId, path, options = {}) {
+    const response = await fetch(apiUrl(path), {
+      method: options.method || 'POST',
+      body: options.body,
+      headers: options.headers,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Job action failed.');
+    }
+
+    await refreshJobs().catch((error) => {
+      console.error(error);
+    });
+    if (body && body.deletedJobId) {
+      invalidateJobLabelerCache(body.deletedJobId);
+      if (currentJobId === body.deletedJobId) {
+        resetCurrentJobSelection({
+          managerMessage: 'Job removed.',
+          eventsMessage: 'Select a job to view recent events.',
+        });
+      }
+      return body;
+    }
+    if (options.skipFollowUpRefresh) {
+      return body;
+    }
+
+    const nextJobId = body.jobId || (body.job && body.job.id) || jobId || currentJobId;
+    if (nextJobId) {
+      currentOffset = 0;
+      await refreshJob(nextJobId);
+    }
+    return body;
+  }
+
   async function refreshJob(jobId) {
     if (!jobId) return;
-    const { job, items, pagination } = await fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`);
+    const previousJobId = currentJobId;
+    const [{ job, items, pagination }] = await Promise.all([
+      fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
+      fetchJobEvents(jobId),
+    ]);
     if (currentJobId && currentJobId !== jobId && selectedManualItemId) {
       selectedManualItemId = '';
       selectManualItem(null);
     }
+    currentJob = job;
     currentJobId = jobId;
     window.history.replaceState({}, '', `?jobId=${jobId}`);
     renderSummary(job);
     renderItems(items, pagination);
+    renderJobManager(job);
     await refreshSelectedItem().catch((error) => console.error(error));
     setDownloads(jobId);
-    refreshJobs().catch((error) => console.error(error));
-
-    const terminal = ['completed', 'completed_with_errors', 'failed'].includes(job.status);
-    if (terminal && pollHandle) {
-      clearInterval(pollHandle);
-      pollHandle = null;
+    if (activeWorkspaceTab === 'labeler') {
+      if (previousJobId !== jobId) {
+        ensureJobLabelerLoaded(false).catch((error) => {
+          const message = error && error.message ? error.message : String(error);
+          setJobLabelerMessage(message, true);
+          showToast(message, { tone: 'error' });
+        });
+      } else {
+        renderJobLabelerReview();
+      }
     }
+    refreshJobs().catch((error) => console.error(error));
+    startPolling(jobId, pollIntervalForStatus(job.status));
   }
 
   async function refreshJobs() {
     const data = await fetchJson('/api/jobs?limit=10');
-    renderRecentJobs(data.jobs || []);
+    const jobs = data.jobs || [];
+    renderRecentJobs(jobs);
+    return jobs;
+  }
+
+  async function handleResumeJob(jobId, triggerElement) {
+    if (!jobId) return;
+    try {
+      setManagerMessage('Resuming unfinished rows...', false);
+      const body = await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}/resume`));
+      const replacedCount = Number(body && body.replacedCount) || 0;
+      const message = replacedCount
+        ? `Resumed ${replacedCount} unfinished row(s).`
+        : 'Resume requested. No unfinished rows needed replacement.';
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleRestartJob(jobId, triggerElement) {
+    if (!jobId) return;
+    const confirmed = await confirmAction({
+      title: 'Restart this job?',
+      description: `This will reset all rows for job ${jobId} and start the scan again from the beginning.`,
+      acceptLabel: 'Restart Job',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Restarting job...', false);
+      invalidateJobLabelerCache(jobId);
+      await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}/restart`));
+      const message = `Job ${jobId} restarted.`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleDeleteJob(jobId, triggerElement) {
+    if (!jobId) return;
+    const confirmed = await confirmAction({
+      title: 'Delete this job?',
+      description: `This removes job ${jobId}, its rows, saved results, and job history for the current runtime.`,
+      acceptLabel: 'Delete Job',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Deleting job...', false);
+      invalidateJobLabelerCache(jobId);
+      await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}`, { method: 'DELETE' }));
+      const message = `Job ${jobId} deleted.`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleReplaceJob(event) {
+    event.preventDefault();
+    if (!currentJobId || !currentJob) {
+      setManagerMessage('Select a job first.', true);
+      showToast('Select a job first.', { tone: 'error' });
+      return;
+    }
+
+    const file = managerReplaceFile.files[0];
+    if (!file) {
+      setManagerMessage('Choose a replacement CSV first.', true);
+      showToast('Choose a replacement CSV first.', { tone: 'error' });
+      return;
+    }
+
+    const submitButton = managerForm.querySelector('button[type="submit"]');
+    try {
+      setManagerMessage('Replacing job CSV...', false);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (managerSourceColumn.value.trim()) {
+        formData.append('urlColumn', managerSourceColumn.value.trim());
+      }
+      if (managerScanDelayInput.value.trim()) {
+        formData.append('scanDelayMs', managerScanDelayInput.value.trim());
+      }
+      if (managerScreenshotDelayInput.value.trim()) {
+        formData.append('screenshotDelayMs', managerScreenshotDelayInput.value.trim());
+      }
+
+      const body = await runElementAction(submitButton, () => postJobAction(currentJobId, `/api/jobs/${currentJobId}/replace`, {
+        body: formData,
+      }));
+      invalidateJobLabelerCache(currentJobId);
+      managerReplaceFile.value = '';
+      const message = `Job ${currentJobId} updated with ${body.totalUrls || 0} row(s).`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleClearAllJobs(triggerElement) {
+    const confirmed = await confirmAction({
+      title: 'Clear all jobs?',
+      description: 'This removes every saved job in the current runtime. Use this only when you want to wipe the job database and start fresh.',
+      acceptLabel: 'Clear All Jobs',
+      danger: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setManagerMessage('Clearing saved jobs...', false);
+      const body = await runElementAction(triggerElement, () => postJobAction('', '/api/jobs/clear', {
+        skipFollowUpRefresh: true,
+      }));
+      jobLabelerCache.clear();
+      jobLabelerLoadingJobId = '';
+      jobLabelerLoadingPromise = null;
+      resetCurrentJobSelection({
+        managerMessage: `Cleared ${body.deletedCount || 0} job(s).`,
+        eventsMessage: 'Select a job to view recent events.',
+      });
+      await refreshJobs();
+      const message = `Cleared ${body.deletedCount || 0} job(s).`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setMessage('Starting scan...', false);
 
     const file = fileInput.files[0];
     if (!file) {
       setMessage('Choose a CSV file first.', true);
+      showToast('Choose a CSV file first.', { tone: 'error' });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-    if (urlColumnInput.value.trim()) {
-      formData.append('urlColumn', urlColumnInput.value.trim());
-    }
-    if (scanDelayInput && scanDelayInput.value.trim()) {
-      formData.append('scanDelayMs', scanDelayInput.value.trim());
-    }
-    if (screenshotDelayInput && screenshotDelayInput.value.trim()) {
-      formData.append('screenshotDelayMs', screenshotDelayInput.value.trim());
-    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    try {
+      setMessage('Starting scan...', false);
+      await runElementAction(submitButton, async () => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (urlColumnInput.value.trim()) {
+          formData.append('urlColumn', urlColumnInput.value.trim());
+        }
+        if (scanDelayInput && scanDelayInput.value.trim()) {
+          formData.append('scanDelayMs', scanDelayInput.value.trim());
+        }
+        if (screenshotDelayInput && screenshotDelayInput.value.trim()) {
+          formData.append('screenshotDelayMs', screenshotDelayInput.value.trim());
+        }
 
-    const response = await fetch(apiUrl('/api/jobs'), {
-      method: 'POST',
-      body: formData,
-    });
+        const response = await fetch(apiUrl('/api/jobs'), {
+          method: 'POST',
+          body: formData,
+        });
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setMessage(body.error || 'Failed to create job.', true);
-      return;
-    }
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to create job.');
+        }
 
-    setMessage(
-      `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
-      false,
-    );
-    await refreshJobs();
-    currentOffset = 0;
-    await refreshJob(body.jobId);
-
-    if (pollHandle) clearInterval(pollHandle);
-    pollHandle = setInterval(() => {
-      refreshJob(body.jobId).catch((error) => {
-        console.error(error);
+        setMessage(
+          `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
+          false,
+        );
+        showToast(`Job ${body.jobId} created.`, { tone: 'success' });
+        await refreshJobs();
+        currentOffset = 0;
+        await refreshJob(body.jobId);
       });
-    }, 4000);
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
   }
 
   async function handleManualSubmit(event) {
     event.preventDefault();
-    setManualMessage('Uploading manual snapshot...', false);
 
     if (!currentJobId || !selectedManualItemId) {
       setManualMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
     const htmlFile = manualHtmlFile.files[0];
     if (!htmlFile) {
       setManualMessage('Choose an HTML snapshot file.', true);
+      showToast('Choose an HTML snapshot file.', { tone: 'error' });
       return;
     }
 
-    const formData = new FormData();
-    formData.append('snapshot', htmlFile);
-    if (manualScreenshotFile.files[0]) {
-      formData.append('screenshot', manualScreenshotFile.files[0]);
-    }
-    if (manualCaptureUrl.value.trim()) {
-      formData.append('captureUrl', manualCaptureUrl.value.trim());
-    }
-    if (manualCaptureTitle.value.trim()) {
-      formData.append('title', manualCaptureTitle.value.trim());
-    }
-    if (manualNotes.value.trim()) {
-      formData.append('notes', manualNotes.value.trim());
-    }
+    const submitButton = manualForm.querySelector('button[type="submit"]');
+    try {
+      setManualMessage('Uploading manual snapshot...', false);
+      await runElementAction(submitButton, async () => {
+        const formData = new FormData();
+        formData.append('snapshot', htmlFile);
+        if (manualScreenshotFile.files[0]) {
+          formData.append('screenshot', manualScreenshotFile.files[0]);
+        }
+        if (manualCaptureUrl.value.trim()) {
+          formData.append('captureUrl', manualCaptureUrl.value.trim());
+        }
+        if (manualCaptureTitle.value.trim()) {
+          formData.append('title', manualCaptureTitle.value.trim());
+        }
+        if (manualNotes.value.trim()) {
+          formData.append('notes', manualNotes.value.trim());
+        }
 
-    const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/manual-capture`), {
-      method: 'POST',
-      body: formData,
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setManualMessage(body.error || 'Failed to upload manual snapshot.', true);
-      return;
-    }
+        const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/manual-capture`), {
+          method: 'POST',
+          body: formData,
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to upload manual snapshot.');
+        }
 
-    manualHtmlFile.value = '';
-    manualScreenshotFile.value = '';
-    setManualMessage('Manual snapshot analyzed.', false);
-    if (body.item) {
-      currentItemsById.set(body.item.id, body.item);
-      selectManualItem(body.item, preferredReviewTab(body.item));
+        manualHtmlFile.value = '';
+        manualScreenshotFile.value = '';
+        setManualMessage('Manual snapshot analyzed.', false);
+        showToast('Manual snapshot analyzed.', { tone: 'success' });
+        if (body.item) {
+          currentItemsById.set(body.item.id, body.item);
+          selectManualItem(body.item, preferredReviewTab(body.item));
+        }
+        invalidateJobLabelerCache(currentJobId);
+        await refreshJob(currentJobId);
+      });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManualMessage(message, true);
+      showToast(message, { tone: 'error' });
     }
-    await refreshJob(currentJobId);
   }
 
   async function copyManualConfig() {
     if (!currentJobId || !selectedManualItemId) {
       setManualMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
@@ -1284,81 +2777,176 @@
       snapshotMode: 'frozen_styles',
     };
 
-    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    await runElementAction(manualCopyConfigButton, async () => {
+      await copyText(JSON.stringify(payload, null, 2));
+    });
     setManualMessage('Fallback extension config copied to clipboard.', false);
+    showToast('Fallback extension config copied to clipboard.', { tone: 'success' });
   }
 
-  async function saveCandidateReview(candidateKey, label, notes, clear) {
-    if (!currentJobId || !selectedManualItemId) {
-      setCandidateMessage('Select a row first.', true);
+  async function saveCandidateReview(candidateKey, label, notes, clear, options = {}) {
+    const itemId = options.itemId || selectedManualItemId;
+    const setMessage = options.setMessage || setCandidateMessage;
+    const scopeElement = options.scopeElement || candidateReview;
+
+    if (!currentJobId || !itemId) {
+      setMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
       return;
     }
 
-    const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${selectedManualItemId}/candidates/${encodeURIComponent(candidateKey)}/review`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        label: clear ? '' : label,
-        notes: notes || '',
-        clear: !!clear,
-      }),
-    });
+    const activeButton = scopeElement.querySelector(clear
+      ? `[data-candidate-clear="${CSS.escape(candidateKey)}"]`
+      : `[data-candidate-review="${CSS.escape(candidateKey)}"][data-label-value="${CSS.escape(label)}"]`)
+      || scopeElement.querySelector(clear
+        ? `[data-job-labeler-clear="${CSS.escape(candidateKey)}"]`
+        : `[data-job-labeler-review="${CSS.escape(candidateKey)}"][data-label-value="${CSS.escape(label)}"]`);
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || 'Failed to save candidate review.');
+    try {
+      await runElementAction(activeButton, async () => {
+        const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${itemId}/candidates/${encodeURIComponent(candidateKey)}/review`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            label: clear ? '' : label,
+            notes: notes || '',
+            clear: !!clear,
+            includeItem: options.includeItemResponse !== false,
+          }),
+        });
+
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || 'Failed to save candidate review.');
+        }
+
+        const item = body.item || null;
+        if (item) {
+          currentItemsById.set(item.id, item);
+          const labelerState = jobLabelerCache.get(currentJobId);
+          if (labelerState) {
+            labelerState.itemsById.set(item.id, item);
+          }
+          if (options.syncSelectedItem !== false) {
+            selectManualItem(item);
+          }
+          if (typeof options.onSaved === 'function') {
+            options.onSaved(item);
+          }
+        }
+        if (typeof options.onSaved === 'function' && !item) {
+          options.onSaved(null);
+        }
+        return body;
+      });
+      const message = clear ? 'Candidate review cleared.' : 'Candidate review saved.';
+      if (!options.silentSuccess) {
+        setMessage(message, false);
+        showToast(message, { tone: 'success' });
+      }
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setMessage(message, true);
+      if (!options.silentError) {
+        showToast(message, { tone: 'error' });
+      }
+      throw error;
     }
-
-    const item = body.item || null;
-    if (item) {
-      currentItemsById.set(item.id, item);
-      selectManualItem(item);
-    }
-
-    setCandidateMessage(clear ? 'Candidate review cleared.' : 'Candidate review saved.', false);
   }
 
   form.addEventListener('submit', (event) => {
-    handleSubmit(event).catch((error) => {
-      setMessage(error.message || String(error), true);
-    });
+    handleSubmit(event).catch((error) => console.error(error));
   });
 
   manualForm.addEventListener('submit', (event) => {
-    handleManualSubmit(event).catch((error) => {
-      setManualMessage(error.message || String(error), true);
-    });
+    handleManualSubmit(event).catch((error) => console.error(error));
+  });
+
+  managerForm.addEventListener('submit', (event) => {
+    handleReplaceJob(event).catch((error) => console.error(error));
   });
 
   manualCopyConfigButton.addEventListener('click', () => {
     copyManualConfig().catch((error) => {
-      setManualMessage(error.message || String(error), true);
+      const message = error && error.message ? error.message : String(error);
+      setManualMessage(message, true);
+      showToast(message, { tone: 'error' });
     });
   });
 
   refreshJobsButton.addEventListener('click', () => {
-    refreshJobs().catch((error) => console.error(error));
+    runElementAction(refreshJobsButton, async () => {
+      if (currentJobId) {
+        await refreshJob(currentJobId);
+        return;
+      }
+      await refreshJobs();
+    }).catch((error) => {
+      showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+    });
   });
 
   workspaceTabs.forEach((button) => {
     button.addEventListener('click', () => {
-      setWorkspaceTab(button.getAttribute('data-workspace-tab'));
+      const tabId = button.getAttribute('data-workspace-tab');
+      setWorkspaceTab(tabId);
+      if (tabId === 'labeler') {
+        ensureJobLabelerLoaded(false).catch((error) => {
+          const message = error && error.message ? error.message : String(error);
+          setJobLabelerMessage(message, true);
+          showToast(message, { tone: 'error' });
+        });
+      }
     });
   });
 
   recentJobs.addEventListener('click', (event) => {
     const button = event.target.closest('[data-open-job]');
-    if (!button) return;
-    const jobId = button.getAttribute('data-open-job');
-    if (!jobId) return;
-    currentOffset = 0;
-    refreshJob(jobId).catch((error) => console.error(error));
-    if (pollHandle) clearInterval(pollHandle);
-    pollHandle = setInterval(() => {
-      refreshJob(jobId).catch((error) => console.error(error));
-    }, 4000);
+    if (button) {
+      const jobId = button.getAttribute('data-open-job');
+      if (!jobId) return;
+      currentOffset = 0;
+      runElementAction(button, () => refreshJob(jobId)).catch((error) => {
+        showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+      });
+      return;
+    }
+
+    const manageButton = event.target.closest('[data-manage-job]');
+    if (manageButton) {
+      const jobId = manageButton.getAttribute('data-manage-job');
+      if (!jobId) return;
+      currentOffset = 0;
+      runElementAction(manageButton, async () => {
+        await refreshJob(jobId);
+        setWorkspaceTab('manager');
+      }).catch((error) => {
+        showToast(error && error.message ? error.message : String(error), { tone: 'error' });
+      });
+      return;
+    }
+
+    const resumeButton = event.target.closest('[data-resume-job]');
+    if (resumeButton) {
+      const jobId = resumeButton.getAttribute('data-resume-job');
+      handleResumeJob(jobId, resumeButton).catch((error) => console.error(error));
+      return;
+    }
+
+    const restartButton = event.target.closest('[data-restart-job]');
+    if (restartButton) {
+      const jobId = restartButton.getAttribute('data-restart-job');
+      handleRestartJob(jobId, restartButton).catch((error) => console.error(error));
+      return;
+    }
+
+    const deleteButton = event.target.closest('[data-delete-job]');
+    if (deleteButton) {
+      const jobId = deleteButton.getAttribute('data-delete-job');
+      handleDeleteJob(jobId, deleteButton).catch((error) => console.error(error));
+    }
   });
 
   jobItems.addEventListener('click', (event) => {
@@ -1445,6 +3033,31 @@
     });
   });
 
+  jobLabelerReview.addEventListener('click', (event) => {
+    const reviewButton = event.target.closest('[data-job-labeler-review]');
+    if (reviewButton) {
+      const candidateKey = reviewButton.getAttribute('data-job-labeler-review');
+      const itemId = reviewButton.getAttribute('data-item-id');
+      const label = reviewButton.getAttribute('data-label-value');
+      if (!candidateKey || !itemId || !label) return;
+      const entry = currentJobLabelerEntry();
+      if (!entry || entry.itemId !== itemId || entry.candidateKey !== candidateKey) return;
+      const notesField = document.getElementById('job-labeler-notes');
+      const notes = notesField ? notesField.value.trim() : '';
+      submitJobLabelerReview(entry, label, notes, false).catch(() => {});
+      return;
+    }
+
+    const clearButton = event.target.closest('[data-job-labeler-clear]');
+    if (!clearButton) return;
+    const candidateKey = clearButton.getAttribute('data-job-labeler-clear');
+    const itemId = clearButton.getAttribute('data-item-id');
+    if (!candidateKey || !itemId) return;
+    const entry = currentJobLabelerEntry();
+    if (!entry || entry.itemId !== itemId || entry.candidateKey !== candidateKey) return;
+    submitJobLabelerReview(entry, '', '', true).catch(() => {});
+  });
+
   scoringBreakdown.addEventListener('toggle', (event) => {
     const details = event.target;
     if (!(details instanceof HTMLDetailsElement)) return;
@@ -1465,17 +3078,107 @@
     downloadCandidateCsv(selectedItem());
   });
 
+  downloadSvgGraphLink.addEventListener('click', (event) => {
+    handleGraphDownload(event, downloadSvgGraphLink, 'svg', 'SVG graph downloaded.');
+  });
+
+  downloadDotGraphLink.addEventListener('click', (event) => {
+    handleGraphDownload(event, downloadDotGraphLink, 'dot', 'DOT graph downloaded.');
+  });
+
+  jobLabelerReloadButton.addEventListener('click', () => {
+    runElementAction(jobLabelerReloadButton, async () => {
+      if (!currentJobId) {
+        throw new Error('Select a job first.');
+      }
+      invalidateJobLabelerCache(currentJobId);
+      await ensureJobLabelerLoaded(true);
+      setJobLabelerMessage('Job-wide candidate queue reloaded.', false);
+      showToast('Job-wide candidate queue reloaded.', { tone: 'success' });
+    }).catch((error) => {
+      const message = error && error.message ? error.message : String(error);
+      setJobLabelerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    });
+  });
+
+  jobLabelerPrevButton.addEventListener('click', () => {
+    stepJobLabeler(-1);
+  });
+
+  jobLabelerNextButton.addEventListener('click', () => {
+    stepJobLabeler(1);
+  });
+
+  managerResumeButton.addEventListener('click', () => {
+    handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));
+  });
+
+  managerRestartButton.addEventListener('click', () => {
+    handleRestartJob(currentJobId, managerRestartButton).catch((error) => console.error(error));
+  });
+
+  managerDeleteButton.addEventListener('click', () => {
+    handleDeleteJob(currentJobId, managerDeleteButton).catch((error) => console.error(error));
+  });
+
+  managerClearJobsButton.addEventListener('click', () => {
+    handleClearAllJobs(managerClearJobsButton).catch((error) => console.error(error));
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (activeWorkspaceTab !== 'labeler') return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target;
+    const tagName = target && target.tagName ? target.tagName.toLowerCase() : '';
+    const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    if (isTypingTarget) return;
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      stepJobLabeler(-1);
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      stepJobLabeler(1);
+      return;
+    }
+
+    const activeEntry = currentJobLabelerEntry();
+    if (!activeEntry) return;
+    const notesField = document.getElementById('job-labeler-notes');
+    const notes = notesField ? notesField.value.trim() : '';
+    let label = '';
+    if (event.key === '1') label = 'comment_region';
+    if (event.key === '2') label = 'not_comment_region';
+    if (event.key === '3') label = 'uncertain';
+    if (!label) return;
+
+    event.preventDefault();
+    submitJobLabelerReview(activeEntry, label, notes, false).catch(() => {});
+  });
+
+  if (confirmDialog) {
+    confirmDialog.addEventListener('close', () => {
+      if (!confirmResolver) return;
+      const resolve = confirmResolver;
+      confirmResolver = null;
+      resolve(confirmDialog.returnValue === 'accept');
+    });
+  }
+
   setResourceDownloads();
   setDownloads(currentJobId);
   setWorkspaceTab('queue');
   renderWorkspaceSelection(null);
   renderCandidateReview(null);
+  renderJobLabelerReview();
   renderScoringBreakdown(null);
+  renderJobManager(null);
+  renderJobEvents([], { message: 'Select a job to view recent events.' });
   refreshJobs().catch((error) => console.error(error));
   if (currentJobId) {
     refreshJob(currentJobId).catch((error) => console.error(error));
-    pollHandle = setInterval(() => {
-      refreshJob(currentJobId).catch((error) => console.error(error));
-    }, 4000);
   }
 }());

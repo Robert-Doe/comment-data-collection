@@ -66,6 +66,34 @@ async function enqueueScanItems(queue, payloads) {
   })));
 }
 
+async function removeQueueItems(queue, itemIds) {
+  const normalizedIds = Array.isArray(itemIds)
+    ? itemIds.map((itemId) => String(itemId || '').trim()).filter(Boolean)
+    : [];
+  if (!normalizedIds.length) {
+    return {
+      removedCount: 0,
+      skippedCount: 0,
+    };
+  }
+
+  let removedCount = 0;
+  let skippedCount = 0;
+  for (const itemId of normalizedIds) {
+    try {
+      await queue.remove(itemId);
+      removedCount += 1;
+    } catch (_) {
+      skippedCount += 1;
+    }
+  }
+
+  return {
+    removedCount,
+    skippedCount,
+  };
+}
+
 module.exports = {
   SCAN_QUEUE_NAME,
   createRedisConnection,
@@ -73,4 +101,5 @@ module.exports = {
   getSharedQueue,
   enqueueScanItem,
   enqueueScanItems,
+  removeQueueItems,
 };

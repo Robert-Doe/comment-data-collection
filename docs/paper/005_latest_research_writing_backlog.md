@@ -21,6 +21,7 @@ The strongest story so far is:
 - hybrid similarity beats hash-only similarity
 - broader attribute and date/time coverage improves recall
 - candidate-level labeling produces better models than page-level labeling alone
+- the trained model can be distilled into a compact browser-runtime bundle without changing inference outcomes materially
 
 ## Evidence we still need
 
@@ -28,6 +29,8 @@ The strongest story so far is:
 - examples of ambiguous multi-candidate pages
 - screenshots showing correct versus incorrect candidate regions
 - ablations for keyword, time/date, and sibling-family refinements
+- parity checks between server-side scoring and browser-side runtime scoring
+- runtime bundle size and load-time measurements
 
 ## What the current app can already collect
 
@@ -46,6 +49,8 @@ This should make the eventual paper stronger because the dataset can be built in
 - candidate screenshot examples
 - threat-model diagrams
 - failure-case examples
+- full training artifact versus browser-runtime bundle figure
+- browser inference contract figure (feature extractor -> vectorizer -> weights -> thresholds)
 
 ## Current position
 

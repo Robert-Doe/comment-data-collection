@@ -62,6 +62,8 @@ async function ensureSchema(databaseUrl) {
       best_sample_text TEXT,
       screenshot_path TEXT,
       screenshot_url TEXT,
+      manual_uploaded_screenshot_path TEXT,
+      manual_uploaded_screenshot_url TEXT,
       analysis_source TEXT NOT NULL DEFAULT 'automated',
       manual_capture_required BOOLEAN NOT NULL DEFAULT FALSE,
       manual_capture_reason TEXT,
@@ -95,8 +97,25 @@ async function ensureSchema(databaseUrl) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS job_events (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES job_items(id) ON DELETE CASCADE,
+      row_number INTEGER,
+      level TEXT NOT NULL DEFAULT 'info',
+      scope TEXT NOT NULL DEFAULT 'job',
+      event_type TEXT NOT NULL DEFAULT '',
+      event_key TEXT,
+      message TEXT NOT NULL,
+      details JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_job_items_job_id ON job_items(job_id);
     CREATE INDEX IF NOT EXISTS idx_job_items_status ON job_items(status);
+    CREATE INDEX IF NOT EXISTS idx_job_events_job_id_created_at ON job_events(job_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_job_events_item_id_created_at ON job_events(item_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_job_events_job_id_event_key ON job_events(job_id, event_key) WHERE event_key IS NOT NULL;
   `);
 
   await db.query(`
@@ -117,6 +136,12 @@ async function ensureSchema(databaseUrl) {
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS screenshot_url TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_uploaded_screenshot_path TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS manual_uploaded_screenshot_url TEXT;
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS analysis_source TEXT NOT NULL DEFAULT 'automated';
@@ -156,6 +181,24 @@ async function ensureSchema(databaseUrl) {
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS candidate_reviews JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS row_number INTEGER;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'info';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'job';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT '';
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS event_key TEXT;
+
+    ALTER TABLE job_events
+    ADD COLUMN IF NOT EXISTS details JSONB;
   `);
 }
 
@@ -235,6 +278,19 @@ async function listJobs(limit = 25, databaseUrl) {
   return result.rows;
 }
 
+async function listIncompleteJobs(limit = 100, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM jobs
+     WHERE status NOT IN ('completed', 'completed_with_errors', 'failed')
+     ORDER BY created_at ASC
+     LIMIT $1`,
+    [Math.max(1, Number(limit) || 100)],
+  );
+  return result.rows;
+}
+
 async function getJob(jobId, databaseUrl) {
   const db = getPool(databaseUrl);
   const result = await db.query(
@@ -274,6 +330,387 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
       jobId,
       Math.max(1, Number(options.limit) || 100),
       Math.max(0, Number(options.offset) || 0),
+    ],
+  );
+  return result.rows;
+}
+
+async function replaceJobRecords(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const records = Array.isArray(options.records)
+    ? options.records.filter((record) => record && record.__normalized_url)
+    : [];
+  if (!records.length) {
+    throw new Error('At least one normalized record is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const batchSize = Math.max(1, Number(options.batchSize) || 250);
+
+  try {
+    await client.query('BEGIN');
+
+    const existingJobResult = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 FOR UPDATE',
+      [normalizedJobId],
+    );
+    const existingJob = existingJobResult.rows[0] || null;
+    if (!existingJob) {
+      throw new Error('Job not found');
+    }
+
+    const nextSourceFilename = options.sourceFilename !== undefined
+      ? String(options.sourceFilename || '')
+      : String(existingJob.source_filename || '');
+    const nextSourceColumn = options.sourceColumn !== undefined
+      ? String(options.sourceColumn || '')
+      : String(existingJob.source_column || '');
+    const nextScanDelayMs = Number.isFinite(Number(options.scanDelayMs))
+      ? Number(options.scanDelayMs)
+      : Number(existingJob.scan_delay_ms || 6000);
+    const nextScreenshotDelayMs = Number.isFinite(Number(options.screenshotDelayMs))
+      ? Number(options.screenshotDelayMs)
+      : Number(existingJob.screenshot_delay_ms || 1500);
+
+    await client.query(
+      'DELETE FROM manual_review_targets WHERE job_id = $1',
+      [normalizedJobId],
+    );
+    await client.query(
+      'DELETE FROM job_events WHERE job_id = $1',
+      [normalizedJobId],
+    );
+    await client.query(
+      'DELETE FROM job_items WHERE job_id = $1',
+      [normalizedJobId],
+    );
+
+    for (let offset = 0; offset < records.length; offset += batchSize) {
+      const chunk = records.slice(offset, offset + batchSize);
+      const { values, placeholders } = buildInsertBatch(normalizedJobId, chunk);
+      await client.query(
+        `INSERT INTO job_items (
+          id, job_id, row_number, input_url, normalized_url, status
+        ) VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    const updatedResult = await client.query(
+      `UPDATE jobs
+       SET source_filename = $2,
+           source_column = $3,
+           scan_delay_ms = $4,
+           screenshot_delay_ms = $5,
+           status = 'pending',
+           total_urls = $6,
+           pending_count = $6,
+           queued_count = 0,
+           running_count = 0,
+           completed_count = 0,
+           failed_count = 0,
+           detected_count = 0,
+           error_message = NULL,
+           updated_at = NOW(),
+           finished_at = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [
+        normalizedJobId,
+        nextSourceFilename,
+        nextSourceColumn,
+        nextScanDelayMs,
+        nextScreenshotDelayMs,
+        records.length,
+      ],
+    );
+
+    await client.query('COMMIT');
+    return updatedResult.rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function restartJob(jobId, options = {}, databaseUrl) {
+  const existingJob = await getJob(jobId, databaseUrl);
+  if (!existingJob) {
+    return null;
+  }
+
+  const items = await getJobItems(jobId, {
+    limit: Math.max(1, Number(existingJob.total_urls) || 1),
+    offset: 0,
+  }, databaseUrl);
+  const records = items.map((item) => ({
+    __row_number: item.row_number,
+    __input_url: item.input_url,
+    __normalized_url: item.normalized_url,
+  }));
+
+  return replaceJobRecords(jobId, {
+    sourceFilename: existingJob.source_filename || '',
+    sourceColumn: existingJob.source_column || '',
+    records,
+    batchSize: options.batchSize,
+    scanDelayMs: existingJob.scan_delay_ms,
+    screenshotDelayMs: existingJob.screenshot_delay_ms,
+  }, databaseUrl);
+}
+
+async function resumeJob(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const batchSize = Math.max(1, Number(options.batchSize) || 250);
+
+  try {
+    await client.query('BEGIN');
+
+    const existingJobResult = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 FOR UPDATE',
+      [normalizedJobId],
+    );
+    const existingJob = existingJobResult.rows[0] || null;
+    if (!existingJob) {
+      throw new Error('Job not found');
+    }
+
+    const unfinishedResult = await client.query(
+      `SELECT id, row_number, input_url, normalized_url
+       FROM job_items
+       WHERE job_id = $1
+         AND status = ANY($2::text[])
+       ORDER BY row_number ASC`,
+      [normalizedJobId, ['pending', 'queued', 'running']],
+    );
+    const unfinishedItems = unfinishedResult.rows;
+    const replacedCount = unfinishedItems.length;
+    if (!replacedCount) {
+      await client.query('COMMIT');
+      return {
+        job: existingJob,
+        replacedCount: 0,
+      };
+    }
+
+    const staleItemIds = unfinishedItems.map((item) => item.id);
+    const records = unfinishedItems.map((item) => ({
+      __row_number: item.row_number,
+      __input_url: item.input_url,
+      __normalized_url: item.normalized_url,
+    }));
+
+    await client.query(
+      `DELETE FROM manual_review_targets
+       WHERE job_id = $1
+         AND item_id = ANY($2::text[])`,
+      [normalizedJobId, staleItemIds],
+    );
+    await client.query(
+      'DELETE FROM job_items WHERE id = ANY($1::text[])',
+      [staleItemIds],
+    );
+
+    for (let offset = 0; offset < records.length; offset += batchSize) {
+      const chunk = records.slice(offset, offset + batchSize);
+      const { values, placeholders } = buildInsertBatch(normalizedJobId, chunk);
+      await client.query(
+        `INSERT INTO job_items (
+          id, job_id, row_number, input_url, normalized_url, status
+        ) VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    const updatedResult = await client.query(
+      `UPDATE jobs
+       SET error_message = NULL,
+           updated_at = NOW(),
+           finished_at = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [normalizedJobId],
+    );
+
+    await client.query('COMMIT');
+    await recomputeJob(normalizedJobId, databaseUrl);
+
+    return {
+      job: await getJob(normalizedJobId, databaseUrl),
+      replacedCount,
+      staleItemIds,
+      previousJob: updatedResult.rows[0] || existingJob,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteJob(jobId, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    'DELETE FROM jobs WHERE id = $1 RETURNING id',
+    [normalizedJobId],
+  );
+  return result.rowCount > 0;
+}
+
+async function clearAllJobs(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('DELETE FROM jobs');
+  return result.rowCount || 0;
+}
+
+async function appendJobEvent(event, databaseUrl) {
+  const jobId = String(event && event.jobId || '').trim();
+  if (!jobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const message = String(event && event.message || '').trim();
+  if (!message) {
+    throw new Error('Job event message is required');
+  }
+
+  const details = event && event.details && typeof event.details === 'object'
+    ? event.details
+    : null;
+  const result = await db.query(
+    `INSERT INTO job_events (
+       id, job_id, item_id, row_number, level, scope, event_type, event_key, message, details
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
+     )
+     ON CONFLICT (job_id, event_key) WHERE event_key IS NOT NULL DO NOTHING
+     RETURNING *`,
+    [
+      crypto.randomUUID(),
+      jobId,
+      event && event.itemId ? String(event.itemId) : null,
+      Number.isFinite(Number(event && event.rowNumber)) ? Number(event.rowNumber) : null,
+      String(event && event.level || 'info'),
+      String(event && event.scope || 'job'),
+      String(event && event.eventType || ''),
+      event && event.eventKey ? String(event.eventKey) : null,
+      message,
+      details ? JSON.stringify(details) : null,
+    ],
+  );
+  return result.rows[0] || null;
+}
+
+async function listJobEvents(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const db = getPool(databaseUrl);
+  const params = [jobId];
+  const clauses = ['job_id = $1'];
+
+  if (options.itemId) {
+    params.push(String(options.itemId));
+    clauses.push(`item_id = $${params.length}`);
+  }
+
+  params.push(Math.max(1, Number(options.limit) || 100));
+  const result = await db.query(
+    `SELECT *
+     FROM job_events
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY created_at DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
+async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const db = getPool(databaseUrl);
+  const clauses = [];
+  const params = [];
+
+  const jobIds = Array.isArray(options.jobIds)
+    ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  if (jobIds.length) {
+    params.push(jobIds);
+    clauses.push(`job_id = ANY($${params.length}::text[])`);
+  }
+
+  if (options.requireCandidates !== false) {
+    clauses.push('candidates IS NOT NULL');
+  }
+
+  const limit = Math.max(1, Number(options.limit) || 20000);
+  params.push(limit);
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     ${whereClause}
+     ORDER BY created_at DESC, row_number ASC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
+async function listJobItemsByStatuses(statuses, optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const normalizedStatuses = Array.isArray(statuses)
+    ? statuses.map((status) => String(status || '').trim()).filter(Boolean)
+    : [];
+  if (!normalizedStatuses.length) {
+    return [];
+  }
+
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     WHERE status = ANY($1::text[])
+     ORDER BY updated_at ASC, row_number ASC
+     LIMIT $2`,
+    [
+      normalizedStatuses,
+      Math.max(1, Number(options.limit) || 1000),
     ],
   );
   return result.rows;
@@ -382,6 +819,26 @@ async function releaseQueuedItems(itemIds, databaseUrl) {
   );
 }
 
+async function setItemStatus(itemId, status, databaseUrl) {
+  const nextStatus = String(status || '').trim();
+  if (!nextStatus) {
+    throw new Error('Item status is required');
+  }
+
+  const db = getPool(databaseUrl);
+  await db.query(
+    `UPDATE job_items
+     SET status = $2,
+         completed_at = CASE
+           WHEN $2 IN ('pending', 'queued', 'running') THEN NULL
+           ELSE completed_at
+         END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [itemId, nextStatus],
+  );
+}
+
 async function markItemRunning(itemId, databaseUrl) {
   const db = getPool(databaseUrl);
   await db.query(
@@ -421,22 +878,24 @@ async function markItemCompleted(itemId, scanResult, databaseUrl) {
          best_sample_text = $10,
          screenshot_path = $11,
          screenshot_url = $12,
-         analysis_source = $13,
-         manual_capture_required = $14,
-         manual_capture_reason = $15,
-         manual_capture_mode = $16,
-         manual_html_path = $17,
-         manual_html_url = $18,
-         manual_raw_html_path = $19,
-         manual_raw_html_url = $20,
-         manual_capture_url = $21,
-         manual_capture_title = $22,
-         manual_capture_notes = $23,
-         manual_captured_at = CASE WHEN $13 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
-         best_candidate = $24::jsonb,
-         candidates = $25::jsonb,
-         scan_result = $26::jsonb,
-         error_message = $27,
+         manual_uploaded_screenshot_path = $13,
+         manual_uploaded_screenshot_url = $14,
+         analysis_source = $15,
+         manual_capture_required = $16,
+         manual_capture_reason = $17,
+         manual_capture_mode = $18,
+         manual_html_path = $19,
+         manual_html_url = $20,
+         manual_raw_html_path = $21,
+         manual_raw_html_url = $22,
+         manual_capture_url = $23,
+         manual_capture_title = $24,
+         manual_capture_notes = $25,
+         manual_captured_at = CASE WHEN $15 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
+         best_candidate = $26::jsonb,
+         candidates = $27::jsonb,
+         scan_result = $28::jsonb,
+         error_message = $29,
          completed_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
@@ -453,6 +912,8 @@ async function markItemCompleted(itemId, scanResult, databaseUrl) {
       best.sample_text || null,
       scanResult.screenshot_path || null,
       scanResult.screenshot_url || null,
+      scanResult.manual_uploaded_screenshot_path || null,
+      scanResult.manual_uploaded_screenshot_url || null,
       analysisSource,
       manualCaptureRequired,
       manualCaptureReason,
@@ -488,19 +949,21 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
          error_message = $2,
          screenshot_path = $3,
          screenshot_url = $4,
-         analysis_source = $5,
-         manual_capture_required = $6,
-         manual_capture_reason = $7,
-         manual_capture_mode = $8,
-         manual_html_path = $9,
-         manual_html_url = $10,
-         manual_raw_html_path = $11,
-         manual_raw_html_url = $12,
-         manual_capture_url = $13,
-         manual_capture_title = $14,
-         manual_capture_notes = $15,
-         manual_captured_at = CASE WHEN $5 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
-         scan_result = $16::jsonb,
+         manual_uploaded_screenshot_path = $5,
+         manual_uploaded_screenshot_url = $6,
+         analysis_source = $7,
+         manual_capture_required = $8,
+         manual_capture_reason = $9,
+         manual_capture_mode = $10,
+         manual_html_path = $11,
+         manual_html_url = $12,
+         manual_raw_html_path = $13,
+         manual_raw_html_url = $14,
+         manual_capture_url = $15,
+         manual_capture_title = $16,
+         manual_capture_notes = $17,
+         manual_captured_at = CASE WHEN $7 = 'manual_snapshot' THEN NOW() ELSE manual_captured_at END,
+         scan_result = $18::jsonb,
          completed_at = NOW(),
          updated_at = NOW()
      WHERE id = $1`,
@@ -509,6 +972,8 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
       String(errorMessage || ''),
       scanResult ? (scanResult.screenshot_path || null) : null,
       scanResult ? (scanResult.screenshot_url || null) : null,
+      scanResult ? (scanResult.manual_uploaded_screenshot_path || null) : null,
+      scanResult ? (scanResult.manual_uploaded_screenshot_url || null) : null,
       analysisSource,
       scanResult ? !!scanResult.manual_capture_required : true,
       scanResult ? (scanResult.manual_capture_reason || errorMessage) : errorMessage,
@@ -525,13 +990,13 @@ async function markItemFailed(itemId, errorOrResult, databaseUrl) {
   );
 }
 
-async function upsertCandidateReview(jobId, itemId, review, databaseUrl) {
-  const existingItem = await getJobItem(jobId, itemId, databaseUrl);
-  if (!existingItem) {
+async function upsertCandidateReview(jobId, itemId, review, databaseUrl, existingItem = null) {
+  const currentItem = existingItem || await getJobItem(jobId, itemId, databaseUrl);
+  if (!currentItem) {
     return null;
   }
 
-  const nextReviews = upsertCandidateReviewArray(existingItem.candidate_reviews || [], review);
+  const nextReviews = upsertCandidateReviewArray(currentItem.candidate_reviews || [], review);
   const db = getPool(databaseUrl);
   await db.query(
     `UPDATE job_items
@@ -593,19 +1058,57 @@ async function recomputeJob(jobId, databaseUrl) {
   );
 }
 
+
+async function listAllEvents(options, databaseUrl) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const db = getPool(databaseUrl);
+  const params = [];
+  const clauses = [];
+
+  if (opts.since) {
+    params.push(String(opts.since));
+    clauses.push(`created_at > \$${params.length}`);
+  }
+
+  params.push(Math.max(1, Math.min(500, Number(opts.limit) || 100)));
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT je.*, j.source_filename
+     FROM job_events je
+     LEFT JOIN jobs j ON j.id = je.job_id
+     ${where}
+     ORDER BY je.created_at DESC
+     LIMIT \$${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
 module.exports = {
   getPool,
   ensureSchema,
   createJob,
+  replaceJobRecords,
+  restartJob,
+  resumeJob,
+  deleteJob,
+  clearAllJobs,
   listJobs,
+  appendJobEvent,
+  listAllEvents,
+  listJobEvents,
+  listIncompleteJobs,
   getJob,
   getJobItem,
   getJobItems,
+  listItemsForModeling,
+  listJobItemsByStatuses,
   listManualReviewCandidates,
   setManualReviewTarget,
   getManualReviewTarget,
   claimPendingItems,
   releaseQueuedItems,
+  setItemStatus,
   markItemRunning,
   markItemCompleted,
   markItemFailed,

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UGC Scanner — Server Monitor</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #1a1d27;
+      --panel2: #1e2130;
+      --line: rgba(255,255,255,0.08);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "IBM Plex Mono","Cascadia Code",monospace; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+    header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; z-index: 10; }
+    header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; }
+    .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.warn { background: var(--yellow); }
+    .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .hdr-status { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--muted); }
+    .shell { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 57px); overflow: hidden; }
+    .sidebar { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; }
+    .main { overflow-y: auto; display: flex; flex-direction: column; }
+    .card { padding: 16px; border-bottom: 1px solid var(--line); }
+    .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+    .hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .hi { background: var(--panel2); border-radius: 6px; padding: 8px 10px; }
+    .hl { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .hv { font-size: 16px; font-weight: 700; }
+    .hv.ok { color: var(--green); }
+    .hv.warn { color: var(--yellow); }
+    .hv.error { color: var(--red); }
+    .pbar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+    .pfill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s; }
+    .pfill.warn { background: var(--yellow); }
+    .pfill.error { background: var(--red); }
+    .jcard { background: var(--panel2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+    .jid { font-size: 10px; color: var(--muted); word-break: break-all; }
+    .jrow { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; }
+    .sv { font-weight: 700; }
+    .sv.g { color: var(--green); }
+    .sv.y { color: var(--yellow); }
+    .sv.r { color: var(--red); }
+    .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
+    .btn:hover { background: var(--accent); border-color: var(--accent); }
+    .cbtn { width: 100%; text-align: left; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
+    .cbtn.danger:hover { border-color: var(--red); background: rgba(239,68,68,0.1); }
+    .log-bar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+    .ev-count { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .feed { flex: 1; }
+    .erow { display: flex; align-items: flex-start; gap: 10px; padding: 7px 16px; border-bottom: 1px solid rgba(255,255,255,0.025); font-size: 12px; }
+    .erow:hover { background: rgba(255,255,255,0.03); }
+    .erow.new-ev { animation: flash 1.2s ease; }
+    @keyframes flash { 0%,100% { background: transparent; } 40% { background: rgba(59,130,246,0.18); } }
+    .ets { color: var(--muted); white-space: nowrap; font-size: 11px; min-width: 108px; }
+    .edot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .edot.info { background: var(--accent); }
+    .edot.warn { background: var(--yellow); }
+    .edot.error { background: var(--red); }
+    .ebody { flex: 1; min-width: 0; }
+    .etype { font-size: 10px; color: var(--muted); }
+    .emsg { word-break: break-word; }
+    .emsg.info { color: var(--text); }
+    .emsg.warn { color: var(--yellow); }
+    .emsg.error { color: var(--red); }
+    .esrc { font-size: 10px; color: var(--accent); opacity: 0.7; }
+    .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+    .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 16px; font-size: 13px; z-index: 100; max-width: 320px; }
+    .toast.err { border-color: var(--red); }
+    .note { font-size: 11px; color: var(--muted); line-height: 1.6; }
+    .mbox { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 11px; line-height: 1.7; color: #93c5fd; }
+    .chip { display: inline-flex; padding: 2px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); color: var(--muted); }
+    .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
+    .chip:not(.on):hover { border-color: var(--accent); color: var(--accent); }
+    a.back { color: var(--accent); text-decoration: none; font-size: 12px; }
+    @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:16px">
+    <a class="back" href="/">Back to App</a>
+    <h1>Server Monitor</h1>
+  </div>
+  <div class="hdr-status">
+    <span><span id="sdot" class="status-dot"></span><span id="stxt">Connecting</span></span>
+    <span id="lts"></span>
+  </div>
+  <button class="btn" onclick="doRefresh()">Refresh</button>
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="card">
+      <div class="card-title">System Health</div>
+      <div class="hgrid">
+        <div class="hi"><div class="hl">Redis</div><div class="hv" id="h-redis">--</div></div>
+        <div class="hi"><div class="hl">Disk Used</div><div class="hv" id="h-disk">--</div><div class="pbar"><div class="pfill" id="h-bar" style="width:0%"></div></div></div>
+        <div class="hi"><div class="hl">Active Jobs</div><div class="hv ok" id="h-jobs">--</div></div>
+        <div class="hi"><div class="hl">Disk Free</div><div class="hv" id="h-free">--</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Active Jobs</div>
+      <div id="jlist"><div class="note">No active jobs.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Worker Controls</div>
+      <button class="cbtn danger" id="btn-restart" onclick="restartWorker()">&#x27F3; Restart Worker</button>
+      <p class="note" style="margin-top:8px">Sends a graceful shutdown signal. Docker restarts the worker automatically. Stalled scans are retried.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ML Model Training</div>
+      <p class="note">Uses Logistic Regression on human-labeled candidates.</p>
+      <div class="mbox">
+        <strong>Why does training show 0?</strong><br>
+        The model needs labeled candidates. Steps:<br>
+        1. Open a completed job in the main app<br>
+        2. Click a row &rarr; open the <strong>Labeler</strong> tab<br>
+        3. Mark candidates as True/False UGC<br>
+        4. Once you have 20+ labels, go to <strong>Scoring</strong> tab to train the model
+      </div>
+      <div class="hgrid" style="margin-top:8px">
+        <div class="hi"><div class="hl">Items w/ Candidates</div><div class="hv ok" id="m-total">--</div></div>
+        <div class="hi"><div class="hl">Labeled Items</div><div class="hv" id="m-labeled">--</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="log-bar">
+      <span style="font-size:12px;color:var(--muted);font-weight:600">Live Activity Log</span>
+      <span class="chip on" data-lv="all" onclick="setLv('all')">All</span>
+      <span class="chip" data-lv="error" onclick="setLv('error')">Errors</span>
+      <span class="chip" data-lv="warn" onclick="setLv('warn')">Warnings</span>
+      <span class="chip" data-lv="info" onclick="setLv('info')">Info</span>
+      <span class="ev-count" id="ecnt">0 events</span>
+      <button class="btn" onclick="clearFeed()">Clear</button>
+    </div>
+    <div class="feed" id="feed">
+      <div class="empty"><div class="spin"></div><br><br>Loading events&hellip;</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = window.location.origin;
+var evs = [], lv = 'all', lastTs = null, MAX = 500;
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtTs(iso) {
+  try { var d=new Date(iso); return d.toLocaleString(undefined,{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+  catch(_){ return iso||''; }
+}
+function fmtBytes(b) {
+  if (!b) return '--';
+  var gb=b/1073741824;
+  return gb>=1 ? gb.toFixed(1)+' GB' : Math.round(b/1048576)+' MB';
+}
+
+function setLv(l) {
+  lv = l;
+  document.querySelectorAll('.chip[data-lv]').forEach(function(el){ el.classList.toggle('on', el.dataset.lv===l); });
+  render();
+}
+function clearFeed() { evs=[]; render(); }
+
+function render() {
+  var feed=document.getElementById('feed');
+  var shown = lv==='all' ? evs : evs.filter(function(e){ return e.level===lv; });
+  document.getElementById('ecnt').textContent = shown.length+' events';
+  if (!shown.length) { feed.innerHTML='<div class="empty">No events to show.</div>'; return; }
+  feed.innerHTML = shown.map(function(ev){
+    var src = ev.source_filename || (ev.job_id && ev.job_id!=='system' ? ev.job_id.slice(0,8)+'...' : '');
+    var rn = ev.row_number ? ' (row '+ev.row_number+')' : '';
+    return '<div class="erow'+(ev._new?' new-ev':'')+'"><div class="ets">'+fmtTs(ev.created_at)+'</div>'
+      +'<div class="edot '+(ev.level||'info')+'"></div>'
+      +'<div class="ebody"><div class="etype">'+esc((ev.scope||'')+'/'+(ev.event_type||''))+'</div>'
+      +'<div class="emsg '+(ev.level||'info')+'">'+esc(ev.message||'')+'</div>'
+      +(src ? '<div class="esrc">'+esc(src)+esc(rn)+'</div>' : '')
+      +'</div></div>';
+  }).join('');
+}
+
+function setStatus(cls, txt) {
+  document.getElementById('sdot').className='status-dot '+cls;
+  document.getElementById('stxt').textContent=txt;
+}
+function showToast(msg, isErr) {
+  var t=document.createElement('div'); t.className='toast'+(isErr?' err':''); t.textContent=msg;
+  document.body.appendChild(t); setTimeout(function(){ t.remove(); },4000);
+}
+
+function loadHealth() {
+  fetch(API+'/api/health/detailed').then(function(r){ return r.json(); }).then(function(d){
+    var re=document.getElementById('h-redis');
+    re.textContent=d.redis?'OK':'DOWN'; re.className='hv '+(d.redis?'ok':'error');
+    var pct=d.diskUsedPct||0, cls=pct>90?'error':pct>80?'warn':'ok';
+    document.getElementById('h-disk').textContent=pct+'%';
+    document.getElementById('h-disk').className='hv '+cls;
+    var bar=document.getElementById('h-bar');
+    bar.style.width=pct+'%'; bar.className='pfill '+(pct>90?'error':pct>80?'warn':'');
+    document.getElementById('h-free').textContent=fmtBytes(d.diskFree);
+    document.getElementById('h-free').className='hv '+cls;
+    document.getElementById('h-jobs').textContent=d.activeJobCount||0;
+    var jl=document.getElementById('jlist');
+    if (!d.activeJobs||!d.activeJobs.length) { jl.innerHTML='<div class="note">No active jobs.</div>'; return; }
+    jl.innerHTML=d.activeJobs.map(function(j){
+      var pj=j.total_urls?Math.round(j.completed_count/j.total_urls*100):0;
+      return '<div class="jcard"><div class="jid">'+esc(j.id)+'</div>'
+        +'<div class="pbar" style="margin:6px 0"><div class="pfill" style="width:'+pj+'%"></div></div>'
+        +'<div class="jrow"><span><span class="sv g">'+j.completed_count+'</span>/'+j.total_urls+' done</span>'
+        +'<span><span class="sv g">'+j.detected_count+'</span> detected</span>'
+        +'<span><span class="sv y">'+j.failed_count+'</span> failed</span></div>'
+        +'<div class="jrow" style="margin-top:4px"><span><span class="sv">'+j.running_count+'</span> running</span>'
+        +'<span><span class="sv">'+j.pending_count+'</span> pending</span>'
+        +'<span style="color:var(--muted)">'+pj+'%</span></div></div>';
+    }).join('');
+  }).catch(function(){});
+}
+
+function loadModelStats() {
+  fetch(API+'/api/modeling/overview').then(function(r){ return r.json(); }).then(function(d){
+    var labeled=d&&d.labeled_count!=null?d.labeled_count:'?';
+    var total=d&&d.total_count!=null?d.total_count:'?';
+    document.getElementById('m-labeled').textContent=labeled;
+    document.getElementById('m-labeled').className='hv '+(Number(labeled)>=20?'ok':'warn');
+    document.getElementById('m-total').textContent=total;
+  }).catch(function(){});
+}
+
+function loadEvents(isRefresh) {
+  var since=(!isRefresh&&lastTs)?'&since='+encodeURIComponent(lastTs):'';
+  fetch(API+'/api/events?limit=200'+since).then(function(r){ return r.json(); }).then(function(d){
+    var list=Array.isArray(d&&d.events)?d.events:[];
+    if (list.length) {
+      if (!isRefresh&&lastTs) {
+        var marked=list.map(function(e,i){ return Object.assign({},e,{_new:i===0}); });
+        evs=marked.concat(evs).slice(0,MAX);
+      } else { evs=list; }
+      lastTs=list[0].created_at;
+      render();
+    }
+    setStatus('ok','Live');
+    document.getElementById('lts').textContent='Updated '+new Date().toLocaleTimeString();
+  }).catch(function(){ setStatus('error','Disconnected'); });
+}
+
+function doRefresh() { loadHealth(); loadEvents(true); loadModelStats(); }
+
+function restartWorker() {
+  if (!confirm('Send a restart signal to the worker? In-progress scans will be retried.')) return;
+  var btn=document.getElementById('btn-restart'); btn.disabled=true;
+  fetch(API+'/api/admin/restart-worker',{method:'POST',headers:{'Content-Type':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ showToast(d.message||'Restart signal sent'); setTimeout(function(){ btn.disabled=false; doRefresh(); },5000); })
+    .catch(function(){ showToast('Failed to send restart signal',true); btn.disabled=false; });
+}
+
+doRefresh();
+setInterval(function(){ loadHealth(); loadEvents(false); }, 5000);
+</script>
+</body>
+</html>

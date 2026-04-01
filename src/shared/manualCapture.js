@@ -104,8 +104,8 @@ async function storeManualCaptureArtifacts(capture, options = {}) {
     manual_raw_html_path: manualRawHtmlPath,
     manual_raw_html_url: buildArtifactUrl(manualRawHtmlRelativePath, options),
     manual_capture_mode: snapshotMode,
-    screenshot_path: manualScreenshotPath,
-    screenshot_url: buildArtifactUrl(manualScreenshotRelativePath, options),
+    manual_uploaded_screenshot_path: manualScreenshotPath,
+    manual_uploaded_screenshot_url: buildArtifactUrl(manualScreenshotRelativePath, options),
   };
 }
 
@@ -117,16 +117,16 @@ async function analyzeManualCapture(capture, options = {}) {
   }
 
   const artifacts = await storeManualCaptureArtifacts(capture, options);
-  const analysisHtml = rawHtml.trim() || html;
   const scanResult = await analyzeHtmlSnapshot({
-    html: analysisHtml,
+    html: html.trim() || rawHtml,
+    raw_html: rawHtml,
     normalized_url: capture.captureUrl || '',
     final_url: capture.captureUrl || '',
     capture_url: capture.captureUrl || '',
     title: capture.title || '',
     notes: capture.notes || '',
-    screenshot_path: artifacts.screenshot_path,
-    screenshot_url: artifacts.screenshot_url,
+    manual_uploaded_screenshot_path: artifacts.manual_uploaded_screenshot_path,
+    manual_uploaded_screenshot_url: artifacts.manual_uploaded_screenshot_url,
     manual_html_path: artifacts.manual_html_path,
     manual_html_url: artifacts.manual_html_url,
     manual_raw_html_path: artifacts.manual_raw_html_path,
@@ -146,6 +146,8 @@ async function analyzeManualCapture(capture, options = {}) {
   scanResult.manual_html_url = artifacts.manual_html_url;
   scanResult.manual_raw_html_path = artifacts.manual_raw_html_path;
   scanResult.manual_raw_html_url = artifacts.manual_raw_html_url;
+  scanResult.manual_uploaded_screenshot_path = artifacts.manual_uploaded_screenshot_path;
+  scanResult.manual_uploaded_screenshot_url = artifacts.manual_uploaded_screenshot_url;
   scanResult.manual_capture_mode = artifacts.manual_capture_mode;
   scanResult.manual_capture_url = capture.captureUrl || '';
   scanResult.manual_capture_title = capture.title || '';

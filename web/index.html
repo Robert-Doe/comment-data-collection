@@ -8,6 +8,12 @@
   </head>
   <body>
     <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link active" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+      </nav>
+
       <section class="hero">
         <p class="eyebrow">Render Deployment</p>
         <h1>UGC Scanner</h1>
@@ -56,6 +62,13 @@
           <button id="refresh-jobs" class="secondary" type="button">Refresh</button>
         </div>
         <div id="job-summary" class="summary empty">No job selected.</div>
+        <div class="job-events-shell">
+          <div class="panel-header compact-header">
+            <h3>Job Events</h3>
+            <span class="subtle">Recent API, worker, queue, and notification events for the selected job.</span>
+          </div>
+          <div id="job-events" class="event-list empty">Select a job to view recent events.</div>
+        </div>
         <div class="download-actions">
           <a id="download-report-xlsx" class="link-button disabled" href="#" download>Download Excel Report</a>
           <a id="download-summary-csv" class="link-button disabled" href="#" download>Download Summary CSV</a>
@@ -69,7 +82,9 @@
             <button class="tab-button active" type="button" role="tab" aria-selected="true" data-workspace-tab="queue">Rows</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manual">Manual</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates">Candidates</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="labeler">Labeler</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring">Scoring</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager">Manager</button>
           </div>
           <div id="workspace-selection" class="workspace-selection empty">Select a row from the table to open the manual or candidate review workspace.</div>
           <section id="workspace-panel-queue" class="workspace-panel active" data-workspace-panel="queue">
@@ -80,7 +95,7 @@
               <h3>Manual Review</h3>
               <button id="manual-copy-config" class="secondary compact" type="button" disabled>Copy Fallback Config</button>
             </div>
-            <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, and let the extension auto-match the current page and upload the snapshot. The fallback config button is only there if auto-match still fails.</p>
+            <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, make sure the comment panel is actually visible in the browser viewport, and let the extension auto-match the current page and upload the snapshot. The extension sends both the visible-tab screenshot and the page DOM/HTML state. The server then re-renders that stored snapshot, saves its own rendered screenshot, and regenerates candidate crops from it. If this job was already completed, click <strong>Refresh</strong> in this web app after the extension upload so the latest manual artifacts are pulled in. The fallback config button is only there if auto-match still fails.</p>
             <div id="manual-context" class="summary empty">Select a row from Job Status to prepare a manual capture.</div>
             <form id="manual-upload-form" class="manual-form">
               <label class="field">
@@ -126,9 +141,28 @@
                 <button id="download-candidate-csv" class="secondary compact" type="button" disabled>Download Candidate CSV</button>
               </div>
             </div>
-            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
+            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. For manual uploads you can now compare the browser-uploaded screenshot, the server-rendered snapshot screenshot, and the candidate crops together. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
             <div id="candidate-review" class="candidate-review empty">Select a row from Job Status to inspect and label candidate regions.</div>
             <p id="candidate-message" class="message"></p>
+          </section>
+          <section id="workspace-panel-labeler" class="workspace-panel" data-workspace-panel="labeler">
+            <div class="panel-header compact-header">
+              <h3>Job Labeler</h3>
+              <div class="panel-actions">
+                <button id="job-labeler-reload" class="secondary compact" type="button">Reload Queue</button>
+                <button id="job-labeler-prev" class="secondary compact" type="button" disabled>Previous</button>
+                <button id="job-labeler-next" class="secondary compact" type="button" disabled>Next</button>
+              </div>
+            </div>
+            <p class="lede manual-lede">Review candidates from the entire selected job on one screen. Use the large screenshot, label buttons, and next controls instead of opening each row one by one. Keyboard shortcuts: left/right arrows for navigation, `1` for comment region, `2` for not comment, `3` for uncertain.</p>
+            <div class="job-labeler-controls">
+              <label class="job-labeler-toggle">
+                <input id="job-labeler-auto-advance" type="checkbox" checked>
+                <span>After saving, jump to the next unlabeled candidate when possible.</span>
+              </label>
+            </div>
+            <div id="job-labeler-review" class="candidate-review empty">Select a job, then open Labeler to build a review queue from every row in that job.</div>
+            <p id="job-labeler-message" class="message"></p>
           </section>
           <section id="workspace-panel-scoring" class="workspace-panel" data-workspace-panel="scoring">
             <div class="panel-header compact-header">
@@ -136,6 +170,49 @@
             </div>
             <p class="lede manual-lede">Inspect why the selected row scored the way it did. This view surfaces the best candidate, its matched signals, penalty signals, and a feature truth table so a reviewer can understand the decision without reading raw JSON.</p>
             <div id="scoring-breakdown" class="candidate-review empty">Select a row from Job Status to inspect the scoring breakdown.</div>
+          </section>
+          <section id="workspace-panel-manager" class="workspace-panel" data-workspace-panel="manager">
+            <div class="panel-header compact-header">
+              <h3>Job Manager</h3>
+              <div class="panel-actions">
+                <button id="manager-resume-job" class="secondary compact" type="button" disabled>Resume</button>
+                <button id="manager-restart-job" class="secondary compact" type="button" disabled>Restart</button>
+                <button id="manager-delete-job" class="secondary compact danger-button" type="button" disabled>Delete</button>
+              </div>
+            </div>
+            <p class="lede manual-lede">Manage the selected job directly from the UI. Resume unfinished work, restart the whole run, replace the current CSV with a new upload, or clear all saved jobs without going back to the terminal.</p>
+            <div id="manager-selection" class="summary empty">Select a job from Job Status or Recent Jobs to manage it here.</div>
+            <form id="manager-replace-form" class="manual-form manager-form">
+              <label class="field">
+                <span>Selected Job</span>
+                <input id="manager-job-id" type="text" readonly>
+              </label>
+              <label class="field">
+                <span>URL Column</span>
+                <input id="manager-source-column" name="urlColumn" type="text" placeholder="url">
+              </label>
+              <label class="field">
+                <span>Scan Delay (ms)</span>
+                <input id="manager-scan-delay-ms" name="scanDelayMs" type="number" min="0" step="500">
+              </label>
+              <label class="field">
+                <span>Screenshot Delay (ms)</span>
+                <input id="manager-screenshot-delay-ms" name="screenshotDelayMs" type="number" min="0" step="500">
+              </label>
+              <label class="field manual-wide">
+                <span>Replace CSV</span>
+                <input id="manager-replace-file" name="file" type="file" accept=".csv,text/csv">
+              </label>
+              <button class="primary" type="submit" disabled>Replace Job CSV</button>
+            </form>
+            <p id="manager-message" class="message"></p>
+            <div class="manager-danger-zone">
+              <div class="manager-danger-copy">
+                <strong>Database Controls</strong>
+                <span>Use this when you want to wipe the saved jobs and start fresh. This clears the current jobs list for the selected runtime.</span>
+              </div>
+              <button id="manager-clear-jobs" class="secondary compact danger-button" type="button">Clear All Jobs</button>
+            </div>
           </section>
         </div>
       </section>
@@ -147,6 +224,19 @@
         <div id="recent-jobs" class="table-shell empty">No jobs loaded.</div>
       </section>
     </main>
+
+    <dialog id="confirm-dialog" class="confirm-dialog">
+      <form method="dialog" class="confirm-card">
+        <p class="eyebrow confirm-eyebrow">Confirm Action</p>
+        <h2 id="confirm-title">Confirm action</h2>
+        <p id="confirm-description" class="lede confirm-copy"></p>
+        <menu class="confirm-actions">
+          <button class="secondary" type="submit" value="cancel">Cancel</button>
+          <button id="confirm-accept" class="primary danger-button" type="submit" value="accept">Continue</button>
+        </menu>
+      </form>
+    </dialog>
+    <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
     <script src="./config.js"></script>
     <script src="./app.js"></script>

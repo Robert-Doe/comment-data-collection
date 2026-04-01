@@ -6,16 +6,57 @@ const crypto = require('crypto');
 const { chromium } = require('playwright');
 
 let browserPromise;
+let browserInstance = null;
 
 function getFeaturePath() {
   return path.resolve(__dirname, '..', 'commentFeatures.js');
 }
 
+function isClosedBrowserError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  return /Target page, context or browser has been closed|browser\.newContext:|Browser has been closed|Connection closed|disconnected/i.test(message);
+}
+
+async function launchBrowser() {
+  const browser = await chromium.launch({ headless: true });
+  browserInstance = browser;
+  browser.once('disconnected', () => {
+    if (browserInstance === browser) {
+      browserInstance = null;
+      browserPromise = null;
+    }
+  });
+  return browser;
+}
+
 async function getBrowser() {
   if (!browserPromise) {
-    browserPromise = chromium.launch({ headless: true });
+    browserPromise = launchBrowser().catch((error) => {
+      browserPromise = null;
+      browserInstance = null;
+      throw error;
+    });
   }
   return browserPromise;
+}
+
+async function resetBrowser() {
+  const pending = browserPromise;
+  const existing = browserInstance;
+  browserPromise = null;
+  browserInstance = null;
+
+  if (existing) {
+    await existing.close().catch(() => {});
+    return;
+  }
+
+  if (pending) {
+    const browser = await pending.catch(() => null);
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
 }
 
 async function safeWait(page, state, timeoutMs) {
@@ -150,16 +191,73 @@ async function expandPotentialUgc(page) {
 
 async function autoScroll(page, options = {}) {
   const steps = Math.max(1, Number(options.steps || 5));
-  const stepDelayMs = Math.max(0, Number(options.stepDelayMs || 500));
-  await page.evaluate(async ({ steps, stepDelayMs }) => {
+  const stepDelayMs = Math.max(0, Number(options.stepDelayMs ?? 250));
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(stepDelayMs, 300)));
+  const stabilizationPasses = Math.max(1, Number(options.stabilizationPasses || 2));
+  const returnToTop = options.returnToTop === true;
+  return page.evaluate(async ({ steps, stepDelayMs, bottomPauseMs, stabilizationPasses, returnToTop }) => {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const maxHeight = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
-    for (let i = 1; i <= steps; i += 1) {
-      window.scrollTo(0, Math.round((maxHeight * i) / steps));
-      await sleep(stepDelayMs);
+    const getScrollHeight = () => Math.max(
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? document.documentElement.scrollHeight : 0,
+    );
+    const startingHeight = getScrollHeight();
+    let observedHeight = startingHeight;
+    let heightChanged = false;
+    let passesCompleted = 0;
+    let previousSettledHeight = startingHeight;
+
+    for (let pass = 0; pass < stabilizationPasses; pass += 1) {
+      passesCompleted += 1;
+      let passHeight = getScrollHeight();
+      observedHeight = Math.max(observedHeight, passHeight);
+
+      for (let i = 1; i <= steps; i += 1) {
+        window.scrollTo(0, Math.round((passHeight * i) / steps));
+        await sleep(stepDelayMs);
+        passHeight = Math.max(passHeight, getScrollHeight());
+        observedHeight = Math.max(observedHeight, passHeight);
+      }
+
+      window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
+      await sleep(bottomPauseMs);
+      const settledHeight = getScrollHeight();
+      if (settledHeight > previousSettledHeight + 4) {
+        heightChanged = true;
+      }
+      observedHeight = Math.max(observedHeight, settledHeight);
+      if (Math.abs(settledHeight - previousSettledHeight) <= 4) {
+        previousSettledHeight = settledHeight;
+        break;
+      }
+      previousSettledHeight = settledHeight;
     }
-    window.scrollTo(0, 0);
-  }, { steps, stepDelayMs }).catch(() => {});
+
+    window.scrollTo(0, Math.max(0, getScrollHeight() - window.innerHeight));
+    await sleep(bottomPauseMs);
+    if (returnToTop) {
+      window.scrollTo(0, 0);
+    }
+    return {
+      startingHeight,
+      finalHeight: getScrollHeight(),
+      observedHeight,
+      heightChanged,
+      passesCompleted,
+    };
+  }, {
+    steps,
+    stepDelayMs,
+    bottomPauseMs,
+    stabilizationPasses,
+    returnToTop,
+  }).catch(() => ({
+    startingHeight: 0,
+    finalHeight: 0,
+    observedHeight: 0,
+    heightChanged: false,
+    passesCompleted: 0,
+  }));
 }
 
 async function waitForDocumentComplete(page, timeoutMs) {
@@ -169,9 +267,11 @@ async function waitForDocumentComplete(page, timeoutMs) {
 async function settlePageForDetection(page, options = {}) {
   const loadWaitMs = Math.max(1000, Number(options.loadWaitMs || 15000));
   const networkIdleWaitMs = Math.max(1000, Number(options.networkIdleWaitMs || 8000));
-  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 1250));
+  const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 350));
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 0));
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
+  const scrollBackToTop = options.scrollBackToTop === true;
+  const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(actionSettleMs, 350)));
 
   await waitForDocumentComplete(page, loadWaitMs);
   await safeWait(page, 'load', loadWaitMs);
@@ -186,15 +286,25 @@ async function settlePageForDetection(page, options = {}) {
     if (actionSettleMs > 0) {
       await page.waitForTimeout(actionSettleMs);
     }
-    await autoScroll(page, {
+    const scrollSummary = await autoScroll(page, {
       steps: 6,
-      stepDelayMs: 600,
+      stepDelayMs: 220,
+      bottomPauseMs,
+      stabilizationPasses: 2,
+      returnToTop: scrollBackToTop,
     });
     await safeWait(page, 'load', Math.min(loadWaitMs, 8000));
     await safeWait(page, 'networkidle', networkIdleWaitMs);
     await waitForDocumentComplete(page, Math.min(loadWaitMs, 8000));
     if (actionSettleMs > 0) {
       await page.waitForTimeout(actionSettleMs);
+    }
+    await expandPotentialUgc(page);
+    if (actionSettleMs > 0) {
+      await page.waitForTimeout(actionSettleMs);
+    }
+    if (!scrollSummary.heightChanged) {
+      break;
     }
   }
 
@@ -334,31 +444,70 @@ async function resolveCandidateElementHandle(frame, candidate) {
   return null;
 }
 
-async function captureCandidateScreenshot(page, frame, candidate, options = {}) {
-  const empty = {
+async function extractCandidateMarkup(handle, options = {}) {
+  const maxHtmlChars = Math.max(500, Number(options.maxCandidateHtmlChars || 8000));
+  return handle.evaluate((node, input) => {
+    const outerHtml = String(node && node.outerHTML ? node.outerHTML : '');
+    const text = String((node && (node.innerText || node.textContent)) || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      candidate_outer_html_excerpt: outerHtml,
+      candidate_outer_html_length: outerHtml.length,
+      candidate_outer_html_truncated: false,
+      candidate_text_excerpt: text.slice(0, 1200),
+      candidate_markup_error: '',
+      candidate_resolved_tag_name: node && node.tagName ? String(node.tagName).toLowerCase() : '',
+    };
+  }, { maxHtmlChars });
+}
+
+async function captureCandidateArtifacts(page, frame, candidate, options = {}) {
+  const emptyScreenshot = {
     candidate_screenshot_path: '',
     candidate_screenshot_url: '',
     candidate_screenshot_error: '',
   };
 
-  if (!options.captureScreenshots || !options.artifactRoot || !page || !frame || !candidate) {
-    return empty;
+  if (!page || !frame || !candidate) {
+    return {
+      ...emptyScreenshot,
+      candidate_markup_error: 'Candidate frame or page was unavailable.',
+    };
   }
 
+  let handle = null;
+  let markup = {};
   try {
-    const handle = await resolveCandidateElementHandle(frame, candidate);
+    handle = await resolveCandidateElementHandle(frame, candidate);
     if (!handle) {
       return {
-        ...empty,
+        ...emptyScreenshot,
         candidate_screenshot_error: 'Candidate element could not be resolved from xpath/css path',
+        candidate_markup_error: 'Candidate element could not be resolved from xpath/css path',
+      };
+    }
+
+    try {
+      markup = await extractCandidateMarkup(handle, options);
+    } catch (error) {
+      markup = {
+        candidate_markup_error: error && error.message ? error.message : String(error),
+      };
+    }
+
+    if (!options.captureScreenshots || !options.artifactRoot) {
+      return {
+        ...emptyScreenshot,
+        ...markup,
       };
     }
 
     const box = await handle.boundingBox();
-    await handle.dispose().catch(() => {});
     if (!box || box.width <= 1 || box.height <= 1) {
       return {
-        ...empty,
+        ...emptyScreenshot,
+        ...markup,
         candidate_screenshot_error: 'Candidate element has no visible bounding box',
       };
     }
@@ -376,27 +525,28 @@ async function captureCandidateScreenshot(page, frame, candidate, options = {}) 
     const relativePath = path.join(...pathParts);
     const absolutePath = path.join(options.artifactRoot, relativePath);
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-    await page.screenshot({
+    await handle.screenshot({
       path: absolutePath,
-      clip: {
-        x: Math.max(0, box.x),
-        y: Math.max(0, box.y),
-        width: Math.max(1, box.width),
-        height: Math.max(1, box.height),
-      },
       animations: 'disabled',
     });
 
     return {
+      ...emptyScreenshot,
+      ...markup,
       candidate_screenshot_path: absolutePath,
       candidate_screenshot_url: buildArtifactUrl(relativePath, options),
       candidate_screenshot_error: '',
     };
   } catch (error) {
     return {
-      ...empty,
+      ...emptyScreenshot,
+      ...markup,
       candidate_screenshot_error: error && error.message ? error.message : String(error),
     };
+  } finally {
+    if (handle) {
+      await handle.dispose().catch(() => {});
+    }
   }
 }
 
@@ -412,14 +562,21 @@ async function enrichCandidatesWithArtifacts(page, candidates, frameLookup, opti
     };
     const frame = frameLookup.get(candidate.frame_key || '');
 
-    if (index < reviewArtifactLimit && frame) {
-      Object.assign(candidate, await captureCandidateScreenshot(page, frame, candidate, options));
+    if (frame) {
+      const artifactOptions = index < reviewArtifactLimit
+        ? options
+        : { ...options, captureScreenshots: false };
+      Object.assign(candidate, await captureCandidateArtifacts(page, frame, candidate, artifactOptions));
+      if (index >= reviewArtifactLimit) {
+        candidate.candidate_screenshot_error = 'Candidate screenshot was skipped because only the top review candidates get screenshot artifacts.';
+      }
     } else {
       candidate.candidate_screenshot_path = '';
       candidate.candidate_screenshot_url = '';
       candidate.candidate_screenshot_error = index >= reviewArtifactLimit
         ? 'Candidate screenshot was skipped because only the top review candidates get screenshot artifacts.'
         : 'Candidate screenshot could not be captured because its frame was unavailable.';
+      candidate.candidate_markup_error = 'Candidate markup could not be captured because its frame was unavailable.';
     }
 
     enriched.push(candidate);
@@ -736,22 +893,36 @@ function deriveManualCaptureState(result, source = 'automated') {
 }
 
 async function createContext() {
-  const browser = await getBrowser();
-  const context = await browser.newContext({
-    ignoreHTTPSErrors: true,
-  });
+  let lastError = null;
 
-  await context.addInitScript({ path: getFeaturePath() });
-  await context.route('**/*', (route) => {
-    const type = route.request().resourceType();
-    if (type === 'image' || type === 'media' || type === 'font') {
-      route.abort().catch(() => {});
-      return;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const browser = await getBrowser();
+      const context = await browser.newContext({
+        ignoreHTTPSErrors: true,
+      });
+
+      await context.addInitScript({ path: getFeaturePath() });
+      await context.route('**/*', (route) => {
+        const type = route.request().resourceType();
+        if (type === 'image' || type === 'media' || type === 'font') {
+          route.abort().catch(() => {});
+          return;
+        }
+        route.continue().catch(() => {});
+      });
+
+      return context;
+    } catch (error) {
+      lastError = error;
+      if (!isClosedBrowserError(error) || attempt >= 2) {
+        throw error;
+      }
+      await resetBrowser();
     }
-    route.continue().catch(() => {});
-  });
+  }
 
-  return context;
+  throw lastError || new Error('Failed to create a browser context');
 }
 
 async function scanUrl(normalizedUrl, options = {}) {
@@ -1497,6 +1668,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
 
 async function analyzeHtmlSnapshot(snapshot, options = {}) {
   const html = String(snapshot && snapshot.html ? snapshot.html : '');
+  const rawHtml = String(snapshot && snapshot.raw_html ? snapshot.raw_html : '');
   if (!html.trim()) {
     throw new Error('HTML snapshot is required');
   }
@@ -1523,9 +1695,11 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     access_reason: '',
     page_text_sample: '',
     frame_count: 0,
-    screenshot_path: snapshot.screenshot_path || '',
-    screenshot_url: snapshot.screenshot_url || '',
+    screenshot_path: '',
+    screenshot_url: '',
     screenshot_error: '',
+    manual_uploaded_screenshot_path: snapshot.manual_uploaded_screenshot_path || '',
+    manual_uploaded_screenshot_url: snapshot.manual_uploaded_screenshot_url || '',
     analysis_source: 'manual_snapshot',
     manual_capture_required: false,
     manual_capture_reason: '',
@@ -1542,12 +1716,19 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
       waitUntil: 'domcontentloaded',
       timeout: timeoutMs,
     });
+    await autoScroll(page, {
+      steps: 4,
+      stepDelayMs: 350,
+      bottomPauseMs: 600,
+      stabilizationPasses: 1,
+      returnToTop: false,
+    });
     await safeWait(page, 'networkidle', 2000);
     if (postLoadDelayMs > 0) {
       await page.waitForTimeout(postLoadDelayMs);
     }
 
-    if (!result.screenshot_path && !result.screenshot_url && options.captureScreenshots) {
+    if (options.captureScreenshots) {
       try {
         const screenshot = await capturePageScreenshot(page, normalizedUrl, {
           ...options,
@@ -1571,8 +1752,8 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     result.page_text_sample = access.pageTextSample;
     result.frame_count = access.frameCount;
 
-    const rawHtml = html || await page.content().catch(() => '');
-    const candidates = await collectCandidatesFromPage(page, rawHtml, snapshot.response_headers || {}, options);
+    const candidateSourceHtml = rawHtml.trim() || html || await page.content().catch(() => '');
+    const candidates = await collectCandidatesFromPage(page, candidateSourceHtml, snapshot.response_headers || {}, options);
     result.candidates = candidates;
     result.best_candidate = candidates[0] || null;
     result.ugc_detected = !!(result.best_candidate && result.best_candidate.detected);
@@ -1586,16 +1767,55 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
   return result;
 }
 
+async function hydrateCandidateMarkupFromSnapshot(snapshot, candidate, options = {}) {
+  const html = String(snapshot && (snapshot.raw_html || snapshot.html) ? (snapshot.raw_html || snapshot.html) : '');
+  if (!html.trim()) {
+    throw new Error('HTML snapshot is required');
+  }
+  if (candidate && candidate.frame_is_main === false) {
+    throw new Error('Stored HTML snapshots do not preserve iframe documents for this candidate');
+  }
+
+  const context = await createContext();
+  const page = await context.newPage();
+  const timeoutMs = Number(options.timeoutMs ?? 20000);
+  page.setDefaultNavigationTimeout(timeoutMs);
+  page.setDefaultTimeout(timeoutMs);
+
+  const normalizedUrl = snapshot.normalized_url || snapshot.final_url || snapshot.capture_url || 'about:blank';
+
+  try {
+    const htmlWithBase = injectBaseHref(html, normalizedUrl);
+    await page.setContent(htmlWithBase, {
+      waitUntil: 'domcontentloaded',
+      timeout: timeoutMs,
+    });
+    await safeWait(page, 'load', 2000);
+
+    const handle = await resolveCandidateElementHandle(page.mainFrame(), candidate);
+    if (!handle) {
+      throw new Error('Candidate element could not be resolved from the stored snapshot');
+    }
+
+    try {
+      return await extractCandidateMarkup(handle, options);
+    } finally {
+      await handle.dispose().catch(() => {});
+    }
+  } finally {
+    await page.close().catch(() => {});
+    await context.close().catch(() => {});
+  }
+}
+
 async function closeBrowser() {
-  if (!browserPromise) return;
-  const browser = await browserPromise;
-  browserPromise = null;
-  await browser.close().catch(() => {});
+  await resetBrowser();
 }
 
 module.exports = {
   scanUrl,
   analyzeHtmlSnapshot,
+  hydrateCandidateMarkupFromSnapshot,
   buildHtmlSnapshotDot,
   deriveManualCaptureState,
   closeBrowser,

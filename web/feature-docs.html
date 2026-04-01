@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UGC Scanner Feature Docs</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link active" href="./feature-docs.html">Feature Docs</a>
+      </nav>
+
+      <section class="hero">
+        <p class="eyebrow">Consulting Page</p>
+        <h1>Feature Docs</h1>
+        <p class="lede">Use this page as a plain-language reference for the modeling vocabulary, the label meanings, the two model variants, and every curated feature that the first training system uses.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Core Terms</h2>
+        </div>
+        <div class="docs-card-grid">
+          <article class="docs-card">
+            <h3>Comment List</h3>
+            <p>The list-level container that holds repeated comment blocks, review blocks, reply blocks, or answer blocks. This is the first model target.</p>
+          </article>
+          <article class="docs-card">
+            <h3>Comment Block</h3>
+            <p>One repeated unit inside the list, usually containing author, timestamp, controls, and the user-authored text.</p>
+          </article>
+          <article class="docs-card">
+            <h3>Comment Block Element</h3>
+            <p>The text-bearing node or wrapper that holds the user’s actual message, opinion, review text, or reply text. It does not include usernames, timestamps, avatars, or reply buttons.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Label Meanings</h2>
+        </div>
+        <div class="docs-card-grid">
+          <article class="docs-card">
+            <h3><code>comment_region</code></h3>
+            <p>The candidate is the real list-level comment region for the page.</p>
+          </article>
+          <article class="docs-card">
+            <h3><code>not_comment_region</code></h3>
+            <p>The candidate is not the right list-level comment region, even if it looks structured.</p>
+          </article>
+          <article class="docs-card">
+            <h3><code>uncertain</code></h3>
+            <p>The candidate is ambiguous. The first model does not train on it; it stays available for later review.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Model Variants</h2>
+        </div>
+        <div id="variant-docs" class="docs-card-grid">Loading model variants...</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Feature Families</h2>
+        </div>
+        <div id="feature-families" class="docs-card-grid">Loading feature families...</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Feature Glossary</h2>
+        </div>
+        <div class="config-grid">
+          <label class="field">
+            <span>Filter Features</span>
+            <input id="feature-filter" type="text" placeholder="Search by feature name, key, family, or meaning">
+          </label>
+          <label class="field">
+            <span>Keyword View</span>
+            <select id="feature-filter-mode">
+              <option value="all">Show all features</option>
+              <option value="keywords">Show keyword features only</option>
+              <option value="non-keywords">Hide keyword features</option>
+            </select>
+          </label>
+        </div>
+        <div id="feature-glossary" class="feature-doc-sections">Loading feature glossary...</div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./feature-docs.js"></script>
+  </body>
+</html>

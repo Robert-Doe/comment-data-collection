@@ -12,8 +12,8 @@ function clampNumber(value, fallback, min, max) {
 }
 
 function normalizeJobScanSettings(input = {}, defaults = {}) {
-  const defaultScanDelayMs = clampNumber(defaults.scanDelayMs, 6000, 0, 120000);
-  const defaultScreenshotDelayMs = clampNumber(defaults.screenshotDelayMs, 1500, 0, 60000);
+  const defaultScanDelayMs = clampNumber(defaults.scanDelayMs, 750, 0, 120000);
+  const defaultScreenshotDelayMs = clampNumber(defaults.screenshotDelayMs, 250, 0, 60000);
   return {
     scanDelayMs: clampNumber(
       input.scanDelayMs !== undefined ? input.scanDelayMs : input.postLoadDelayMs,
