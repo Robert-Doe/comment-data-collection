@@ -503,8 +503,8 @@
     //  PAGE TAB SWITCHER
     // ══════════════════════════════════════════════════════
     function switchPageTab(id) {
-      document.getElementById('tab-lab').style.display = id === 'lab' ? '' : 'none';
-      document.getElementById('tab-demo').style.display = id === 'demo' ? '' : 'none';
+      document.getElementById('tab-lab').style.display = id === 'lab' ? 'block' : 'none';
+      document.getElementById('tab-demo').style.display = id === 'demo' ? 'block' : 'none';
       document.getElementById('ptab-lab').classList.toggle('active', id === 'lab');
       document.getElementById('ptab-demo').classList.toggle('active', id === 'demo');
     }
