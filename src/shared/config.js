@@ -97,7 +97,7 @@ function getRuntimeProfile() {
 function getConfig() {
   const runtimeProfile = getRuntimeProfile();
   const frontendOrigins = expandFrontendOrigins(process.env.FRONTEND_ORIGIN || '*');
-  const requestedWorkerConcurrency = Math.max(1, integerFromEnv('WORKER_CONCURRENCY', 2));
+  const requestedWorkerConcurrency = Math.max(1, integerFromEnv('WORKER_CONCURRENCY', 5));
   const workerConcurrency = clamp(
     requestedWorkerConcurrency,
     1,

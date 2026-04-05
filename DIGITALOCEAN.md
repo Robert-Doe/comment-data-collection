@@ -60,7 +60,8 @@ The ready-to-use command-line deployment files on this branch are:
   - the Docker volume handles persistence for the container path
 - `worker concurrency`
   - your choice
-  - start with `2` unless your droplet is very small
+  - start with `5` on a 4 CPU droplet
+  - use `2` only on a very small droplet
 
 ### Core environment variables
 
@@ -122,7 +123,7 @@ The extension should point to the deployed API URL:
 
 ### Practical starting values
 
-- `WORKER_CONCURRENCY=2`
+- `WORKER_CONCURRENCY=5`
 - `SCAN_TIMEOUT_MS=90000`
 - `POST_LOAD_DELAY_MS=750`
 - `PRE_SCREENSHOT_DELAY_MS=250`
@@ -130,8 +131,8 @@ The extension should point to the deployed API URL:
 - `LOAD_SETTLE_PASSES=1`
 - `NEGATIVE_RETRY_SETTLE_PASSES=1`
 - `ACTION_SETTLE_MS=350`
-- `INITIAL_QUEUE_FILL=4`
-- `QUEUE_REFILL_COUNT=2`
+- `INITIAL_QUEUE_FILL=10`
+- `QUEUE_REFILL_COUNT=5`
 - `QUEUE_RECOVERY_INTERVAL_MS=30000`
 
 The worker now derives sane lock timings from those scan values. In most cases you should leave the advanced lock variables unset unless you are deliberately tuning BullMQ behavior.
@@ -152,6 +153,12 @@ For a `2 vCPU / 2 GB RAM` droplet, start with:
 - `WORKER_CONCURRENCY=2`
 - `INITIAL_QUEUE_FILL=4`
 - `QUEUE_REFILL_COUNT=2`
+
+For a `4 vCPU` droplet, start with:
+
+- `WORKER_CONCURRENCY=5`
+- `INITIAL_QUEUE_FILL=10`
+- `QUEUE_REFILL_COUNT=5`
 
 Only raise those after watching `docker stats` during a real batch.
 
