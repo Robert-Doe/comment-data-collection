@@ -17,7 +17,7 @@ function parseArgs(argv) {
     concurrency: 2,
     timeoutMs: 45000,
     postLoadDelayMs: 3000,
-    maxCandidates: 25,
+    maxCandidates: 50,
     maxResults: 5,
   };
 

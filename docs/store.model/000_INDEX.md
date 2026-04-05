@@ -26,6 +26,7 @@ Read in this order:
 8. [008_logistic_regression_for_this_repo.md](./008_logistic_regression_for_this_repo.md)
 9. [009_model_artifacts_and_runtime_json.md](./009_model_artifacts_and_runtime_json.md)
 10. [010_how_the_detector_extension_will_use_the_model.md](./010_how_the_detector_extension_will_use_the_model.md)
+11. [011_candidate_decision_flow_and_modification_map.md](./011_candidate_decision_flow_and_modification_map.md)
 
 ## Core words
 

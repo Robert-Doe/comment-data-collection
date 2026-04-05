@@ -144,7 +144,7 @@ function getConfig() {
     loadSettlePasses: numberFromEnv('LOAD_SETTLE_PASSES', 1),
     negativeRetrySettlePasses: numberFromEnv('NEGATIVE_RETRY_SETTLE_PASSES', 1),
     actionSettleMs: numberFromEnv('ACTION_SETTLE_MS', 350),
-    maxCandidates: numberFromEnv('MAX_CANDIDATES', 25),
+    maxCandidates: numberFromEnv('MAX_CANDIDATES', 50),
     maxResults: numberFromEnv('MAX_RESULTS', 5),
     workerConcurrency,
     requestedWorkerConcurrency,

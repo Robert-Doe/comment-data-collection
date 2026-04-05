@@ -520,6 +520,7 @@
     const chips = [];
     const candidateCount = Array.isArray(item.candidates) ? item.candidates.length : 0;
     const reviewSummary = item.candidate_review_summary || {};
+    const heuristicSummary = item.scan_result && item.scan_result.candidate_heuristic_summary ? item.scan_result.candidate_heuristic_summary : null;
     const reviewedCount = Number(reviewSummary.total || 0);
 
     if (item.analysis_source === 'manual_snapshot') {
@@ -535,6 +536,10 @@
       chips.push('<span class="review-chip warn">needs labels</span>');
     } else if (candidateCount > 0 && reviewedCount > 0) {
       chips.push(`<span class="review-chip">reviewed ${escapeHtml(reviewedCount)}/${escapeHtml(candidateCount)}</span>`);
+    }
+
+    if (heuristicSummary && heuristicSummary.total) {
+      chips.push(`<span class="review-chip">heuristic ${escapeHtml(heuristicSummary.ugc || 0)}/${escapeHtml(heuristicSummary.total)}</span>`);
     }
 
     return chips.join(' ');
@@ -1047,6 +1052,54 @@
     return '';
   }
 
+  function candidateHeuristicLabel(candidate) {
+    const label = String(candidate && candidate.heuristic_pseudo_label || '').trim();
+    if (label) return label;
+    if (candidate && candidate.detected) return 'ugc';
+    if (candidate && (candidate.repeated_structure_support || Number(candidate.score) >= 10)) return 'uncertain';
+    return 'not_ugc';
+  }
+
+  function candidateHeuristicReason(candidate) {
+    return String(candidate && candidate.heuristic_pseudo_reason || candidate && candidate.acceptance_gate_reason || '').trim();
+  }
+
+  function heuristicLabelText(label) {
+    if (label === 'ugc') return 'system: ugc';
+    if (label === 'not_ugc') return 'system: not ugc';
+    if (label === 'uncertain') return 'system: uncertain';
+    return 'system: unknown';
+  }
+
+  function heuristicLabelClass(label) {
+    if (label === 'ugc') return 'good';
+    if (label === 'not_ugc') return 'bad';
+    if (label === 'uncertain') return 'warn';
+    return '';
+  }
+
+  function summarizeCandidateHeuristics(candidates) {
+    return (Array.isArray(candidates) ? candidates : []).reduce((summary, candidate) => {
+      const label = candidateHeuristicLabel(candidate);
+      summary.total += 1;
+      if (label === 'ugc') summary.ugc += 1;
+      else if (label === 'not_ugc') summary.not_ugc += 1;
+      else summary.uncertain += 1;
+      if (candidate && candidate.detected) summary.detected += 1;
+      if (candidate && candidate.acceptance_gate_passed) summary.gate_passed += 1;
+      if (candidate && candidate.repeated_structure_support) summary.repeating_structure += 1;
+      return summary;
+    }, {
+      total: 0,
+      ugc: 0,
+      not_ugc: 0,
+      uncertain: 0,
+      detected: 0,
+      gate_passed: 0,
+      repeating_structure: 0,
+    });
+  }
+
   function preferredReviewTab(item) {
     return item && Array.isArray(item.candidates) && item.candidates.length ? 'candidates' : 'manual';
   }
@@ -1060,6 +1113,7 @@
 
     const reviewSummary = item.candidate_review_summary || {};
     const scanResult = item.scan_result || {};
+    const heuristicSummary = scanResult.candidate_heuristic_summary || summarizeCandidateHeuristics(item.candidates);
     workspaceSelection.className = 'workspace-selection';
     workspaceSelection.innerHTML = [
       `<div><strong>Row:</strong> ${escapeHtml(item.row_number)}</div>`,
@@ -1067,6 +1121,13 @@
       `<div><strong>UGC:</strong> ${item.ugc_detected ? 'yes' : 'no'}</div>`,
       `<div><strong>Candidates:</strong> ${escapeHtml(Array.isArray(item.candidates) ? item.candidates.length : 0)}</div>`,
       `<div><strong>Reviewed:</strong> ${escapeHtml(reviewSummary.total ?? 0)}</div>`,
+      `<div><strong>Selection Limit:</strong> ${escapeHtml(scanResult.candidate_selection_limit ?? (Array.isArray(item.candidates) ? item.candidates.length : 0))}</div>`,
+      `<div><strong>Artifact Limit:</strong> ${escapeHtml(scanResult.candidate_review_artifact_limit ?? 5)}</div>`,
+      `<div><strong>Heuristic UGC:</strong> ${escapeHtml(heuristicSummary.ugc ?? 0)}</div>`,
+      `<div><strong>Heuristic Uncertain:</strong> ${escapeHtml(heuristicSummary.uncertain ?? 0)}</div>`,
+      `<div><strong>Heuristic Not UGC:</strong> ${escapeHtml(heuristicSummary.not_ugc ?? 0)}</div>`,
+      `<div><strong>Heuristic Detected:</strong> ${escapeHtml(heuristicSummary.detected ?? 0)}</div>`,
+      `<div><strong>Gate Passed:</strong> ${escapeHtml(heuristicSummary.gate_passed ?? 0)}</div>`,
       `<div><strong>Access Flag:</strong> ${escapeHtml(scanResult.blocker_type || 'clear')}</div>`,
       `<div><strong>Reason:</strong> ${escapeHtml(item.manual_capture_reason || item.error_message || '')}</div>`,
       `<div><strong>URL:</strong> ${escapeHtml(item.final_url || item.normalized_url || '')}</div>`,
@@ -1288,6 +1349,10 @@
       'detected',
       'score',
       'confidence',
+      'heuristic_pseudo_label',
+      'heuristic_pseudo_confidence',
+      'heuristic_pseudo_reason',
+      'heuristic_pseudo_source',
       'base_detected',
       'acceptance_gate_passed',
       'keyword_gate_tier',
@@ -1339,6 +1404,7 @@
 
   function downloadCandidateJson(item) {
     if (!item || !Array.isArray(item.candidates) || !item.candidates.length) return;
+    const scanResult = item.scan_result || {};
     const payload = {
       job_id: item.job_id || currentJobId || '',
       item_id: item.id || '',
@@ -1348,6 +1414,12 @@
       analysis_source: item.analysis_source || '',
       ugc_detected: !!item.ugc_detected,
       candidate_review_summary: item.candidate_review_summary || {},
+      candidate_heuristic_summary: scanResult.candidate_heuristic_summary || summarizeCandidateHeuristics(item.candidates),
+      candidate_selection_limit: scanResult.candidate_selection_limit ?? '',
+      candidate_review_artifact_limit: scanResult.candidate_review_artifact_limit ?? '',
+      heuristic_best_candidate_key: scanResult.heuristic_best_candidate_key || '',
+      heuristic_best_candidate_label: scanResult.heuristic_best_candidate_label || '',
+      heuristic_best_candidate_reason: scanResult.heuristic_best_candidate_reason || '',
       candidates: item.candidates,
     };
     const fileBase = toFileSafeSegment(`${item.row_number || 'row'}-${item.id || 'item'}-candidates`, 'candidates');
@@ -1384,6 +1456,7 @@
     const summary = item.candidate_review_summary || {};
     const scanResult = item.scan_result || {};
     const hasGraphSnapshot = !!(item.manual_html_url || item.manual_raw_html_url);
+    const heuristicSummary = scanResult.candidate_heuristic_summary || summarizeCandidateHeuristics(candidates);
     if (!candidates.length) {
       candidateReview.className = 'candidate-review empty';
       candidateReview.textContent = 'This row does not have candidate regions yet. Run the scan or upload a manual snapshot first.';
@@ -1406,6 +1479,10 @@
       const noteId = `candidate-notes-${candidate.candidate_key || candidate.candidate_rank || 'x'}`;
       const label = humanLabelText(candidate.human_label);
       const labelClass = humanLabelClass(candidate.human_label);
+      const heuristicLabel = candidateHeuristicLabel(candidate);
+      const heuristicClass = heuristicLabelClass(heuristicLabel);
+      const heuristicText = heuristicLabelText(heuristicLabel);
+      const heuristicReason = candidateHeuristicReason(candidate);
       const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
       const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
       return `
@@ -1420,6 +1497,7 @@
               <span class="candidate-pill">${escapeHtml(candidate.confidence || 'unknown')}</span>
               <span class="candidate-pill">${escapeHtml(candidate.ugc_type || 'candidate')}</span>
               <span class="candidate-pill">${escapeHtml(candidate.score ?? '')}</span>
+              <span class="candidate-pill ${heuristicClass}">${escapeHtml(heuristicText)}</span>
               <span class="candidate-pill">${escapeHtml(candidate.keyword_evidence_strength || 'none')}</span>
               <span class="candidate-pill ${candidate.acceptance_gate_passed ? 'good' : 'bad'}">gate ${candidate.acceptance_gate_passed ? 'pass' : 'fail'}</span>
               ${candidate.detected ? '<span class="candidate-pill good">detected</span>' : ''}
@@ -1427,6 +1505,7 @@
             </div>
             <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available for this candidate.')}</p>
             <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+            ${heuristicReason ? `<p class="candidate-copy"><strong>System Cue:</strong> ${escapeHtml(heuristicReason)}</p>` : ''}
             ${renderCandidateMarkupDetails(candidate)}
             ${matchedSignals ? `<div><p class="candidate-copy"><strong>Positive Signals</strong></p>${matchedSignals}</div>` : ''}
             ${penaltySignals ? `<div><p class="candidate-copy"><strong>Penalty Signals</strong></p>${penaltySignals}</div>` : ''}
@@ -1451,10 +1530,17 @@
         <div><strong>Source:</strong> ${escapeHtml(item.analysis_source || 'automated')}</div>
         <div><strong>Access Flag:</strong> ${escapeHtml(scanResult.blocker_type || 'clear')}</div>
         <div><strong>Candidate Count:</strong> ${escapeHtml(candidates.length)}</div>
+        <div><strong>Selection Limit:</strong> ${escapeHtml(scanResult.candidate_selection_limit ?? candidates.length)}</div>
+        <div><strong>Artifact Limit:</strong> ${escapeHtml(scanResult.candidate_review_artifact_limit ?? 5)}</div>
         <div><strong>Reviewed:</strong> ${escapeHtml(summary.total ?? 0)}</div>
         <div><strong>Comment Region:</strong> ${escapeHtml(summary.comment_region ?? 0)}</div>
         <div><strong>Not Comment:</strong> ${escapeHtml(summary.not_comment_region ?? 0)}</div>
         <div><strong>Uncertain:</strong> ${escapeHtml(summary.uncertain ?? 0)}</div>
+        <div><strong>Heuristic UGC:</strong> ${escapeHtml(heuristicSummary.ugc ?? 0)}</div>
+        <div><strong>Heuristic Uncertain:</strong> ${escapeHtml(heuristicSummary.uncertain ?? 0)}</div>
+        <div><strong>Heuristic Not UGC:</strong> ${escapeHtml(heuristicSummary.not_ugc ?? 0)}</div>
+        <div><strong>Heuristic Detected:</strong> ${escapeHtml(heuristicSummary.detected ?? 0)}</div>
+        <div><strong>Gate Passed:</strong> ${escapeHtml(heuristicSummary.gate_passed ?? 0)}</div>
       </div>
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
@@ -1564,6 +1650,10 @@
     const noteId = 'job-labeler-notes';
     const label = humanLabelText(candidate.human_label);
     const labelClass = humanLabelClass(candidate.human_label);
+    const heuristicLabel = candidateHeuristicLabel(candidate);
+    const heuristicClass = heuristicLabelClass(heuristicLabel);
+    const heuristicText = heuristicLabelText(heuristicLabel);
+    const heuristicReason = candidateHeuristicReason(candidate);
     const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
     const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
 
@@ -1599,6 +1689,7 @@
               <span class="candidate-pill">rank ${escapeHtml(candidate.candidate_rank || entry.candidateRank || '')}</span>
               <span class="candidate-pill">${escapeHtml(candidate.confidence || 'unknown')}</span>
               <span class="candidate-pill">${escapeHtml(candidate.ugc_type || 'candidate')}</span>
+              <span class="candidate-pill ${heuristicClass}">${escapeHtml(heuristicText)}</span>
               <span class="candidate-pill ${candidate.acceptance_gate_passed ? 'good' : 'bad'}">gate ${candidate.acceptance_gate_passed ? 'pass' : 'fail'}</span>
               ${candidate.job_labeler_pending_save ? '<span class="candidate-pill warn">saving</span>' : ''}
               ${candidate.detected ? '<span class="candidate-pill good">detected</span>' : ''}
@@ -1606,6 +1697,7 @@
             </div>
             <p class="candidate-copy">${escapeHtml(candidate.sample_text || 'No sample text available for this candidate.')}</p>
             <p class="candidate-copy mono">${escapeHtml(candidate.xpath || candidate.css_path || '')}</p>
+            ${heuristicReason ? `<p class="candidate-copy"><strong>System Cue:</strong> ${escapeHtml(heuristicReason)}</p>` : ''}
             <p class="candidate-copy"><strong>URL:</strong> ${escapeHtml(item.final_url || item.normalized_url || '')}</p>
             ${renderCandidateMarkupDetails(candidate)}
             ${matchedSignals ? `<div><p class="candidate-copy"><strong>Positive Signals</strong></p>${matchedSignals}</div>` : ''}
@@ -1783,6 +1875,10 @@
       'human_label',
       'human_notes',
       'human_reviewed_at',
+      'heuristic_pseudo_label',
+      'heuristic_pseudo_confidence',
+      'heuristic_pseudo_reason',
+      'heuristic_pseudo_source',
       'candidate_screenshot_url',
       'candidate_screenshot_error',
       'candidate_outer_html_excerpt',
@@ -1868,6 +1964,11 @@
     const matchedSignalsArray = Array.isArray(candidate.matched_signals) ? candidate.matched_signals.filter(Boolean) : [];
     const penaltySignalsArray = Array.isArray(candidate.penalty_signals) ? candidate.penalty_signals.filter(Boolean) : [];
     const keywordSignalsArray = Array.isArray(candidate.keyword_evidence_signals) ? candidate.keyword_evidence_signals.filter(Boolean) : [];
+    const heuristicLabel = candidateHeuristicLabel(candidate);
+    const heuristicClass = heuristicLabelClass(heuristicLabel);
+    const heuristicText = heuristicLabelText(heuristicLabel);
+    const heuristicReason = candidateHeuristicReason(candidate);
+    const heuristicSummary = scanResult.candidate_heuristic_summary || summarizeCandidateHeuristics(candidates);
     const matchedSignals = renderSignalList(matchedSignalsArray, 'good');
     const penaltySignals = renderSignalList(penaltySignalsArray, 'bad');
     const keywordSignals = renderSignalList(keywordSignalsArray, candidate.acceptance_gate_passed ? 'good' : 'bad');
@@ -1960,49 +2061,59 @@
       ['Blocker flag', scanResult.blocker_type || 'clear'],
       ['Access reason', truncateMetricText(scanResult.access_reason || '', 140)],
     ];
-    let verdictTitle = 'Scanner kept this candidate below threshold';
-    let verdictCopy = `Candidate #${candidate.candidate_rank} stayed below the decision threshold. The scanner found ${matchedSignalsArray.length} positive signals and ${penaltySignalsArray.length} penalties. ${candidate.acceptance_gate_reason || ''}`;
-    if (candidate.detected) {
-      verdictTitle = 'Scanner selected this candidate';
-      verdictCopy = `Candidate #${candidate.candidate_rank} was promoted at score ${formatMetricValue(candidate.score)}. ${candidate.acceptance_gate_reason || ''}`;
+    let verdictTitle = 'Heuristic left this candidate for review';
+    let verdictCopy = `System cue marked this candidate as ${heuristicText}. ${heuristicReason || candidate.acceptance_gate_reason || ''}`;
+    if (heuristicLabel === 'ugc') {
+      verdictTitle = 'Heuristic marked this candidate as likely UGC';
+      verdictCopy = `The rule-based cue promoted candidate #${candidate.candidate_rank} at score ${formatMetricValue(candidate.score)}. Human review still decides the final label. ${heuristicReason || candidate.acceptance_gate_reason || ''}`;
+    } else if (heuristicLabel === 'not_ugc') {
+      verdictTitle = 'Heuristic marked this candidate as likely not UGC';
+      verdictCopy = `Candidate #${candidate.candidate_rank} did not build enough structure or keyword evidence to earn a positive system cue. Human review can still override that cue. ${heuristicReason || candidate.acceptance_gate_reason || ''}`;
     } else if (baseThresholdPassed && !gatePassed) {
-      verdictTitle = 'Raw score passed, but the keyword gate rejected this candidate';
-      verdictCopy = `Candidate #${candidate.candidate_rank} cleared the raw score threshold at score ${formatMetricValue(candidate.score)}, but the acceptance gate blocked it. ${candidate.acceptance_gate_reason || ''}`;
+      verdictTitle = 'Heuristic kept this candidate in the review set';
+      verdictCopy = `Candidate #${candidate.candidate_rank} cleared the raw score threshold at score ${formatMetricValue(candidate.score)}, but the heuristic stayed cautious and left it for human review. ${heuristicReason || candidate.acceptance_gate_reason || ''}`;
     }
     const candidateScreenshot = renderCandidateVisual(candidate, {
       linkClass: 'score-shot-link',
       imageClass: 'score-shot',
       fallbackHeading: 'Candidate Text Preview',
     });
-    const candidateSummary = candidates.slice(0, 5).map((entry) => `
-      <tr>
-        <td>${escapeHtml(entry.candidate_rank)}</td>
-        <td>${escapeHtml(entry.score ?? '')}</td>
-        <td>${escapeHtml(entry.confidence || '')}</td>
-        <td>${escapeHtml(entry.ugc_type || '')}</td>
-        <td>${escapeHtml(entry.keyword_evidence_strength || 'none')}</td>
-        <td>${entry.acceptance_gate_passed ? 'pass' : 'fail'}</td>
-        <td>${entry.detected ? 'yes' : 'no'}</td>
-        <td>${escapeHtml(entry.human_label || '')}</td>
-      </tr>
-    `).join('');
+    const candidateSummaryRows = candidates.map((entry) => {
+      const entryHeuristicLabel = candidateHeuristicLabel(entry);
+      const entryHeuristicText = heuristicLabelText(entryHeuristicLabel);
+      const entryHeuristicClass = heuristicLabelClass(entryHeuristicLabel);
+      return `
+        <tr>
+          <td>${escapeHtml(entry.candidate_rank)}</td>
+          <td>${escapeHtml(entry.score ?? '')}</td>
+          <td><span class="candidate-pill ${entryHeuristicClass}">${escapeHtml(entryHeuristicText)}</span></td>
+          <td>${escapeHtml(entry.repeating_group_count ?? '')}</td>
+          <td>${escapeHtml(entry.keyword_evidence_strength || 'none')}</td>
+          <td>${entry.acceptance_gate_passed ? 'pass' : 'fail'}</td>
+          <td>${entry.detected ? 'yes' : 'no'}</td>
+          <td>${escapeHtml(entry.human_label || '')}</td>
+        </tr>
+      `;
+    }).join('');
 
     scoringBreakdown.className = 'candidate-review';
     scoringBreakdown.innerHTML = `
       <div class="score-shell">
         <section class="score-hero">
-          <article class="score-verdict ${candidate.detected ? 'good' : 'bad'}">
+          <article class="score-verdict ${heuristicClass || (candidate.detected ? 'good' : 'bad')}">
             <div class="candidate-meta-row">
               <span class="candidate-pill ${candidate.detected ? 'good' : 'bad'}">${candidate.detected ? 'detected' : 'not detected'}</span>
               <span class="candidate-pill">candidate ${escapeHtml(candidate.candidate_rank)}</span>
               <span class="candidate-pill">${escapeHtml(candidate.ugc_type || 'candidate')}</span>
               <span class="candidate-pill">${escapeHtml(candidate.confidence || 'unknown')}</span>
+              <span class="candidate-pill ${heuristicClass}">${escapeHtml(heuristicText)}</span>
             </div>
             <h4>${escapeHtml(verdictTitle)}</h4>
             <p class="candidate-copy">${escapeHtml(verdictCopy)}</p>
             <div class="candidate-meta-row">
               <span class="candidate-pill">source ${escapeHtml(item.analysis_source || 'automated')}</span>
               <span class="candidate-pill">score ${escapeHtml(candidate.score ?? '')}</span>
+              <span class="candidate-pill">heuristic ${escapeHtml(heuristicLabel)}</span>
               <span class="candidate-pill">true flags ${escapeHtml(buckets.trueFlags.length)}</span>
               <span class="candidate-pill">false flags ${escapeHtml(buckets.falseFlags.length)}</span>
               <span class="candidate-pill ${scanResult.blocker_type ? 'warn' : ''}">blocker ${escapeHtml(scanResult.blocker_type || 'clear')}</span>
@@ -2013,9 +2124,13 @@
             ${renderScoreStat('Penalty signals', penaltySignalsArray.length, 'bad')}
             ${renderScoreStat('Base threshold', baseThresholdPassed ? 'passed' : 'failed', baseThresholdPassed ? 'good' : 'bad')}
             ${renderScoreStat('Acceptance gate', gatePassed ? 'passed' : 'failed', gatePassed ? 'good' : 'bad')}
+            ${renderScoreStat('Heuristic cue', heuristicText, heuristicClass)}
             ${renderScoreStat('Keyword evidence', candidate.keyword_evidence_strength || 'none', gatePassed ? 'good' : 'bad')}
             ${renderScoreStat('Repeated sibling', candidate.repeated_structure_support ? 'yes' : 'no', candidate.repeated_structure_support ? 'good' : '')}
             ${renderScoreStat('Candidates on row', candidates.length, '')}
+            ${renderScoreStat('Heuristic UGC', heuristicSummary.ugc, 'good')}
+            ${renderScoreStat('Heuristic uncertain', heuristicSummary.uncertain, 'warn')}
+            ${renderScoreStat('Selection limit', scanResult.candidate_selection_limit ?? candidates.length, '')}
             ${renderScoreStat('Human label', candidate.human_label || 'none', 'warn')}
           </div>
         </section>
@@ -2049,6 +2164,22 @@
             <p class="candidate-copy">${escapeHtml(candidate.acceptance_gate_reason || 'No acceptance-gate explanation was stored for this candidate.')}</p>
             ${keywordSignals || '<p class="candidate-copy">No keyword signals were stored for this candidate.</p>'}
             ${renderMetricList(keywordMetrics, 'No keyword-gate metrics were stored for this candidate.')}
+          </article>
+
+          <article class="score-card">
+            <h4>System Cue</h4>
+            ${renderMetricList([
+              ['Heuristic label', heuristicText],
+              ['Heuristic confidence', candidate.heuristic_pseudo_confidence || candidate.confidence || ''],
+              ['Heuristic source', candidate.heuristic_pseudo_source || 'rule_based'],
+              ['Heuristic reason', truncateMetricText(heuristicReason || '', 180)],
+              ['Selection limit', scanResult.candidate_selection_limit ?? ''],
+              ['Artifact limit', scanResult.candidate_review_artifact_limit ?? ''],
+              ['Heuristic total', heuristicSummary.total],
+              ['Heuristic UGC', heuristicSummary.ugc],
+              ['Heuristic uncertain', heuristicSummary.uncertain],
+              ['Heuristic not UGC', heuristicSummary.not_ugc],
+            ], 'No heuristic cue was stored for this candidate.')}
           </article>
 
           <article class="score-card">
@@ -2112,20 +2243,20 @@
 
         <div class="table-shell score-candidate-table">
           <table>
-            <caption>Top candidate comparison</caption>
+            <caption>All candidates on this row</caption>
             <thead>
               <tr>
                 <th>Rank</th>
                 <th>Score</th>
-                <th>Confidence</th>
-                <th>Type</th>
+                <th>System Cue</th>
+                <th>Repeating</th>
                 <th>Keywords</th>
                 <th>Gate</th>
                 <th>Detected</th>
                 <th>Human Label</th>
               </tr>
             </thead>
-            <tbody>${candidateSummary}</tbody>
+            <tbody>${candidateSummaryRows}</tbody>
           </table>
         </div>
       </div>

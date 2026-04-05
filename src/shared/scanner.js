@@ -551,7 +551,7 @@ async function captureCandidateArtifacts(page, frame, candidate, options = {}) {
 }
 
 async function enrichCandidatesWithArtifacts(page, candidates, frameLookup, options = {}) {
-  const reviewArtifactLimit = Math.max(0, Number(options.maxCandidateReviewArtifacts || options.maxResults || 5));
+  const reviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
   const enriched = [];
 
   for (let index = 0; index < candidates.length; index += 1) {
@@ -785,7 +785,7 @@ async function extractCandidatesFromFrame(frame, rawHtml, responseHeaders, optio
       html: rawHtml,
       headers: responseHeaders,
       detectionOptions: {
-        maxCandidates: options.maxCandidates || 25,
+        maxCandidates: options.maxCandidates || 50,
         maxResults: options.maxResults || 5,
       },
     });
@@ -812,6 +812,49 @@ function sortCandidates(candidates) {
   ));
 }
 
+function resolveCandidateLimit(options = {}) {
+  const maxCandidates = Number(options.maxCandidates);
+  const maxResults = Number(options.maxResults);
+  const resolvedMaxCandidates = Number.isFinite(maxCandidates) && maxCandidates > 0 ? maxCandidates : 50;
+  const resolvedMaxResults = Number.isFinite(maxResults) && maxResults > 0 ? maxResults : 5;
+  return Math.max(1, resolvedMaxCandidates, resolvedMaxResults);
+}
+
+function resolveCandidateReviewArtifactLimit(options = {}) {
+  const maxArtifacts = Number(options.maxCandidateReviewArtifacts);
+  if (Number.isFinite(maxArtifacts) && maxArtifacts >= 0) {
+    return Math.floor(maxArtifacts);
+  }
+  return 5;
+}
+
+function createEmptyCandidateHeuristicSummary() {
+  return {
+    total: 0,
+    ugc: 0,
+    not_ugc: 0,
+    uncertain: 0,
+    detected: 0,
+    gate_passed: 0,
+    repeating_structure: 0,
+  };
+}
+
+function summarizeCandidateHeuristics(candidates) {
+  return (Array.isArray(candidates) ? candidates : []).reduce((summary, candidate) => {
+    const label = String(candidate && candidate.heuristic_pseudo_label || '').trim()
+      || (candidate && candidate.detected ? 'ugc' : 'uncertain');
+    summary.total += 1;
+    if (label === 'ugc') summary.ugc += 1;
+    else if (label === 'not_ugc') summary.not_ugc += 1;
+    else summary.uncertain += 1;
+    if (candidate && candidate.detected) summary.detected += 1;
+    if (candidate && candidate.acceptance_gate_passed) summary.gate_passed += 1;
+    if (candidate && candidate.repeated_structure_support) summary.repeating_structure += 1;
+    return summary;
+  }, createEmptyCandidateHeuristicSummary());
+}
+
 function dedupeCandidates(candidates, maxResults) {
   const seen = new Set();
   const deduped = [];
@@ -828,7 +871,7 @@ function dedupeCandidates(candidates, maxResults) {
 }
 
 async function collectCandidatesFromPage(page, rawHtml, responseHeaders, options = {}) {
-  const maxResults = options.maxResults || 5;
+  const maxResults = resolveCandidateLimit(options);
   const candidateBuckets = [];
   const frameLookup = new Map();
   frameLookup.set(buildFrameKey(page.mainFrame()), page.mainFrame());
@@ -935,6 +978,8 @@ async function scanUrl(normalizedUrl, options = {}) {
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses ?? 2));
   const negativeRetrySettlePasses = Math.max(1, Number(options.negativeRetrySettlePasses ?? 2));
   const actionSettleMs = Math.max(0, Number(options.actionSettleMs ?? 1250));
+  const candidateSelectionLimit = resolveCandidateLimit(options);
+  const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -964,6 +1009,12 @@ async function scanUrl(normalizedUrl, options = {}) {
     negative_retry_applied: false,
     scan_delay_ms_applied: postLoadDelayMs,
     screenshot_delay_ms_applied: preScreenshotDelayMs,
+    candidate_selection_limit: candidateSelectionLimit,
+    candidate_review_artifact_limit: candidateReviewArtifactLimit,
+    candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
+    heuristic_best_candidate_key: '',
+    heuristic_best_candidate_label: '',
+    heuristic_best_candidate_reason: '',
   };
 
   try {
@@ -1034,6 +1085,14 @@ async function scanUrl(normalizedUrl, options = {}) {
     result.candidates = candidates;
     result.best_candidate = bestCandidate;
     result.ugc_detected = ugcDetected;
+    result.candidate_heuristic_summary = summarizeCandidateHeuristics(candidates);
+    result.heuristic_best_candidate_key = bestCandidate ? (bestCandidate.candidate_key || '') : '';
+    result.heuristic_best_candidate_label = bestCandidate
+      ? (bestCandidate.heuristic_pseudo_label || (bestCandidate.detected ? 'ugc' : 'uncertain'))
+      : '';
+    result.heuristic_best_candidate_reason = bestCandidate
+      ? (bestCandidate.heuristic_pseudo_reason || bestCandidate.acceptance_gate_reason || '')
+      : '';
   } catch (error) {
     result.error = error && error.message ? error.message : String(error);
   } finally {
@@ -1076,7 +1135,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
   const timeoutMs = Number(options.timeoutMs ?? 20000);
   const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
   const maxResults = Math.max(1, Number(options.maxResults ?? 5));
-  const maxCandidates = Math.max(maxResults, Number(options.maxCandidates ?? 25));
+  const maxCandidates = Math.max(maxResults, Number(options.maxCandidates ?? 50));
   const maxNodes = Math.max(200, Number(options.maxDotNodes ?? 1500));
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
@@ -1677,6 +1736,8 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
   const page = await context.newPage();
   const timeoutMs = Number(options.timeoutMs ?? 20000);
   const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
+  const candidateSelectionLimit = resolveCandidateLimit(options);
+  const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -1708,6 +1769,12 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     manual_capture_url: snapshot.capture_url || snapshot.final_url || normalizedUrl,
     manual_capture_title: snapshot.title || '',
     manual_capture_notes: snapshot.notes || '',
+    candidate_selection_limit: candidateSelectionLimit,
+    candidate_review_artifact_limit: candidateReviewArtifactLimit,
+    candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
+    heuristic_best_candidate_key: '',
+    heuristic_best_candidate_label: '',
+    heuristic_best_candidate_reason: '',
   };
 
   try {
@@ -1757,6 +1824,14 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     result.candidates = candidates;
     result.best_candidate = candidates[0] || null;
     result.ugc_detected = !!(result.best_candidate && result.best_candidate.detected);
+    result.candidate_heuristic_summary = summarizeCandidateHeuristics(candidates);
+    result.heuristic_best_candidate_key = result.best_candidate ? (result.best_candidate.candidate_key || '') : '';
+    result.heuristic_best_candidate_label = result.best_candidate
+      ? (result.best_candidate.heuristic_pseudo_label || (result.best_candidate.detected ? 'ugc' : 'uncertain'))
+      : '';
+    result.heuristic_best_candidate_reason = result.best_candidate
+      ? (result.best_candidate.heuristic_pseudo_reason || result.best_candidate.acceptance_gate_reason || '')
+      : '';
   } catch (error) {
     result.error = error && error.message ? error.message : String(error);
   } finally {

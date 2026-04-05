@@ -1217,8 +1217,8 @@ function createLocalApp(options = {}) {
           timeoutMs: runtime.config.scanTimeoutMs,
           postLoadDelayMs: 0,
           captureScreenshots: false,
-          maxCandidates: Math.max(runtime.config.maxCandidates, 25),
-          maxResults: Math.max(runtime.config.maxResults, 25),
+          maxCandidates: Math.max(runtime.config.maxCandidates, 50),
+          maxResults: Math.max(runtime.config.maxResults, 50),
         });
         const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
         const matched = fallbackCandidates.find((entry) => (

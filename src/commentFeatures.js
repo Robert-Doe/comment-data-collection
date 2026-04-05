@@ -1775,6 +1775,8 @@ function scoreFeatures(features) {
   add(features.has_relative_time, 2, 'has_relative_time');
   add(features.external_link_density_low, 1, 'external_link_density_low');
   add(features.has_text_content && features.text_word_count >= 40, 2, 'substantial_text_content');
+  add(features.repeating_group_count >= 4 && features.sibling_homogeneity_score >= 0.75, 2, 'strong_repeating_structure');
+  add(features.text_contains_links && features.repeating_group_count >= 3, 1, 'repeating_link_collection');
 
   subtract(features.table_row_structure, 6, 'table_row_structure');
   subtract(features.no_text_content_in_units, 6, 'no_text_content_in_units');
@@ -1912,6 +1914,19 @@ function scoreFeatures(features) {
           : (baseDetected
             ? 'Raw score cleared threshold, but the keyword gate rejected the candidate because explicit UGC keywords were missing or too weak.'
             : 'Raw score stayed below threshold, and keyword evidence was not strong enough to rescue the candidate.'))));
+  const heuristicPseudoLabel = detected
+    ? 'ugc'
+    : (score >= 10 || repeatedStructureSupport || keywordEvidencePresent
+      ? 'uncertain'
+      : 'not_ugc');
+  const heuristicPseudoConfidence = detected
+    ? confidence
+    : (confidence === 'unlikely' ? 'low' : confidence);
+  const heuristicPseudoReason = detected
+    ? acceptanceGateReason
+    : (heuristicPseudoLabel === 'uncertain'
+      ? 'Heuristic kept this candidate in the review set because it still had some structural or text evidence, even though it did not clear the acceptance gate.'
+      : 'Heuristic marked this candidate as likely not UGC because the structural and keyword evidence were both weak.');
 
   return {
     score,
@@ -1936,6 +1951,10 @@ function scoreFeatures(features) {
     high_assurance_without_keywords: highAssuranceWithoutKeywords,
     acceptance_gate_passed: acceptanceGatePassed,
     acceptance_gate_reason: acceptanceGateReason,
+    heuristic_pseudo_label: heuristicPseudoLabel,
+    heuristic_pseudo_confidence: heuristicPseudoConfidence,
+    heuristic_pseudo_reason: heuristicPseudoReason,
+    heuristic_pseudo_source: 'rule_based',
   };
 }
 
@@ -1955,10 +1974,14 @@ function looksLikeContainer(el) {
   const repeated = dominantUnitGroup(el)?.elements.length || 0;
   const homogeneity = childCount > 1 ? ratio(repeated, childCount) : 0;
   const hasRoleOrMicrodata = el.matches('[role="feed"], [role="comment"], [itemtype*="Comment"], [itemtype*="Review"]');
+  const strongRepeatedStructure = repeated >= 4 && homogeneity >= 0.75;
 
   if (hasRoleOrMicrodata) return true;
   if (semantic && textLength >= 40) return true;
-  if (repeated >= 3 && homogeneity >= 0.5 && textLength >= 120) return true;
+  // Low-text collections such as playlist grids often look like repeated cards rather than long prose.
+  // Allow strong repetition to qualify even when there are no comment/review keywords on the container.
+  if (strongRepeatedStructure && textLength >= 20) return true;
+  if (repeated >= 3 && homogeneity >= 0.5 && textLength >= 80) return true;
   if (childCount >= 4 && homogeneity >= 0.75 && textLength >= 160) return true;
   return false;
 }
@@ -1974,9 +1997,11 @@ function quickCandidateScore(el) {
   if (el.matches('[role="feed"], [role="comment"]')) score += 5;
   if (el.matches('[itemtype*="Comment"], [itemtype*="Review"]')) score += 5;
   if (/\b(comment|reply|discussion|review|thread|forum|answer|feed)\b/i.test(attrs)) score += 3;
+  if (repeated >= 4 && homogeneity >= 0.75) score += 3;
   if (repeated >= 3) score += 3;
   if (repeated >= 8) score += 2;
   if (homogeneity >= 0.6) score += 2;
+  if (deepQuerySelector(el, 'a[href], img, video, picture')) score += 1;
   if (deepQuerySelector(el, 'time[datetime]')) score += 1;
   if (deepQuerySelector(el, 'textarea, [contenteditable]')) score += 1;
   if (textLength >= 200) score += 1;
@@ -2025,7 +2050,11 @@ function discoverCandidateRoots(options = {}) {
 }
 
 function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {}) {
-  const maxResults = Math.max(1, options.maxResults || 5);
+  const maxResults = Math.max(
+    1,
+    Number.isFinite(Number(options.maxResults)) && Number(options.maxResults) > 0 ? Number(options.maxResults) : 5,
+    Number.isFinite(Number(options.maxCandidates)) && Number(options.maxCandidates) > 0 ? Number(options.maxCandidates) : 50,
+  );
   const roots = discoverCandidateRoots(options);
   const results = roots.map((root) => {
     const features = extractAllFeatures(root, rawHTML, responseHeaders);
