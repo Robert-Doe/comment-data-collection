@@ -1435,7 +1435,7 @@ function createLocalApp(options = {}) {
     etag: true,
     setHeaders(res, filePath) {
       if (/\.(?:js|css)$/i.test(filePath)) {
-        res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+        res.setHeader('Cache-Control', 'no-store');
         return;
       }
       if (/\.html$/i.test(filePath)) {
