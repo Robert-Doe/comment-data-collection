@@ -7,6 +7,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+const runtimeBuildVersion = process.env.BUILD_VERSION || `${Date.now().toString(36)}`;
+
 const { getConfig } = require('../shared/config');
 const { parseCsvText } = require('../shared/csv');
 const { resolveProjectPath, sendFileDownload, streamDirectoryZip } = require('../shared/downloads');
@@ -1427,7 +1429,10 @@ function createLocalApp(options = {}) {
   app.get('/config.js', (_req, res) => {
     res.type('application/javascript');
     res.setHeader('Cache-Control', 'no-store');
-    res.send('window.__APP_CONFIG__ = {"apiBaseUrl": ""};\n');
+    res.send(`window.__APP_CONFIG__ = ${JSON.stringify({
+      apiBaseUrl: '',
+      buildVersion: runtimeBuildVersion,
+    })};\n`);
   });
 
   app.use(runtime.config.artifactUrlBasePath, express.static(runtime.config.artifactRoot));

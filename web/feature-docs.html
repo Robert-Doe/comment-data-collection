@@ -4,7 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>UGC Scanner Feature Docs</title>
-    <link rel="stylesheet" href="./styles.css">
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
   </head>
   <body>
     <main class="app-shell">
@@ -97,7 +109,14 @@
       </section>
     </main>
 
-    <script src="./config.js"></script>
-    <script src="./feature-docs.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        document.write('<script src="./feature-docs.js' + cacheSuffix + '"><\\/script>');
+      })();
+    </script>
   </body>
 </html>

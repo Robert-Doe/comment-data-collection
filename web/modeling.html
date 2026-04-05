@@ -4,7 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>UGC Scanner Model Lab</title>
-    <link rel="stylesheet" href="./styles.css">
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
     <style>
       /* ── Page-level tab strip ──────────────────────────── */
       .page-tabs { display:flex; gap:10px; margin-bottom:24px; }
@@ -496,8 +508,15 @@
 
     </main>
 
-    <script src="./config.js"></script>
-    <script src="./modeling.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        document.write('<script src="./modeling.js' + cacheSuffix + '"><\\/script>');
+      })();
+    </script>
     <script>
     // ══════════════════════════════════════════════════════
     //  PAGE TAB SWITCHER
