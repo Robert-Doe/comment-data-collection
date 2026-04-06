@@ -1532,7 +1532,13 @@
     const heuristicSummary = scanResult.candidate_heuristic_summary || summarizeCandidateHeuristics(candidates);
     if (!candidates.length) {
       candidateReview.className = 'candidate-review empty';
-      candidateReview.textContent = 'This row does not have candidate regions yet. Run the scan or upload a manual snapshot first.';
+      const alreadyScanned = item.status === 'completed' || item.status === 'failed'
+        || item.analysis_source === 'manual_snapshot'
+        || !!(item.manual_html_url || item.manual_raw_html_url)
+        || !!(item.scan_result);
+      candidateReview.textContent = alreadyScanned
+        ? 'No candidate regions were detected in this scan. The page may have been inaccessible, blocked, or does not contain recognisable UGC structure.'
+        : 'This row does not have candidate regions yet. Run the scan or upload a manual snapshot first.';
       setCandidateExportState(item);
       return;
     }
