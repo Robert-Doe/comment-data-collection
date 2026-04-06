@@ -1240,7 +1240,8 @@ function createApp(config = getConfig()) {
       } catch (_) {}
 
       const jobs = await listJobs(10, config.databaseUrl);
-      const activeJobs = jobs.filter((j) => j.status === 'running');
+      const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
+      const activeJobs = jobs.filter((j) => !terminalStatuses.has(String(j.status || '')));
 
       res.json({
         ok: true,
@@ -1255,8 +1256,10 @@ function createApp(config = getConfig()) {
           total_urls: j.total_urls,
           completed_count: j.completed_count,
           running_count: j.running_count,
+          queued_count: j.queued_count,
           failed_count: j.failed_count,
           pending_count: j.pending_count,
+          in_flight_count: (Number(j.running_count) || 0) + (Number(j.queued_count) || 0),
           detected_count: j.detected_count,
         })),
       });

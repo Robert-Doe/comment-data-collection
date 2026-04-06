@@ -508,15 +508,7 @@
 
     </main>
 
-    <script>
-      (function () {
-        var appConfig = window.__APP_CONFIG__ || {};
-        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
-        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
-
-        document.write('<script src="./modeling.js' + cacheSuffix + '"><\\/script>');
-      })();
-    </script>
+    <script src="./modeling.js"></script>
     <script>
     // ══════════════════════════════════════════════════════
     //  PAGE TAB SWITCHER

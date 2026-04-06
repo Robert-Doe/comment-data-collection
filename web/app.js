@@ -1,6 +1,6 @@
 (function bootstrap() {
   const config = window.__APP_CONFIG__ || {};
-  const apiBase = (config.apiBaseUrl || '').replace(/\/$/, '');
+  const apiBase = resolveApiBase(config.apiBaseUrl);
 
   const form = document.getElementById('upload-form');
   const fileInput = document.getElementById('csv-file');
@@ -85,15 +85,53 @@
   const candidatePageSize = 1;
   const activePollIntervalMs = 4000;
   const terminalPollIntervalMs = 12000;
+  const recentJobsPollIntervalMs = 15000;
   const actionStateDurationMs = 1400;
   const jobLabelerTransitionMs = 140;
   let pollHandle = null;
   let pollJobId = '';
   let pollIntervalMs = 0;
+  let recentJobsPollHandle = null;
   const candidateMarkupCache = new Map();
   const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
   const jobLabelerCache = new Map();
+
+  function normalizeBaseUrl(value) {
+    return String(value || '').trim().replace(/\/+$/g, '');
+  }
+
+  function isLoopbackHost(hostname) {
+    return hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+  }
+
+  function resolveApiBase(explicitBase) {
+    const configured = normalizeBaseUrl(explicitBase);
+    if (configured) {
+      return configured;
+    }
+
+    const { protocol, hostname, port, origin } = window.location;
+    if (isLoopbackHost(hostname)) {
+      const loopbackHost = hostname.includes(':') ? `[${hostname}]` : hostname;
+      return port === '3000'
+        ? origin
+        : `${protocol}//${loopbackHost}:3000`;
+    }
+
+    if (hostname.startsWith('api.')) {
+      return origin;
+    }
+
+    if (hostname.startsWith('www.')) {
+      return `${protocol}//api.${hostname.slice(4)}`;
+    }
+
+    return `${protocol}//api.${hostname}`;
+  }
 
   function apiUrl(path) {
     return `${apiBase}${path}`;
@@ -134,6 +172,41 @@
     return ['completed', 'completed_with_errors', 'failed'].includes(status)
       ? terminalPollIntervalMs
       : activePollIntervalMs;
+  }
+
+  function pickInitialJob(jobs) {
+    if (!Array.isArray(jobs) || !jobs.length) {
+      return null;
+    }
+
+    const preferredStatuses = ['running', 'queued', 'pending'];
+    for (const status of preferredStatuses) {
+      const match = jobs.find((job) => job && job.status === status);
+      if (match) {
+        return match;
+      }
+    }
+
+    return jobs[0] || null;
+  }
+
+  function startRecentJobsPolling() {
+    if (recentJobsPollHandle) {
+      return;
+    }
+
+    recentJobsPollHandle = window.setInterval(() => {
+      refreshJobs().catch((error) => {
+        console.error(error);
+      });
+    }, recentJobsPollIntervalMs);
+  }
+
+  function stopRecentJobsPolling() {
+    if (recentJobsPollHandle) {
+      window.clearInterval(recentJobsPollHandle);
+    }
+    recentJobsPollHandle = null;
   }
 
   function setResourceDownloads() {
@@ -2620,10 +2693,19 @@
     startPolling(jobId, pollIntervalForStatus(job.status));
   }
 
-  async function refreshJobs() {
+  async function refreshJobs(options = {}) {
     const data = await fetchJson('/api/jobs?limit=10');
     const jobs = data.jobs || [];
     renderRecentJobs(jobs);
+    if (options.autoselect && !currentJobId) {
+      const preferred = pickInitialJob(jobs);
+      if (preferred && preferred.id) {
+        currentOffset = 0;
+        await refreshJob(preferred.id).catch((error) => {
+          console.error(error);
+        });
+      }
+    }
     return jobs;
   }
 
@@ -3299,6 +3381,11 @@
     });
   }
 
+  window.addEventListener('beforeunload', () => {
+    stopPolling();
+    stopRecentJobsPolling();
+  });
+
   setResourceDownloads();
   setDownloads(currentJobId);
   setWorkspaceTab('queue');
@@ -3308,8 +3395,13 @@
   renderScoringBreakdown(null);
   renderJobManager(null);
   renderJobEvents([], { message: 'Select a job to view recent events.' });
-  refreshJobs().catch((error) => console.error(error));
+  startRecentJobsPolling();
   if (currentJobId) {
-    refreshJob(currentJobId).catch((error) => console.error(error));
+    refreshJob(currentJobId).catch((error) => {
+      console.error(error);
+      refreshJobs({ autoselect: true }).catch((fallbackError) => console.error(fallbackError));
+    });
+  } else {
+    refreshJobs({ autoselect: true }).catch((error) => console.error(error));
   }
 }());

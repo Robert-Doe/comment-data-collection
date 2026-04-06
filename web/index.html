@@ -251,14 +251,6 @@
     </dialog>
     <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
-    <script>
-      (function () {
-        var appConfig = window.__APP_CONFIG__ || {};
-        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
-        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
-
-        document.write('<script src="./app.js' + cacheSuffix + '"><\\/script>');
-      })();
-    </script>
+    <script src="./app.js"></script>
   </body>
 </html>

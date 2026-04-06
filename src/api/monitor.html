@@ -120,6 +120,7 @@
 
     <div class="card">
       <div class="card-title">Active Jobs</div>
+      <p class="note" style="margin-bottom:10px">Running means a scan is executing right now. Queued means the row has already been claimed and is waiting in the worker pool.</p>
       <div id="jlist"><div class="note">No active jobs.</div></div>
     </div>
 
@@ -234,14 +235,21 @@ function loadHealth() {
     if (!d.activeJobs||!d.activeJobs.length) { jl.innerHTML='<div class="note">No active jobs.</div>'; return; }
     jl.innerHTML=d.activeJobs.map(function(j){
       var pj=j.total_urls?Math.round(j.completed_count/j.total_urls*100):0;
+      var running = Number(j.running_count)||0;
+      var queued = Number(j.queued_count)||0;
+      var pending = Number(j.pending_count)||0;
+      var inFlight = Number(j.in_flight_count);
+      if (!Number.isFinite(inFlight)) inFlight = running + queued;
       return '<div class="jcard"><div class="jid">'+esc(j.id)+'</div>'
         +'<div class="pbar" style="margin:6px 0"><div class="pfill" style="width:'+pj+'%"></div></div>'
         +'<div class="jrow"><span><span class="sv g">'+j.completed_count+'</span>/'+j.total_urls+' done</span>'
         +'<span><span class="sv g">'+j.detected_count+'</span> detected</span>'
         +'<span><span class="sv y">'+j.failed_count+'</span> failed</span></div>'
-        +'<div class="jrow" style="margin-top:4px"><span><span class="sv">'+j.running_count+'</span> running</span>'
-        +'<span><span class="sv">'+j.pending_count+'</span> pending</span>'
-        +'<span style="color:var(--muted)">'+pj+'%</span></div></div>';
+        +'<div class="jrow" style="margin-top:4px"><span><span class="sv">'+running+'</span> running</span>'
+        +'<span><span class="sv">'+queued+'</span> queued</span>'
+        +'<span style="color:var(--muted)">'+inFlight+' in flight</span></div>'
+        +'<div class="jrow"><span><span class="sv">'+pending+'</span> pending</span>'
+        +'<span style="color:var(--muted)">'+pj+'%</span><span></span></div></div>';
     }).join('');
   }).catch(function(){});
 }
