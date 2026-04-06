@@ -90,10 +90,10 @@ function getRuntimeProfile() {
   return {
     cpuCount,
     totalMemoryMb,
-    // Playwright scans are CPU-heavy enough that a 4 vCPU droplet should
-    // generally stay at 4 workers, not 5. Keep the cap aligned to available
-    // CPUs so the API/UI stay responsive while scans are in flight.
-    maxRecommendedWorkerConcurrency: Math.max(1, Math.min(cpuCount, memoryBound)),
+    // Playwright scans are mostly I/O-bound (network + settle delays), so
+    // oversubscribing CPUs up to 2x is safe and improves throughput. Memory
+    // is the real constraint; cap at cpuCount*2 so the API/UI stay responsive.
+    maxRecommendedWorkerConcurrency: Math.max(1, Math.min(cpuCount * 2, memoryBound)),
   };
 }
 
