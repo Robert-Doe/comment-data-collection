@@ -5,6 +5,9 @@ const { getFeatureCatalog, getFeatureCatalogForVariant, groupFeaturesByFamily } 
 const { extractCandidateDataset, serializeDatasetCsv } = require('./dataset');
 const { fitVectorizer, transformRow, transformRows } = require('./vectorizer');
 const { trainLogisticRegression, predictProbability } = require('./logisticRegression');
+const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree } = require('./decisionTree');
+const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
+const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
 const { computeAllMetrics } = require('./metrics');
 const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact } = require('./artifacts');
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
@@ -107,26 +110,149 @@ function canTrainRows(rows) {
   return counts.positive > 0 && counts.negative > 0;
 }
 
-function buildFeatureReliance(vectorizer, model) {
-  const features = (vectorizer.descriptors || []).map((descriptor) => ({
+const TRAINING_ALGORITHMS = [
+  {
+    id: 'logistic_regression',
+    title: 'Logistic Regression',
+  },
+  {
+    id: 'decision_tree',
+    title: 'Decision Tree',
+  },
+  {
+    id: 'random_forest',
+    title: 'Random Forest',
+  },
+  {
+    id: 'gradient_boosting',
+    title: 'Gradient Boosting',
+  },
+];
+
+function listTrainingAlgorithms() {
+  return TRAINING_ALGORITHMS.map((entry) => ({ ...entry }));
+}
+
+function normalizeTrainingAlgorithm(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) {
+    return 'logistic_regression';
+  }
+  return TRAINING_ALGORITHMS.some((entry) => entry.id === normalized) ? normalized : null;
+}
+
+function getArtifactAlgorithm(artifact) {
+  const algorithm = artifact && (artifact.algorithm || (artifact.model && artifact.model.algorithm));
+  return normalizeTrainingAlgorithm(algorithm) || 'logistic_regression';
+}
+
+function trainModelByAlgorithm(algorithm, vectors, labels, trainingOptions = {}) {
+  const normalized = normalizeTrainingAlgorithm(algorithm) || 'logistic_regression';
+  switch (normalized) {
+    case 'decision_tree':
+      return trainDecisionTree(vectors, labels, trainingOptions);
+    case 'random_forest':
+      return trainRandomForest(vectors, labels, trainingOptions);
+    case 'gradient_boosting':
+      return trainGradientBoosting(vectors, labels, trainingOptions);
+    case 'logistic_regression':
+    default:
+      return trainLogisticRegression(vectors, labels, trainingOptions);
+  }
+}
+
+function predictProbabilityForArtifact(artifact, vector) {
+  const model = artifact && artifact.model ? artifact.model : artifact;
+  switch (getArtifactAlgorithm(artifact)) {
+    case 'decision_tree':
+      return predictProbabilityDecisionTree(model, vector);
+    case 'random_forest':
+      return predictProbabilityRandomForest(model, vector);
+    case 'gradient_boosting':
+      return predictProbabilityGradientBoosting(model, vector);
+    case 'logistic_regression':
+    default:
+      return predictProbability(model, vector);
+  }
+}
+
+function explainModelContributions(artifact, vector, vectorizer) {
+  const model = artifact && artifact.model ? artifact.model : artifact;
+  const dimension = vectorizer && Array.isArray(vectorizer.descriptors)
+    ? vectorizer.descriptors.length
+    : (Array.isArray(vector) ? vector.length : 0);
+
+  switch (getArtifactAlgorithm(artifact)) {
+    case 'decision_tree':
+      return explainDecisionTree(model, vector, dimension);
+    case 'random_forest':
+      return explainRandomForest(model, vector, dimension);
+    case 'gradient_boosting':
+      return explainGradientBoosting(model, vector, dimension);
+    case 'logistic_regression':
+    default: {
+      const contributions = new Array(dimension).fill(0);
+      const weights = Array.isArray(model && model.weights) ? model.weights : [];
+      for (let index = 0; index < dimension; index += 1) {
+        contributions[index] = (Number(vector[index]) || 0) * (Number(weights[index]) || 0);
+      }
+      return contributions;
+    }
+  }
+}
+
+function summarizeContributions(vectorizer, contributions, options = {}) {
+  const descriptors = Array.isArray(vectorizer && vectorizer.descriptors) ? vectorizer.descriptors : [];
+  const entries = descriptors
+    .map((descriptor, index) => {
+      const contribution = roundNumber(contributions[index] || 0);
+      return {
+        output_key: descriptor.output_key,
+        feature_key: descriptor.feature_key,
+        title: descriptor.title,
+        family: descriptor.family,
+        value: roundNumber(Number(contributions[index]) || 0),
+        contribution,
+        absolute_contribution: roundNumber(Math.abs(contribution)),
+      };
+    })
+    .filter((entry) => entry.contribution !== 0)
+    .sort((left, right) => Math.abs(right.contribution) - Math.abs(left.contribution));
+
+  const topCount = Math.max(3, Number(options.topCount) || 6);
+  return {
+    top_positive_contributors: entries.filter((entry) => entry.contribution > 0).slice(0, topCount),
+    top_negative_contributors: entries.filter((entry) => entry.contribution < 0).slice(0, topCount),
+  };
+}
+
+function buildFeatureReliance(vectorizer, artifact, rows) {
+  const descriptors = Array.isArray(vectorizer && vectorizer.descriptors) ? vectorizer.descriptors : [];
+  const rowCount = Array.isArray(rows) ? rows.length : 0;
+  const signedTotals = new Array(descriptors.length).fill(0);
+  const absoluteTotals = new Array(descriptors.length).fill(0);
+  const familyMap = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const vector = transformRow(row, vectorizer);
+    const contributions = explainModelContributions(artifact, vector, vectorizer);
+
+    descriptors.forEach((descriptor, index) => {
+      const contribution = Number(contributions[index]) || 0;
+      signedTotals[index] += contribution;
+      absoluteTotals[index] += Math.abs(contribution);
+    });
+  });
+
+  const features = descriptors.map((descriptor, index) => ({
     output_key: descriptor.output_key,
     feature_key: descriptor.feature_key,
     title: descriptor.title,
     family: descriptor.family,
-    weight: roundNumber(model.weights[descriptor.index] || 0),
-    absolute_weight: roundNumber(Math.abs(model.weights[descriptor.index] || 0)),
+    weight: roundNumber(rowCount ? signedTotals[index] / rowCount : 0),
+    absolute_weight: roundNumber(rowCount ? absoluteTotals[index] / rowCount : 0),
   }));
 
-  const positive_weights = features
-    .filter((entry) => entry.weight > 0)
-    .sort((left, right) => right.weight - left.weight)
-    .slice(0, 15);
-  const negative_weights = features
-    .filter((entry) => entry.weight < 0)
-    .sort((left, right) => left.weight - right.weight)
-    .slice(0, 15);
-
-  const familyMap = new Map();
   features.forEach((entry) => {
     if (!familyMap.has(entry.family)) {
       familyMap.set(entry.family, {
@@ -136,18 +262,32 @@ function buildFeatureReliance(vectorizer, model) {
         top_weight: entry.absolute_weight,
       });
     }
+
     const family = familyMap.get(entry.family);
-    family.total_absolute_weight += Math.abs(entry.weight);
+    family.total_absolute_weight += entry.absolute_weight;
     if (entry.absolute_weight > family.top_weight) {
       family.top_weight = entry.absolute_weight;
       family.top_feature = entry.title;
     }
   });
 
+  const positive_weights = features
+    .filter((entry) => entry.weight > 0)
+    .sort((left, right) => right.weight - left.weight)
+    .slice(0, 15);
+  const negative_weights = features
+    .filter((entry) => entry.weight < 0)
+    .sort((left, right) => left.weight - right.weight)
+    .slice(0, 15);
+  const feature_importances = features
+    .filter((entry) => entry.absolute_weight > 0)
+    .sort((left, right) => right.absolute_weight - left.absolute_weight)
+    .slice(0, 20);
+
   const families = Array.from(familyMap.values())
     .map((entry) => ({
       ...entry,
-      total_absolute_weight: roundNumber(entry.total_absolute_weight),
+      total_absolute_weight: roundNumber(rowCount ? entry.total_absolute_weight / rowCount : 0),
       top_weight: roundNumber(entry.top_weight),
     }))
     .sort((left, right) => right.total_absolute_weight - left.total_absolute_weight);
@@ -156,44 +296,29 @@ function buildFeatureReliance(vectorizer, model) {
     positive_weights,
     negative_weights,
     family_importance: families,
+    feature_importances,
   };
 }
 
-function explainScoredRow(row, vectorizer, model, options = {}) {
+function explainScoredRow(row, vectorizer, artifact, options = {}) {
   const vector = transformRow(row, vectorizer);
-  const contributions = vectorizer.descriptors
-    .map((descriptor) => ({
-      output_key: descriptor.output_key,
-      feature_key: descriptor.feature_key,
-      title: descriptor.title,
-      family: descriptor.family,
-      value: roundNumber(vector[descriptor.index] || 0),
-      contribution: roundNumber((vector[descriptor.index] || 0) * (model.weights[descriptor.index] || 0)),
-    }))
-    .filter((entry) => entry.value !== 0 && entry.contribution !== 0)
-    .sort((left, right) => Math.abs(right.contribution) - Math.abs(left.contribution));
-
-  const topCount = Math.max(3, Number(options.topCount) || 6);
-  return {
-    top_positive_contributors: contributions.filter((entry) => entry.contribution > 0).slice(0, topCount),
-    top_negative_contributors: contributions.filter((entry) => entry.contribution < 0).slice(0, topCount),
-  };
+  const contributions = explainModelContributions(artifact, vector, vectorizer);
+  return summarizeContributions(vectorizer, contributions, options);
 }
 
 function scoreRows(rows, artifact, options = {}) {
   const vectorizer = artifact.vectorizer;
-  const model = artifact.model;
 
   return (Array.isArray(rows) ? rows : []).map((row) => {
     const vector = transformRow(row, vectorizer);
-    const probability = predictProbability(model, vector);
+    const probability = predictProbabilityForArtifact(artifact, vector);
     return {
       ...row,
       probability: roundNumber(probability),
       predicted_label: probability >= (Number(options.threshold) || 0.5) ? 1 : 0,
       explanation: options.includeExplanations === false
         ? null
-        : explainScoredRow(row, vectorizer, model, options),
+        : explainScoredRow(row, vectorizer, artifact, options),
     };
   });
 }
@@ -295,6 +420,10 @@ function buildRuntimeModelBundle(artifact, options = {}) {
   const vectorizer = artifact.vectorizer || {};
   const model = artifact.model || {};
   const reliance = artifact.reliance || {};
+  const runtimeModel = JSON.parse(JSON.stringify(model || {}));
+  if (!runtimeModel.algorithm && artifact.algorithm) {
+    runtimeModel.algorithm = artifact.algorithm;
+  }
 
   return {
     schema_version: 1,
@@ -322,11 +451,7 @@ function buildRuntimeModelBundle(artifact, options = {}) {
       categoricalMaps: vectorizer.categoricalMaps ? { ...vectorizer.categoricalMaps } : {},
       dimension: Number(vectorizer.dimension) || 0,
     },
-    model: {
-      algorithm: model.algorithm || artifact.algorithm,
-      weights: Array.isArray(model.weights) ? model.weights.slice() : [],
-      bias: Number(model.bias) || 0,
-    },
+    model: runtimeModel,
     evaluation_summary: summarizeEvaluationForRuntime(artifact.evaluation),
     reliance_summary: {
       family_importance: Array.isArray(reliance.family_importance)
@@ -337,6 +462,9 @@ function buildRuntimeModelBundle(artifact, options = {}) {
         : [],
       negative_weights: Array.isArray(reliance.negative_weights)
         ? reliance.negative_weights.map((entry) => ({ ...entry }))
+        : [],
+      feature_importances: Array.isArray(reliance.feature_importances)
+        ? reliance.feature_importances.map((entry) => ({ ...entry }))
         : [],
     },
   };
@@ -363,21 +491,30 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
   const trainVectors = transformRows(split.trainRows, vectorizer);
   const trainLabels = split.trainRows.map((row) => row.binary_label);
-  const model = trainLogisticRegression(trainVectors, trainLabels, trainingInput.trainingOptions);
-  const scoredTrainRows = scoreRows(split.trainRows, { vectorizer, model }, { includeExplanations: false });
-  const scoredTestRows = scoreRows(split.testRows, { vectorizer, model }, { includeExplanations: false });
+  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm);
+  if (!normalizedAlgorithm) {
+    throw new Error('Select a valid training algorithm');
+  }
+
+  const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, trainingInput.trainingOptions);
+  const trainingArtifact = {
+    algorithm: model.algorithm,
+    model,
+  };
+  const scoredTrainRows = scoreRows(split.trainRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+  const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
   const evaluation = {
     train: computeAllMetrics(scoredTrainRows, {}),
     test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
   };
-  const reliance = buildFeatureReliance(vectorizer, model);
+  const reliance = buildFeatureReliance(vectorizer, trainingArtifact, split.trainRows);
 
   const artifact = {
     id: buildArtifactId(variant.id),
     variant_id: variant.id,
     variant_title: variant.title,
     variant_description: variant.description,
-    algorithm: model.algorithm,
+    algorithm: trainingArtifact.algorithm,
     created_at: new Date().toISOString(),
     feature_count: dataset.featureCatalog.length,
     feature_catalog: dataset.featureCatalog,
@@ -504,6 +641,8 @@ function exportDataset(items, variantId) {
 
 module.exports = {
   buildOverview,
+  listTrainingAlgorithms,
+  normalizeTrainingAlgorithm,
   trainModel,
   getModelDetails,
   buildRuntimeModelBundle,

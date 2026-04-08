@@ -11,6 +11,8 @@ const {
 const { listModelVariants, getModelVariant } = require('../variants');
 const {
   buildOverview,
+  listTrainingAlgorithms,
+  normalizeTrainingAlgorithm,
   trainModel,
   getModelDetails,
   buildRuntimeModelBundle,
@@ -65,6 +67,12 @@ function createModelingRouter(dependencies) {
     });
   });
 
+  router.get('/algorithms', (_req, res) => {
+    res.json({
+      algorithms: listTrainingAlgorithms(),
+    });
+  });
+
   router.get('/models', async (_req, res, next) => {
     try {
       const models = await dependencies.listModelArtifacts();
@@ -116,10 +124,17 @@ function createModelingRouter(dependencies) {
         return;
       }
 
+      const algorithm = normalizeTrainingAlgorithm(req.body && req.body.algorithm);
+      if (!algorithm) {
+        res.status(400).json({ error: 'Select a valid training algorithm' });
+        return;
+      }
+
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
       const items = await loadModelingItems(jobIds);
       const trained = await trainModel(items, dependencies.artifactRoot, {
         variantId,
+        algorithm,
         split: req.body && req.body.split ? req.body.split : undefined,
         trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
       });

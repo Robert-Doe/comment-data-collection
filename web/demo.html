@@ -784,8 +784,11 @@
           </div>
           <div class="rep-field" style="margin:0">
             <label>Training Algorithm</label>
-            <select id="rep-train-algorithm" title="The classifier used to fit the model. More algorithms will be available here in future iterations.">
+            <select id="rep-train-algorithm" title="Choose the classifier used to fit the model. Logistic Regression is the baseline; tree-based models are available for comparison.">
               <option value="logistic_regression" selected>Logistic Regression</option>
+              <option value="decision_tree">Decision Tree</option>
+              <option value="random_forest">Random Forest</option>
+              <option value="gradient_boosting">Gradient Boosting</option>
             </select>
           </div>
           <div class="rep-field" style="margin:0">
@@ -803,7 +806,7 @@
             <div class="rep-chip-row">
               <span class="rep-chip plain" title="Number of HTML features extracted per candidate">Feature Count: 42</span>
               <span class="rep-chip good" title="Text keywords are included as features">🔤 Keywords: included</span>
-              <span class="rep-chip plain" title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
+              <span class="rep-chip plain" data-algorithm-chip title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
             </div>
             <button class="rep-train-btn" id="rep-train-kw-btn">Train Keyword-Aware Model</button>
             <span class="rep-link-btn" style="font-size:0.74rem">↓ Download Variant Dataset</span>
@@ -815,7 +818,7 @@
             <div class="rep-chip-row">
               <span class="rep-chip plain" title="Number of HTML features extracted per candidate">Feature Count: 28</span>
               <span class="rep-chip muted-chip" title="Text keywords are excluded — only structural signals used">🏗 Keywords: excluded</span>
-              <span class="rep-chip plain" title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
+              <span class="rep-chip plain" data-algorithm-chip title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
             </div>
             <button class="rep-train-btn" id="rep-train-struct-btn">Train Structure-Only Model</button>
             <span class="rep-link-btn" style="font-size:0.74rem">↓ Download Variant Dataset</span>
@@ -1047,10 +1050,10 @@ const STEPS = [
     icon: '🔎',
     badge: 'Scope & Algorithm',
     title: 'Set Scope & Choose Algorithm',
-    desc: 'Before training, set two optional parameters: the Job IDs Filter scopes which candidates to train on; the Training Algorithm dropdown selects the classifier. Currently only Logistic Regression is available — a dropdown makes it easy to plug in SVM, Random Forest, or others later.',
+    desc: 'Before training, set two optional parameters: the Job IDs Filter scopes which candidates to train on; the Training Algorithm dropdown selects the classifier. Logistic Regression is the baseline, and Decision Tree, Random Forest, and Gradient Boosting are available when you want to compare models.',
     tips: [
       { type: 'info', title: 'Leave Job IDs blank for all data', body: 'Most of the time you leave this empty to use every labeled candidate regardless of which job found it. Enter job IDs to isolate a specific batch.' },
-      { type: 'success', title: 'Algorithm dropdown is future-proof', body: 'Logistic Regression is the default. As you experiment with other classifiers, you\'ll select them here — no code changes needed. The algorithm is recorded in every saved model artifact.' },
+      { type: 'success', title: 'Algorithm dropdown is future-proof', body: 'Logistic Regression is the default, but the dropdown now lets you switch between linear and tree-based classifiers without changing the workflow. Every saved model records the algorithm you chose.' },
     ],
     section: 'rep-train',
     action: 'runFilter',
@@ -1060,9 +1063,9 @@ const STEPS = [
     icon: '🏋️',
     badge: 'Train',
     title: 'Training a Model Variant',
-    desc: 'Click "Train [Variant]" on one of the two variant cards. Each card shows its feature count, whether keywords are included, and which algorithm will run. The result shows Precision, Recall, F1, Top-1 Accuracy, the most influential feature families, and the top positive and negative weight drivers.',
+    desc: 'Click "Train [Variant]" on one of the two variant cards. Each card shows its feature count, whether keywords are included, and which algorithm will run. The result shows Precision, Recall, F1, Top-1 Accuracy, the most influential feature families, and the top positive and negative signals.',
     tips: [
-      { type: 'info', title: '🔤 Keyword-Aware vs 🏗 Structure-Only', body: 'Keyword-Aware includes text signals ("comments", "reply", "posted by") on top of DOM structure — typically 10–15 F1 points better. Structure-Only is a useful control to measure how much keywords actually contribute.' },
+      { type: 'info', title: '🔤 Keyword-Aware vs 🏗 Structure-Only', body: 'Keyword-Aware keeps lexical signals such as comment, review, and reply on top of DOM structure. Structure-Only removes those keywords so you can measure the structural baseline.' },
       { type: 'success', title: 'Train both, compare F1', body: 'Train the Keyword-Aware variant first, then the Structure-Only variant. Compare their F1 scores in the Trained Models table to decide which to export for the browser extension.' },
     ],
     section: 'rep-train',
@@ -1258,6 +1261,27 @@ function makeChip(text, type) {
   return span;
 }
 
+const ALGORITHM_LABELS = {
+  logistic_regression: 'Logistic Regression',
+  decision_tree: 'Decision Tree',
+  random_forest: 'Random Forest',
+  gradient_boosting: 'Gradient Boosting',
+};
+
+function formatAlgorithmLabel(value) {
+  const key = String(value || '').trim();
+  if (!key) return 'Logistic Regression';
+  return ALGORITHM_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function syncAlgorithmChips() {
+  const select = document.getElementById('rep-train-algorithm');
+  const label = formatAlgorithmLabel(select ? select.value : '');
+  document.querySelectorAll('[data-algorithm-chip]').forEach((chip) => {
+    chip.textContent = `Algorithm: ${label}`;
+  });
+}
+
 // ══════════════════════════════════════════════════════════════
 //  NARRATOR RENDERING
 // ══════════════════════════════════════════════════════════════
@@ -1333,7 +1357,7 @@ const actions = {
     const algoSelect = document.getElementById('rep-train-algorithm');
     await clickEl(algoSelect);
     await sleep(600);
-    showToast('Training Algorithm', 'Currently only Logistic Regression is available. The dropdown is ready for SVM, Random Forest, or any other classifier you add later — just add an option here.', '⚙️', 6500);
+    showToast('Training Algorithm', 'Choose the classifier before training. Logistic Regression is the baseline, and Decision Tree, Random Forest, and Gradient Boosting are available for comparison.', '??????', 6500);
     hideCursor();
     await sleep(3500);
 
@@ -1347,25 +1371,26 @@ const actions = {
   },
 
   async runTrain() {
-    showToast('Train Keyword-Aware Model', 'Click the "Train" button on the Keyword-Aware variant. The cursor will show you.', '🏋️', 4000);
+    const classifierLabel = formatAlgorithmLabel(document.getElementById('rep-train-algorithm').value);
+    showToast('Train Keyword-Aware Model', `Click the "Train" button on the Keyword-Aware variant after choosing ${classifierLabel}. The cursor will show you.`, '???', 4000);
     await sleep(1200);
     const trainBtn = document.getElementById('rep-train-kw-btn');
     await clickEl(trainBtn);
-    trainBtn.innerHTML = '<span class="demo-spinner white"></span> Training…';
+    trainBtn.innerHTML = '<span class="demo-spinner white"></span> Training...';
     trainBtn.classList.add('loading');
 
     const progress = document.getElementById('rep-train-progress');
-    const status   = document.getElementById('rep-train-status');
+    const status = document.getElementById('rep-train-status');
     progress.style.display = 'block';
     hideCursor();
 
     const stages = [
-      'Loading labeled candidates from database…',
-      'Extracting ~40 HTML features per candidate…',
-      'Splitting dataset: 80% train / 20% test…',
-      'Fitting Logistic Regression classifier…',
-      'Computing Precision / Recall / F1 on test set…',
-      'Saving model artifact…',
+      'Loading labeled candidates from database...',
+      'Extracting HTML features per candidate...',
+      'Splitting dataset: 80% train / 20% test...',
+      `Fitting ${classifierLabel} classifier...`,
+      'Computing Precision / Recall / F1 on test set...',
+      'Saving model artifact...',
     ];
     for (const msg of stages) {
       status.textContent = msg;
@@ -1373,11 +1398,10 @@ const actions = {
     }
 
     progress.style.display = 'none';
-    trainBtn.innerHTML = '✓ Trained';
+    trainBtn.innerHTML = '? Trained';
     trainBtn.style.background = 'var(--success)';
     trainBtn.classList.remove('loading');
 
-    // Show 4-card result
     const resultGrid = document.getElementById('rep-train-result');
     resultGrid.style.display = 'grid';
     await sleep(300);
@@ -1388,7 +1412,6 @@ const actions = {
       await sleep(250);
     }
 
-    // Fill metrics
     document.getElementById('rc-train-rows').textContent = '37';
     document.getElementById('rc-test-rows').textContent = '10';
     await sleep(400);
@@ -1397,23 +1420,20 @@ const actions = {
     document.getElementById('rc-f1').textContent = '0.89';
     document.getElementById('rc-top1').textContent = '0.94';
 
-    // Fill reliance chips
     const relianceData = [['keywords', '2.34'], ['structure', '1.87'], ['depth', '0.92'], ['sibling', '0.71'], ['aria', '0.58']];
     const relianceEl = document.getElementById('rc-reliance-chips');
-    relianceData.forEach(([k, v]) => relianceEl.appendChild(makeChip(`${k}: ${v}`, 'plain')));
+    relianceData.forEach(([k, v]) => relianceEl.appendChild(makeChip(k + ': ' + v, 'plain')));
 
-    // Fill positive weights
     const posData = ['css:comments-section', 'kw:comment', 'kw:reply', 'aria:live', 'css:comment-list'];
     const posEl = document.getElementById('rc-positive-chips');
-    posData.forEach(f => posEl.appendChild(makeChip(f, 'good')));
+    posData.forEach((f) => posEl.appendChild(makeChip(f, 'good')));
 
-    // Fill negative weights
     const negData = ['kw:share', 'css:share-tools', 'depth:root', 'sibling:single'];
     const negEl = document.getElementById('rc-negative-chips');
-    negData.forEach(f => negEl.appendChild(makeChip(f, 'muted')));
+    negData.forEach((f) => negEl.appendChild(makeChip(f, 'muted')));
 
     await sleep(1000);
-    showToast('Model trained! F1: 0.89 — Top-1 Accuracy: 0.94', 'Feature Reliance shows "keywords" contributed most. Keyword signals are the strongest signal for UGC detection.', '✅', 6000);
+    showToast('Model trained! F1: 0.89 - Top-1 Accuracy: 0.94', 'Feature Reliance highlights the families that pushed the model toward comment-region predictions.', '?', 6000);
     await sleep(5500);
   },
 
@@ -1761,6 +1781,11 @@ function restartDemo() {
     .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
   const filterInput = document.getElementById('rep-job-filter');
   if (filterInput) filterInput.value = '';
+  const algorithmSelect = document.getElementById('rep-train-algorithm');
+  if (algorithmSelect) {
+    algorithmSelect.value = 'logistic_regression';
+    syncAlgorithmChips();
+  }
   const trainKwBtn = document.getElementById('rep-train-kw-btn');
   if (trainKwBtn) { trainKwBtn.innerHTML = 'Train Keyword-Aware Model'; trainKwBtn.style.background = ''; trainKwBtn.classList.remove('loading'); }
   document.getElementById('rep-train-progress').style.display = 'none';
@@ -1794,6 +1819,13 @@ function restartDemo() {
 
   runStep(0);
 }
+
+const repTrainAlgorithm = document.getElementById('rep-train-algorithm');
+if (repTrainAlgorithm) {
+  repTrainAlgorithm.addEventListener('change', syncAlgorithmChips);
+}
+syncAlgorithmChips();
+
 </script>
 </body>
 </html>

@@ -30,8 +30,21 @@
   let currentVariants = [];
   let currentOverview = null;
 
+  const ALGORITHM_LABELS = {
+    logistic_regression: 'Logistic Regression',
+    decision_tree: 'Decision Tree',
+    random_forest: 'Random Forest',
+    gradient_boosting: 'Gradient Boosting',
+  };
+
   function apiUrl(path) {
     return `${apiBase}${path}`;
+  }
+
+  function formatAlgorithmName(value) {
+    const key = String(value || '').trim();
+    if (!key) return 'Logistic Regression';
+    return ALGORITHM_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
   }
 
   function runtimeModelUrl(modelId) {
@@ -117,7 +130,7 @@
     variantCards.innerHTML = currentVariants.map((variant) => {
       const usesKeywords = !variant.excludeKeywordFeatures;
       const algorithmLabel = trainAlgorithm
-        ? (trainAlgorithm.options[trainAlgorithm.selectedIndex] || {}).text || trainAlgorithm.value
+        ? formatAlgorithmName(trainAlgorithm.value)
         : 'Logistic Regression';
       return `
         <article class="model-card">
@@ -128,8 +141,8 @@
             <span class="feature-chip plain">
               <strong>Feature Count</strong><span>${escapeHtml(variant.feature_count)}</span>
             </span>
-            <span class="feature-chip ${usesKeywords ? 'good' : 'muted'}" title="${usesKeywords ? 'Text keywords (e.g. "comments", "reply") are included as features' : 'Only structural DOM signals used — no text keywords'}">
-              <strong>${usesKeywords ? '🔤 Keywords' : '🏗 Structure'}</strong>
+            <span class="feature-chip ${usesKeywords ? 'good' : 'muted'}" title="${usesKeywords ? 'Text keywords (e.g. "comments", "reply") are included as features' : 'Text keywords are excluded — only structural DOM signals remain'}">
+              <strong>🔤 Keywords</strong>
               <span>${usesKeywords ? 'included' : 'excluded'}</span>
             </span>
             <span class="feature-chip plain" title="The classifier algorithm that will be used when you click Train">
@@ -158,6 +171,7 @@
       : model.evaluation && model.evaluation.train
         ? model.evaluation.train
         : null;
+    const algorithmLabel = formatAlgorithmName(model.algorithm);
     const familyImportance = model.reliance && Array.isArray(model.reliance.family_importance)
       ? model.reliance.family_importance.slice(0, 6)
       : [];
@@ -175,6 +189,7 @@
         <h3>${escapeHtml(model.variant_title || model.variant_id || '')}</h3>
         <p>Saved as <code>${escapeHtml(model.id || '')}</code>. This is the artifact you can use for scoring jobs and probing site groups.</p>
         <div class="summary tight-summary">
+          <div><strong>Algorithm:</strong> ${escapeHtml(algorithmLabel)}</div>
           <div><strong>Train Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.train_rows : '')}</div>
           <div><strong>Test Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.test_rows : '')}</div>
           <div><strong>Precision:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.precision) : '')}</div>
@@ -194,15 +209,15 @@
             </span>
           `).join('')}
         </div>
-        <p class="candidate-copy">These are the feature families the trained logistic model leaned on most heavily, based on summed absolute coefficient weight.</p>
+        <p class="candidate-copy">These are the feature families the trained model leaned on most heavily, based on average absolute contribution across labeled training rows.</p>
       </article>
       <article class="model-card">
         <p class="eyebrow subtle">Positive Drivers</p>
-        <h3>Top Positive Weights</h3>
+        <h3>Top Positive Signals</h3>
         <div class="feature-chip-list">
           ${positiveWeights.map((entry) => `
             <span class="feature-chip good">
-              <strong>${escapeHtml(entry.output_key)}</strong>
+              <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
               <span>${escapeHtml(formatMetric(entry.weight))}</span>
             </span>
           `).join('')}
@@ -210,11 +225,11 @@
       </article>
       <article class="model-card">
         <p class="eyebrow subtle">Negative Drivers</p>
-        <h3>Top Negative Weights</h3>
+        <h3>Top Negative Signals</h3>
         <div class="feature-chip-list">
           ${negativeWeights.map((entry) => `
             <span class="feature-chip muted">
-              <strong>${escapeHtml(entry.output_key)}</strong>
+              <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
               <span>${escapeHtml(formatMetric(entry.weight))}</span>
             </span>
           `).join('')}
@@ -226,7 +241,7 @@
   function repopulateModelSelects(models) {
     currentModels = models || [];
     const options = currentModels.map((model) => `
-      <option value="${escapeHtml(model.id)}">${escapeHtml(model.variant_title || model.variant_id || model.id)}</option>
+      <option value="${escapeHtml(model.id)}">${escapeHtml(`${model.variant_title || model.variant_id || model.id} • ${formatAlgorithmName(model.algorithm)} • ${String(model.created_at || '').slice(0, 10)}`)}</option>
     `).join('');
 
     [scoreModelId, siteGroupModelId].forEach((select) => {
@@ -250,6 +265,7 @@
           <tr>
             <th>Artifact</th>
             <th>Variant</th>
+            <th>Algorithm</th>
             <th>Created</th>
             <th>Precision</th>
             <th>Recall</th>
@@ -269,6 +285,7 @@
               <tr>
                 <td class="mono">${escapeHtml(model.id || '')}</td>
                 <td>${escapeHtml(model.variant_title || model.variant_id || '')}</td>
+                <td>${escapeHtml(formatAlgorithmName(model.algorithm))}</td>
                 <td>${escapeHtml(model.created_at || '')}</td>
                 <td>${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.precision) : '')}</td>
                 <td>${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.recall) : '')}</td>
@@ -342,6 +359,7 @@
       `<div><strong>Manual Review:</strong> ${escapeHtml(summary.manual_review_item_count)}</div>`,
       `<div><strong>Mean Top Probability:</strong> ${escapeHtml(formatMetric(summary.mean_top_probability))}</div>`,
       `<div><strong>Model:</strong> ${escapeHtml(result.artifact ? result.artifact.id : '')}</div>`,
+      `<div><strong>Algorithm:</strong> ${escapeHtml(result.artifact ? formatAlgorithmName(result.artifact.algorithm) : '')}</div>`,
     ].join('');
 
     if (!items.length) {
@@ -387,13 +405,13 @@
                       <div class="feature-chip-list">
                         ${positiveContributors.map((entry) => `
                           <span class="feature-chip good">
-                            <strong>${escapeHtml(entry.output_key)}</strong>
+                            <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
                             <span>${escapeHtml(formatMetric(entry.contribution))}</span>
                           </span>
                         `).join('')}
                         ${negativeContributors.map((entry) => `
                           <span class="feature-chip muted">
-                            <strong>${escapeHtml(entry.output_key)}</strong>
+                            <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
                             <span>${escapeHtml(formatMetric(entry.contribution))}</span>
                           </span>
                         `).join('')}
@@ -484,7 +502,7 @@
 
   async function trainVariant(variantId) {
     const algorithm = trainAlgorithm ? trainAlgorithm.value : 'logistic_regression';
-    setMessage(trainMessage, `Training model using ${algorithm.replace(/_/g, ' ')}…`, false);
+    setMessage(trainMessage, `Training model using ${formatAlgorithmName(algorithm)}…`, false);
     const body = {
       variantId,
       jobIds: trainJobIds.value.trim(),

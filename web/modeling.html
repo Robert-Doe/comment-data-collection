@@ -50,8 +50,11 @@
             </label>
             <label class="field">
               <span>Training Algorithm</span>
-              <select id="train-algorithm" title="The classifier used to fit the model. More algorithms can be added here in future iterations.">
+              <select id="train-algorithm" title="Choose the classifier used to fit the model. Logistic Regression is the baseline; tree-based models are available for comparison.">
                 <option value="logistic_regression" selected>Logistic Regression</option>
+                <option value="decision_tree">Decision Tree</option>
+                <option value="random_forest">Random Forest</option>
+                <option value="gradient_boosting">Gradient Boosting</option>
               </select>
             </label>
             <label class="field">
