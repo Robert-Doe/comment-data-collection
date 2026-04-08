@@ -82,6 +82,9 @@
   let jobLabelerTransition = null;
   let jobLabelerTransitionTimer = null;
   const pageSize = 50;
+  // Load labeler rows in smaller chunks so opening the tab is immediate.
+  const jobLabelerBatchSize = pageSize;
+  const jobLabelerPrefetchThreshold = 8;
   const candidatePageSize = 1;
   const activePollIntervalMs = 4000;
   const terminalPollIntervalMs = 12000;
@@ -96,6 +99,7 @@
   const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
   const jobLabelerCache = new Map();
+  let jobLabelerLoadToken = 0;
 
   function normalizeBaseUrl(value) {
     return String(value || '').trim().replace(/\/+$/g, '');
@@ -1002,8 +1006,16 @@
   function setJobLabelerNavState(state) {
     const disabled = !state || !state.entries.length;
     const transitioning = !!(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId);
-    jobLabelerPrevButton.disabled = disabled || transitioning || state.index <= 0;
-    jobLabelerNextButton.disabled = disabled || transitioning || state.index >= (state.entries.length - 1);
+    const hasMore = !!(state && state.hasMore);
+    const loadingMore = !!(state && state.loadingMorePromise);
+    const currentIndex = Math.max(0, Number(state && state.index) || 0);
+    const lastIndex = Math.max(0, (state && state.entries ? state.entries.length : 0) - 1);
+    const atEnd = currentIndex >= lastIndex;
+    jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
+    jobLabelerNextButton.disabled = disabled
+      || transitioning
+      || (!hasMore && atEnd)
+      || (loadingMore && atEnd);
   }
 
   function stopJobLabelerTransition() {
@@ -1040,10 +1052,153 @@
     state.entries.splice(insertAt, 0, entry);
   }
 
+  function createJobLabelerState(options = {}) {
+    return {
+      itemsById: new Map(),
+      entries: [],
+      index: 0,
+      loadedRows: 0,
+      totalRows: Math.max(0, Number(options.totalRows) || 0),
+      nextOffset: 0,
+      hasMore: false,
+      loadingMorePromise: null,
+      focusEntryKey: String(options.focusEntryKey || ''),
+      pendingAdvanceFromIndex: -1,
+    };
+  }
+
+  function findJobLabelerEntryIndex(state, entryKey) {
+    if (!state || !entryKey) return -1;
+    return state.entries.findIndex((entry) => jobLabelerEntryKey(entry) === entryKey);
+  }
+
+  function resolveJobLabelerSelection(state) {
+    if (!state) return false;
+
+    if (state.pendingAdvanceFromIndex >= 0) {
+      const nextUnreviewed = findNextUnreviewedLabelerIndex(state, state.pendingAdvanceFromIndex);
+      if (nextUnreviewed >= 0) {
+        state.index = nextUnreviewed;
+        state.pendingAdvanceFromIndex = -1;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function pickInitialJobLabelerIndex(state) {
+    if (!state) return -1;
+
+    if (state.focusEntryKey) {
+      const focusIndex = findJobLabelerEntryIndex(state, state.focusEntryKey);
+      if (focusIndex >= 0) {
+        state.focusEntryKey = '';
+        return focusIndex;
+      }
+      return -1;
+    }
+
+    const firstUnreviewed = findNextUnreviewedLabelerIndex(state, 0);
+    if (firstUnreviewed >= 0) {
+      return firstUnreviewed;
+    }
+    return -1;
+  }
+
+  function appendJobLabelerBatch(state, batchItems, pagination) {
+    if (!state) return 0;
+
+    const items = Array.isArray(batchItems) ? batchItems : [];
+    items.forEach((item) => {
+      if (item && item.id) {
+        state.itemsById.set(item.id, item);
+      }
+    });
+
+    const entries = buildJobLabelerEntries(items);
+    if (entries.length) {
+      state.entries.push(...entries);
+    }
+
+    state.loadedRows += items.length;
+
+    const totalRows = Math.max(0, Number(pagination && pagination.total) || 0);
+    if (totalRows) {
+      state.totalRows = Math.max(state.totalRows || 0, totalRows);
+    }
+
+    const offset = Math.max(0, Number(pagination && pagination.offset) || state.nextOffset || 0);
+    const limit = Math.max(1, Number(pagination && pagination.limit) || items.length || jobLabelerBatchSize);
+    state.nextOffset = offset + items.length;
+    state.hasMore = state.totalRows ? state.nextOffset < state.totalRows : items.length >= limit;
+
+    resolveJobLabelerSelection(state);
+    return entries.length;
+  }
+
+  async function fetchJobLabelerBatch(jobId, offset, limit) {
+    const body = await fetchJson(`/api/jobs/${jobId}?limit=${limit}&offset=${offset}`);
+    return {
+      items: Array.isArray(body && body.items) ? body.items : [],
+      pagination: body && body.pagination ? body.pagination : { limit, offset, total: 0 },
+    };
+  }
+
+  async function loadNextJobLabelerBatch(jobId, state) {
+    if (!state || !jobId) return 0;
+    if (!state.hasMore) return 0;
+    if (state.loadingMorePromise) {
+      return state.loadingMorePromise;
+    }
+
+    state.loadingMorePromise = (async () => {
+      const { items, pagination } = await fetchJobLabelerBatch(jobId, state.nextOffset, jobLabelerBatchSize);
+      return appendJobLabelerBatch(state, items, pagination);
+    })();
+
+    try {
+      return await state.loadingMorePromise;
+    } finally {
+      state.loadingMorePromise = null;
+      if (currentJobId === jobId && currentJobLabelerState() === state && activeWorkspaceTab === 'labeler') {
+        renderJobLabelerReview();
+      }
+    }
+  }
+
+  function maybePrefetchJobLabelerEntries(jobId) {
+    const state = currentJobLabelerState();
+    if (!state || currentJobId !== jobId || activeWorkspaceTab !== 'labeler') return null;
+    if (!state.hasMore || state.loadingMorePromise) return null;
+
+    const remaining = Math.max(0, (state.entries.length - 1) - Math.max(0, state.index || 0));
+    if (remaining > jobLabelerPrefetchThreshold) return null;
+
+    const promise = loadNextJobLabelerBatch(jobId, state);
+    promise.catch((error) => {
+      console.error(error);
+    }).finally(() => {
+      if (currentJobId === jobId && currentJobLabelerState() === state && activeWorkspaceTab === 'labeler') {
+        maybePrefetchJobLabelerEntries(jobId);
+      }
+    });
+    return promise;
+  }
+
+  async function ensureJobLabelerEntriesForIndex(jobId, state, targetIndex) {
+    if (!state) return false;
+    while (state.hasMore && targetIndex >= state.entries.length) {
+      await loadNextJobLabelerBatch(jobId, state);
+    }
+    return targetIndex < state.entries.length;
+  }
+
   function invalidateJobLabelerCache(jobId) {
     if (!jobId) return;
     jobLabelerCache.delete(jobId);
     if (jobLabelerLoadingJobId === jobId) {
+      jobLabelerLoadToken += 1;
       jobLabelerLoadingJobId = '';
       jobLabelerLoadingPromise = null;
     }
@@ -1066,36 +1221,44 @@
       ? `${existing.entries[existing.index || 0].itemId}:${existing.entries[existing.index || 0].candidateKey}`
       : '';
     const total = Math.max(0, Number(currentJob && currentJob.id === jobId ? currentJob.total_urls : 0) || 0);
-    const requestLimit = 100;
     jobLabelerLoadingJobId = jobId;
+    const loadToken = ++jobLabelerLoadToken;
     jobLabelerLoadingPromise = (async () => {
-      const items = [];
+      const state = createJobLabelerState({
+        totalRows: total,
+        focusEntryKey: existingEntry,
+      });
       let offset = 0;
-      let expectedTotal = total;
       do {
-        const body = await fetchJson(`/api/jobs/${jobId}?limit=${requestLimit}&offset=${offset}`);
-        const batch = Array.isArray(body && body.items) ? body.items : [];
-        items.push(...batch);
-        expectedTotal = Math.max(expectedTotal, Number(body && body.pagination && body.pagination.total) || 0);
-        if (!batch.length || items.length >= expectedTotal) break;
-        offset += requestLimit;
+        const { items, pagination } = await fetchJobLabelerBatch(jobId, offset, jobLabelerBatchSize);
+        if (jobLabelerLoadToken !== loadToken || jobLabelerLoadingJobId !== jobId) {
+          return null;
+        }
+        appendJobLabelerBatch(state, items, pagination);
+
+        const resolvedIndex = pickInitialJobLabelerIndex(state);
+        if (resolvedIndex >= 0) {
+          state.index = resolvedIndex;
+          break;
+        }
+
+        if (!state.hasMore) {
+          break;
+        }
+        offset = state.nextOffset;
       } while (true);
 
-      const itemsById = new Map(items.map((item) => [item.id, item]));
-      const entries = buildJobLabelerEntries(items);
-      const state = {
-        itemsById,
-        entries,
-        index: 0,
-      };
-      if (existingEntry) {
-        const preservedIndex = entries.findIndex((entry) => `${entry.itemId}:${entry.candidateKey}` === existingEntry);
-        if (preservedIndex >= 0) {
-          state.index = preservedIndex;
-        }
-      } else {
-        const firstUnreviewed = findNextUnreviewedLabelerIndex(state, 0);
-        state.index = firstUnreviewed >= 0 ? firstUnreviewed : 0;
+      if (state.focusEntryKey) {
+        const fallbackIndex = findNextUnreviewedLabelerIndex(state, 0);
+        state.index = fallbackIndex >= 0 ? fallbackIndex : 0;
+        state.focusEntryKey = '';
+      }
+      if (!state.entries.length) {
+        state.index = 0;
+      }
+
+      if (jobLabelerLoadToken !== loadToken || jobLabelerLoadingJobId !== jobId) {
+        return null;
       }
       jobLabelerCache.set(jobId, state);
       return state;
@@ -1104,7 +1267,7 @@
     try {
       return await jobLabelerLoadingPromise;
     } finally {
-      if (jobLabelerLoadingJobId === jobId) {
+      if (jobLabelerLoadToken === loadToken && jobLabelerLoadingJobId === jobId) {
         jobLabelerLoadingJobId = '';
         jobLabelerLoadingPromise = null;
       }
@@ -1644,6 +1807,9 @@
     let commentRegion = 0;
     let notComment = 0;
     let uncertain = 0;
+    const loadingRows = state.hasMore || state.loadingMorePromise
+      ? `<div><strong>Rows Loaded:</strong> ${escapeHtml(state.loadedRows || 0)}${state.totalRows ? ` / ${escapeHtml(state.totalRows)}` : ''}</div>`
+      : '';
 
     state.entries.forEach((entry) => {
       itemsWithCandidates.add(entry.itemId);
@@ -1660,6 +1826,7 @@
       <div class="summary">
         <div><strong>Rows With Candidates:</strong> ${escapeHtml(itemsWithCandidates.size)}</div>
         <div><strong>Total Candidates:</strong> ${escapeHtml(state.entries.length)}</div>
+        ${loadingRows}
         <div><strong>Reviewed:</strong> ${escapeHtml(reviewed)}</div>
         <div><strong>Remaining:</strong> ${escapeHtml(state.entries.length - reviewed)}</div>
         <div><strong>Comment Region:</strong> ${escapeHtml(commentRegion)}</div>
@@ -1674,14 +1841,14 @@
     if (!jobLabelerReview) return;
     if (!currentJobId) {
       jobLabelerReview.className = 'candidate-review empty';
-      jobLabelerReview.textContent = 'Select a job, then open Labeler to build a review queue from every row in that job.';
+      jobLabelerReview.textContent = 'Select a job, then open Labeler to build a batched review queue from that job.';
       setJobLabelerNavState(null);
       return;
     }
 
     if (jobLabelerLoadingJobId === currentJobId && jobLabelerLoadingPromise) {
       jobLabelerReview.className = 'candidate-review empty';
-      jobLabelerReview.textContent = 'Loading candidates across the selected job...';
+      jobLabelerReview.textContent = 'Loading the first candidate batch across the selected job...';
       setJobLabelerNavState(null);
       return;
     }
@@ -1689,7 +1856,7 @@
     const state = currentJobLabelerState();
     if (!state) {
       jobLabelerReview.className = 'candidate-review empty';
-      jobLabelerReview.textContent = 'Open Labeler to load a job-wide review queue.';
+      jobLabelerReview.textContent = 'Open Labeler to load a batched review queue.';
       setJobLabelerNavState(null);
       return;
     }
@@ -1735,10 +1902,14 @@
     const heuristicReason = candidateHeuristicReason(candidate);
     const matchedSignals = renderSignalList(candidate.matched_signals, 'good');
     const penaltySignals = renderSignalList(candidate.penalty_signals, 'bad');
+    const loadingNote = state.loadingMorePromise
+      ? '<p class="candidate-copy"><strong>Loading more candidates in the background.</strong></p>'
+      : '';
 
     jobLabelerReview.className = 'candidate-review';
     jobLabelerReview.innerHTML = `
       ${renderJobLabelerSummary(state)}
+      ${loadingNote}
       <div class="candidate-toolbar job-labeler-toolbar">
         <span class="candidate-page-copy">Row ${escapeHtml(item.row_number || '')} • Candidate rank ${escapeHtml(candidate.candidate_rank || entry.candidateRank || '')}</span>
         <div class="candidate-pager">
@@ -1797,6 +1968,7 @@
       </div>
     `;
     setJobLabelerNavState(state);
+    maybePrefetchJobLabelerEntries(currentJobId);
   }
 
   async function ensureJobLabelerLoaded(force) {
@@ -1808,33 +1980,69 @@
     try {
       await loadJobLabelerState(currentJobId, !!force);
       renderJobLabelerReview();
+      maybePrefetchJobLabelerEntries(currentJobId);
     } catch (error) {
       renderJobLabelerReview();
       throw error;
     }
   }
 
-  function stepJobLabeler(direction) {
+  async function stepJobLabeler(direction) {
     const state = currentJobLabelerState();
     if (!state || !state.entries.length) return;
-    const nextIndex = Math.max(0, Math.min((state.index || 0) + direction, state.entries.length - 1));
+    const jobId = currentJobId;
+    state.pendingAdvanceFromIndex = -1;
+    const step = direction < 0 ? -1 : 1;
+    const targetIndex = Math.max(0, (state.index || 0) + step);
+    const nextIndex = Math.min(targetIndex, state.entries.length - 1);
+    if (targetIndex >= state.entries.length && state.hasMore) {
+      startJobLabelerTransition('Loading more candidates...');
+      try {
+        await ensureJobLabelerEntriesForIndex(jobId, state, targetIndex);
+        if (currentJobLabelerState() !== state || currentJobId !== jobId) {
+          return;
+        }
+        state.index = Math.min(targetIndex, state.entries.length - 1);
+        setJobLabelerMessage('', false);
+        stopJobLabelerTransition();
+        renderJobLabelerReview();
+        maybePrefetchJobLabelerEntries(jobId);
+        return;
+      } catch (error) {
+        stopJobLabelerTransition();
+        throw error;
+      }
+    }
     if (nextIndex === state.index) return;
     state.index = nextIndex;
     setJobLabelerMessage('', false);
     renderJobLabelerReview();
+    maybePrefetchJobLabelerEntries(jobId);
+  }
+
+  function handleJobLabelerStep(direction) {
+    stepJobLabeler(direction).catch((error) => {
+      const message = error && error.message ? error.message : String(error);
+      setJobLabelerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    });
   }
 
   function advanceJobLabelerAfterSave(state, previousIndex) {
     if (!state || !state.entries.length) return;
+    state.pendingAdvanceFromIndex = -1;
     const startIndex = Math.min(previousIndex + 1, state.entries.length - 1);
     if (jobLabelerAutoAdvance && jobLabelerAutoAdvance.checked) {
       const nextUnreviewed = findNextUnreviewedLabelerIndex(state, startIndex);
       if (nextUnreviewed >= 0) {
         state.index = nextUnreviewed;
+        maybePrefetchJobLabelerEntries(currentJobId);
         return;
       }
+      state.pendingAdvanceFromIndex = startIndex;
     }
     state.index = Math.min(startIndex, state.entries.length - 1);
+    maybePrefetchJobLabelerEntries(currentJobId);
   }
 
   function applyOptimisticJobLabelerReview(state, entry, label, notes, clear) {
@@ -3322,11 +3530,11 @@
   });
 
   jobLabelerPrevButton.addEventListener('click', () => {
-    stepJobLabeler(-1);
+    handleJobLabelerStep(-1);
   });
 
   jobLabelerNextButton.addEventListener('click', () => {
-    stepJobLabeler(1);
+    handleJobLabelerStep(1);
   });
 
   managerResumeButton.addEventListener('click', () => {
@@ -3355,12 +3563,12 @@
 
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      stepJobLabeler(-1);
+      handleJobLabelerStep(-1);
       return;
     }
     if (event.key === 'ArrowRight') {
       event.preventDefault();
-      stepJobLabeler(1);
+      handleJobLabelerStep(1);
       return;
     }
 

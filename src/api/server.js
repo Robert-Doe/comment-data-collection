@@ -27,6 +27,8 @@ const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSna
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
+const { loadInBatches } = require('../shared/loadInBatches');
+const { createRequestTracker } = require('../shared/requestTracker');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -209,7 +211,7 @@ function queueFillCountForJob(job, config) {
   return Math.min(config.initialQueueFill, pendingCount || totalUrls);
 }
 
-async function listAllJobItemsForAction(jobId, config) {
+async function listAllJobItemsForAction(jobId, config, progress) {
   const job = await getJob(jobId, config.databaseUrl);
   if (!job) {
     return {
@@ -218,10 +220,19 @@ async function listAllJobItemsForAction(jobId, config) {
     };
   }
 
-  const items = await getJobItems(jobId, {
-    limit: Math.max(1, Number(job.total_urls) || 1),
-    offset: 0,
-  }, config.databaseUrl);
+  const total = Math.max(1, Number(job.total_urls) || 1);
+  const items = await loadInBatches(async ({ limit, offset }) => getJobItems(jobId, {
+    limit,
+    offset,
+  }, config.databaseUrl), {
+    batchSize: Math.max(100, Number(config.apiResultsPageSize) || 250),
+    total,
+    label: 'job rows',
+    progress,
+    startMessage: `Loading ${total} job row(s)`,
+    loadedMessage: (count, knownTotal) => `Loaded ${count}${knownTotal ? `/${knownTotal}` : ''} job row(s)`,
+    doneMessage: 'Job rows loaded',
+  });
   return { job, items };
 }
 
@@ -248,8 +259,13 @@ async function purgeJobArtifactFiles(jobId, artifactRoot, databaseUrl) {
 
 function createApp(config = getConfig()) {
   const app = express();
+  const requestTracker = createRequestTracker({
+    historyLimit: 25,
+    historyThresholdMs: 500,
+  });
   app.set('trust proxy', true);
   app.use(cors(createCorsOptions(config)));
+  app.use(requestTracker.middleware);
   app.use(express.json({ limit: '1mb' }));
   app.use(config.artifactUrlBasePath, express.static(config.artifactRoot));
   app.use('/api/modeling', createModelingRouter({
@@ -257,9 +273,9 @@ function createApp(config = getConfig()) {
     listModelArtifacts: () => listModelArtifacts(config.modelArtifactRoot),
     listItemsForModeling: (options) => listItemsForModeling(options, config.databaseUrl),
     getJob: (jobId) => getJob(jobId, config.databaseUrl),
-    getItemsForJob: async (jobId, job) => getJobItems(jobId, {
-      limit: Math.max(1, Number(job && job.total_urls) || 100),
-      offset: 0,
+    getItemsForJob: async (jobId, job, options = {}) => getJobItems(jobId, {
+      limit: Math.max(1, Number(options.limit) || Number(job && job.total_urls) || 100),
+      offset: Math.max(0, Number(options.offset) || 0),
     }, config.databaseUrl),
   }));
 
@@ -279,6 +295,7 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs', upload.single('file'), async (req, res, next) => {
     try {
+      const progress = req.requestProgress;
       const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
       const sourceFilename = req.file ? req.file.originalname : (req.body.filename || 'upload.csv');
       const preferredColumn = req.body.urlColumn || '';
@@ -294,6 +311,16 @@ function createApp(config = getConfig()) {
         res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
         return;
       }
+      progress && progress.update({
+        stage: 'parsing',
+        message: `Parsed ${records.length} URL(s) from the upload`,
+        progress: {
+          current: records.length,
+          total: records.length,
+          unit: 'rows',
+          indeterminate: false,
+        },
+      });
 
       const jobSettings = normalizeJobScanSettings({
         scanDelayMs: req.body.scanDelayMs,
@@ -301,6 +328,16 @@ function createApp(config = getConfig()) {
       }, {
         scanDelayMs: config.postLoadDelayMs,
         screenshotDelayMs: config.preScreenshotDelayMs,
+      });
+      progress && progress.update({
+        stage: 'creating',
+        message: `Creating job for ${records.length} row(s)`,
+        progress: {
+          current: 0,
+          total: 1,
+          unit: 'job',
+          indeterminate: false,
+        },
       });
 
       const job = await createJob({
@@ -313,6 +350,16 @@ function createApp(config = getConfig()) {
       }, config.databaseUrl);
 
       const queue = getSharedQueue(config.redisUrl);
+      progress && progress.update({
+        stage: 'queueing',
+        message: 'Priming worker queue',
+        progress: {
+          current: 0,
+          total: Math.min(config.initialQueueFill, job.totalUrls),
+          unit: 'rows',
+          indeterminate: false,
+        },
+      });
       await fillQueueForJob(
         job.id,
         Math.min(config.initialQueueFill, job.totalUrls),
@@ -398,7 +445,9 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs/:jobId/resume', async (req, res, next) => {
     try {
-      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for resume' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
@@ -449,7 +498,9 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs/:jobId/restart', async (req, res, next) => {
     try {
-      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for restart' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
@@ -494,7 +545,9 @@ function createApp(config = getConfig()) {
 
   app.post('/api/jobs/:jobId/replace', upload.single('file'), async (req, res, next) => {
     try {
-      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for replacement' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
@@ -575,7 +628,9 @@ function createApp(config = getConfig()) {
 
   app.delete('/api/jobs/:jobId', async (req, res, next) => {
     try {
-      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for delete' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
@@ -1092,13 +1147,15 @@ function createApp(config = getConfig()) {
 
   app.get('/api/jobs/:jobId/download.csv', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for CSV export' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit: Math.max(1, job.total_urls), offset: 0 }, config.databaseUrl);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing CSV export' });
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${job.id}.csv"`);
       res.send(`${serializeJobItemsCsv(items.map((item) => materializeItem(item, req)))}\n`);
@@ -1109,13 +1166,15 @@ function createApp(config = getConfig()) {
 
   app.get('/api/jobs/:jobId/features.csv', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for features export' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit: Math.max(1, job.total_urls), offset: 0 }, config.databaseUrl);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing features export' });
       const materializedItems = items.map((item) => materializeItem(item, req));
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${job.id}.features.csv"`);
@@ -1127,13 +1186,15 @@ function createApp(config = getConfig()) {
 
   app.get('/api/jobs/:jobId/candidates.csv', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for candidates export' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit: Math.max(1, job.total_urls), offset: 0 }, config.databaseUrl);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing candidates export' });
       const materializedItems = items.map((item) => materializeItem(item, req));
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${job.id}.candidates.csv"`);
@@ -1145,13 +1206,15 @@ function createApp(config = getConfig()) {
 
   app.get('/api/jobs/:jobId/summary.csv', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for summary export' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit: Math.max(1, job.total_urls), offset: 0 }, config.databaseUrl);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing summary export' });
       const materializedItems = items.map((item) => materializeItem(item, req));
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${job.id}.summary.csv"`);
@@ -1163,13 +1226,15 @@ function createApp(config = getConfig()) {
 
   app.get('/api/jobs/:jobId/report.xlsx', async (req, res, next) => {
     try {
-      const job = await getJob(req.params.jobId, config.databaseUrl);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for report export' });
+      const { job, items } = await listAllJobItemsForAction(req.params.jobId, config, progress);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit: Math.max(1, job.total_urls), offset: 0 }, config.databaseUrl);
+      progress && progress.update({ stage: 'exporting', message: 'Building workbook' });
       const materializedItems = items.map((item) => materializeItem(item, req));
       const workbook = await buildJobReportWorkbook(job, materializedItems);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1242,6 +1307,7 @@ function createApp(config = getConfig()) {
       const jobs = await listJobs(10, config.databaseUrl);
       const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
       const activeJobs = jobs.filter((j) => !terminalStatuses.has(String(j.status || '')));
+      const requestSnapshot = requestTracker.getSnapshot();
 
       res.json({
         ok: true,
@@ -1262,6 +1328,10 @@ function createApp(config = getConfig()) {
           in_flight_count: (Number(j.running_count) || 0) + (Number(j.queued_count) || 0),
           detected_count: j.detected_count,
         })),
+        activeRequestCount: requestSnapshot.activeRequestCount,
+        recentRequestCount: requestSnapshot.recentRequestCount,
+        activeRequests: requestSnapshot.activeRequests,
+        recentRequests: requestSnapshot.recentRequests,
       });
     } catch (error) {
       next(error);
@@ -1305,6 +1375,7 @@ function createApp(config = getConfig()) {
   // Purge artifacts for all completed jobs, keeping the N most recent
   app.post('/api/admin/purge-artifacts', async (req, res, next) => {
     try {
+      const progress = req.requestProgress;
       const keepRecentJobs = Math.max(0, Number(req.query.keepRecentJobs != null ? req.query.keepRecentJobs : req.body && req.body.keepRecentJobs) || 1);
       const jobs = await listJobs(100, config.databaseUrl);
       const completedJobs = jobs.filter((j) => j.status === 'completed' || j.status === 'completed_with_errors');
@@ -1312,9 +1383,30 @@ function createApp(config = getConfig()) {
       completedJobs.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       const toClean = completedJobs.slice(keepRecentJobs);
       const results = [];
-      for (const job of toClean) {
+      progress && progress.update({
+        stage: 'purging',
+        message: `Purging artifacts for ${toClean.length} job(s)`,
+        progress: {
+          current: 0,
+          total: toClean.length,
+          unit: 'jobs',
+          indeterminate: toClean.length === 0,
+        },
+      });
+      for (let index = 0; index < toClean.length; index += 1) {
+        const job = toClean[index];
         const r = await purgeJobArtifactFiles(job.id, config.artifactRoot, config.databaseUrl);
         results.push({ jobId: job.id, ...r });
+        progress && progress.update({
+          stage: 'purging',
+          message: `Purged ${index + 1}/${toClean.length} job(s)`,
+          progress: {
+            current: index + 1,
+            total: toClean.length,
+            unit: 'jobs',
+            indeterminate: false,
+          },
+        });
       }
       const totalBytesFreed = results.reduce((s, r) => s + (r.bytesFreed || 0), 0);
       res.json({ ok: true, purged: results.length, totalBytesFreed, jobs: results });

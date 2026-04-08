@@ -171,10 +171,27 @@ function extractCandidateDataset(items, options = {}) {
   const featureCatalog = Array.isArray(options.featureCatalog) && options.featureCatalog.length
     ? options.featureCatalog.map((entry) => ({ ...entry }))
     : getFeatureCatalogForVariant(variant);
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 50);
+  const sourceItems = Array.isArray(items) ? items : [];
+  const totalItems = sourceItems.length;
 
   const rows = [];
 
-  (Array.isArray(items) ? items : []).forEach((item) => {
+  sourceItems.forEach((item, index) => {
+    if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === totalItems)) {
+      progress({
+        stage: 'extracting',
+        message: `Extracting candidate rows ${index + 1}/${totalItems}`,
+        progress: {
+          current: index + 1,
+          total: totalItems,
+          unit: 'items',
+          indeterminate: totalItems === 0,
+        },
+      });
+    }
+
     const reviewedCandidates = applyCandidateReviews(item && item.candidates ? item.candidates : [], item && item.candidate_reviews ? item.candidate_reviews : []);
     if (!reviewedCandidates.length) {
       return;
@@ -207,7 +224,7 @@ function quoteCsvValue(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function serializeDatasetCsv(rows, featureCatalog) {
+function serializeDatasetCsv(rows, featureCatalog, options = {}) {
   const catalog = Array.isArray(featureCatalog) ? featureCatalog : [];
   const metadataColumns = [
     'dataset_row_id',
@@ -242,13 +259,57 @@ function serializeDatasetCsv(rows, featureCatalog) {
   const header = metadataColumns.concat(catalog.map((entry) => entry.key));
   const lines = [header.join(',')];
 
-  (Array.isArray(rows) ? rows : []).forEach((row) => {
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const totalRows = sourceRows.length;
+
+  if (progress) {
+    progress({
+      stage: 'exporting',
+      message: `Writing CSV rows ${totalRows ? `0/${totalRows}` : '0'}`,
+      progress: {
+        current: 0,
+        total: totalRows,
+        unit: 'rows',
+        indeterminate: totalRows === 0,
+      },
+    });
+  }
+
+  sourceRows.forEach((row, index) => {
+    if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === totalRows)) {
+      progress({
+        stage: 'exporting',
+        message: `Writing CSV rows ${index + 1}/${totalRows}`,
+        progress: {
+          current: index + 1,
+          total: totalRows,
+          unit: 'rows',
+          indeterminate: totalRows === 0,
+        },
+      });
+    }
+
     const values = metadataColumns
       .map((column) => row[column])
       .concat(catalog.map((entry) => row.feature_values ? row.feature_values[entry.key] : ''))
       .map((value) => quoteCsvValue(value));
     lines.push(values.join(','));
   });
+
+  if (progress) {
+    progress({
+      stage: 'exporting',
+      message: `CSV ready (${totalRows} row(s))`,
+      progress: {
+        current: totalRows,
+        total: totalRows || 1,
+        unit: 'rows',
+        indeterminate: false,
+      },
+    });
+  }
 
   return `${lines.join('\n')}\n`;
 }

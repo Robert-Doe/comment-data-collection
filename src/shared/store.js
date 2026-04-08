@@ -673,7 +673,9 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
   }
 
   const limit = Math.max(1, Number(options.limit) || 20000);
+  const offset = Math.max(0, Number(options.offset) || 0);
   params.push(limit);
+  params.push(offset);
 
   const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const result = await db.query(
@@ -681,7 +683,8 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
      FROM job_items
      ${whereClause}
      ORDER BY created_at DESC, row_number ASC
-     LIMIT $${params.length}`,
+     LIMIT $${params.length - 1}
+     OFFSET $${params.length}`,
     params,
   );
   return result.rows;

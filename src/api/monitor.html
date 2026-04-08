@@ -45,6 +45,8 @@
     .pfill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s; }
     .pfill.warn { background: var(--yellow); }
     .pfill.error { background: var(--red); }
+    .pfill.indeterminate { width: 100%; background: linear-gradient(90deg, rgba(59,130,246,0.15), rgba(59,130,246,0.95), rgba(59,130,246,0.15)); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+    @keyframes shimmer { 0% { background-position: 0 0; } 100% { background-position: 200% 0; } }
     .jcard { background: var(--panel2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
     .jid { font-size: 10px; color: var(--muted); word-break: break-all; }
     .jrow { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; }
@@ -86,6 +88,13 @@
     .chip { display: inline-flex; padding: 2px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); color: var(--muted); }
     .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
     .chip:not(.on):hover { border-color: var(--accent); color: var(--accent); }
+    .rlist { display: flex; flex-direction: column; gap: 8px; }
+    .rcard { background: var(--panel2); border-radius: 6px; padding: 10px; }
+    .rtop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .rtitle { font-size: 11px; font-weight: 700; color: var(--text); word-break: break-word; }
+    .rmeta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .rmsg { margin-top: 6px; font-size: 11px; color: var(--text); word-break: break-word; }
+    .rsub { margin-top: 4px; font-size: 10px; color: var(--muted); word-break: break-word; }
     a.back { color: var(--accent); text-decoration: none; font-size: 12px; }
     @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } }
   </style>
@@ -122,6 +131,14 @@
       <div class="card-title">Active Jobs</div>
       <p class="note" style="margin-bottom:10px">Running means a scan is executing right now. Queued means the row has already been claimed and is waiting in the worker pool.</p>
       <div id="jlist"><div class="note">No active jobs.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Server Requests</div>
+      <p class="note" style="margin-bottom:10px">Long API requests stay visible here while they load batches, score rows, or build exports.</p>
+      <div id="ractive"><div class="note">No active requests.</div></div>
+      <div class="card-title" style="margin-top:12px">Recent Long Requests</div>
+      <div id="rrecent"><div class="note">No recent requests.</div></div>
     </div>
 
     <div class="card">
@@ -185,6 +202,69 @@ function fmtBytes(b) {
   var gb=b/1073741824;
   return gb>=1 ? gb.toFixed(1)+' GB' : Math.round(b/1048576)+' MB';
 }
+function fmtDuration(ms) {
+  var value = Number(ms) || 0;
+  if (value < 1000) return Math.max(0, Math.round(value)) + 'ms';
+  var seconds = Math.round(value / 1000);
+  if (seconds < 60) return seconds + 's';
+  var minutes = Math.floor(seconds / 60);
+  var remainder = seconds % 60;
+  return remainder ? minutes + 'm ' + remainder + 's' : minutes + 'm';
+}
+function fmtRequestTitle(req) {
+  if (!req) return '';
+  return String(req.label || ((req.method || '') + ' ' + (req.path || ''))).trim();
+}
+function fmtRequestMeta(req) {
+  if (!req) return '';
+  var pieces = [];
+  if (req.method || req.path) pieces.push((req.method || '') + ' ' + (req.path || ''));
+  if (req.stage) pieces.push(req.stage);
+  if (req.status) pieces.push(req.status);
+  pieces.push(fmtDuration(req.durationMs));
+  return pieces.filter(Boolean).join(' | ');
+}
+function fmtRequestProgress(req) {
+  if (!req || !req.progress) return '';
+  var p = req.progress;
+  if (p.total != null) {
+    return p.current + '/' + p.total + (p.unit ? ' ' + p.unit : '');
+  }
+  if (p.current != null) {
+    return p.current + (p.unit ? ' ' + p.unit : '');
+  }
+  return '';
+}
+function renderRequests(list, emptyText, isRecent) {
+  var items = Array.isArray(list) ? list : [];
+  if (!items.length) {
+    return '<div class="note">'+esc(emptyText)+'</div>';
+  }
+  return '<div class="rlist">'+items.map(function(req) {
+    var progress = req && req.progress ? req.progress : null;
+    var percent = progress && Number.isFinite(Number(progress.percent)) ? Number(progress.percent) : null;
+    if (percent == null && isRecent && req && req.status && req.status !== 'running') {
+      percent = 100;
+    }
+    var fillClass = 'pfill' + (percent == null ? ' indeterminate' : '');
+    var fillStyle = percent == null ? '' : ' style="width:'+Math.max(0, Math.min(100, percent))+'%"';
+    var message = req && (req.message || (progress && progress.message)) ? (req.message || progress.message) : '';
+    var sub = fmtRequestProgress(req);
+    if (!sub && req && req.statusCode != null) {
+      sub = 'HTTP ' + req.statusCode;
+    }
+    var status = req && req.status ? req.status : '';
+    if (isRecent && req && req.statusCode != null) {
+      status = (status ? status + ' | ' : '') + 'HTTP ' + req.statusCode;
+    }
+    return '<div class="rcard">'
+      +'<div class="rtop"><div><div class="rtitle">'+esc(fmtRequestTitle(req))+'</div><div class="rsub">'+esc(fmtRequestMeta(req))+'</div></div><div class="rmeta">'+esc(status)+'</div></div>'
+      +'<div class="pbar" style="margin-top:8px"><div class="'+fillClass+'"'+fillStyle+'></div></div>'
+      +(message ? '<div class="rmsg">'+esc(message)+'</div>' : '')
+      +(sub ? '<div class="rsub">'+esc(sub)+'</div>' : '')
+      +'</div>';
+  }).join('')+'</div>';
+}
 
 function setLv(l) {
   lv = l;
@@ -222,35 +302,47 @@ function showToast(msg, isErr) {
 function loadHealth() {
   fetch(API+'/api/health/detailed').then(function(r){ return r.json(); }).then(function(d){
     var re=document.getElementById('h-redis');
-    re.textContent=d.redis?'OK':'DOWN'; re.className='hv '+(d.redis?'ok':'error');
-    var pct=d.diskUsedPct||0, cls=pct>90?'error':pct>80?'warn':'ok';
-    document.getElementById('h-disk').textContent=pct+'%';
+    var redisState = d.redis === null || d.redis === undefined ? null : !!d.redis;
+    re.textContent=redisState===null?'--':(redisState?'OK':'DOWN');
+    re.className='hv '+(redisState===null?'':(redisState?'ok':'error'));
+    var pct=Number(d.diskUsedPct);
+    var hasPct=Number.isFinite(pct);
+    var cls=hasPct?(pct>90?'error':pct>80?'warn':'ok'):'';
+    document.getElementById('h-disk').textContent=hasPct?pct+'%':'--';
     document.getElementById('h-disk').className='hv '+cls;
     var bar=document.getElementById('h-bar');
-    bar.style.width=pct+'%'; bar.className='pfill '+(pct>90?'error':pct>80?'warn':'');
-    document.getElementById('h-free').textContent=fmtBytes(d.diskFree);
+    bar.style.width=hasPct?pct+'%':'';
+    bar.className='pfill '+(hasPct?(pct>90?'error':pct>80?'warn':''):'indeterminate');
+    document.getElementById('h-free').textContent=d.diskFree==null?'--':fmtBytes(d.diskFree);
     document.getElementById('h-free').className='hv '+cls;
     document.getElementById('h-jobs').textContent=d.activeJobCount||0;
     var jl=document.getElementById('jlist');
-    if (!d.activeJobs||!d.activeJobs.length) { jl.innerHTML='<div class="note">No active jobs.</div>'; return; }
-    jl.innerHTML=d.activeJobs.map(function(j){
-      var pj=j.total_urls?Math.round(j.completed_count/j.total_urls*100):0;
-      var running = Number(j.running_count)||0;
-      var queued = Number(j.queued_count)||0;
-      var pending = Number(j.pending_count)||0;
-      var inFlight = Number(j.in_flight_count);
-      if (!Number.isFinite(inFlight)) inFlight = running + queued;
-      return '<div class="jcard"><div class="jid">'+esc(j.id)+'</div>'
-        +'<div class="pbar" style="margin:6px 0"><div class="pfill" style="width:'+pj+'%"></div></div>'
-        +'<div class="jrow"><span><span class="sv g">'+j.completed_count+'</span>/'+j.total_urls+' done</span>'
-        +'<span><span class="sv g">'+j.detected_count+'</span> detected</span>'
-        +'<span><span class="sv y">'+j.failed_count+'</span> failed</span></div>'
-        +'<div class="jrow" style="margin-top:4px"><span><span class="sv">'+running+'</span> running</span>'
-        +'<span><span class="sv">'+queued+'</span> queued</span>'
-        +'<span style="color:var(--muted)">'+inFlight+' in flight</span></div>'
-        +'<div class="jrow"><span><span class="sv">'+pending+'</span> pending</span>'
-        +'<span style="color:var(--muted)">'+pj+'%</span><span></span></div></div>';
-    }).join('');
+    if (!d.activeJobs||!d.activeJobs.length) {
+      jl.innerHTML='<div class="note">No active jobs.</div>';
+    } else {
+      jl.innerHTML=d.activeJobs.map(function(j){
+        var pj=j.total_urls?Math.round(j.completed_count/j.total_urls*100):0;
+        var running = Number(j.running_count)||0;
+        var queued = Number(j.queued_count)||0;
+        var pending = Number(j.pending_count)||0;
+        var inFlight = Number(j.in_flight_count);
+        if (!Number.isFinite(inFlight)) inFlight = running + queued;
+        return '<div class="jcard"><div class="jid">'+esc(j.id)+'</div>'
+          +'<div class="pbar" style="margin:6px 0"><div class="pfill" style="width:'+pj+'%"></div></div>'
+          +'<div class="jrow"><span><span class="sv g">'+j.completed_count+'</span>/'+j.total_urls+' done</span>'
+          +'<span><span class="sv g">'+j.detected_count+'</span> detected</span>'
+          +'<span><span class="sv y">'+j.failed_count+'</span> failed</span></div>'
+          +'<div class="jrow" style="margin-top:4px"><span><span class="sv">'+running+'</span> running</span>'
+          +'<span><span class="sv">'+queued+'</span> queued</span>'
+          +'<span style="color:var(--muted)">'+inFlight+' in flight</span></div>'
+          +'<div class="jrow"><span><span class="sv">'+pending+'</span> pending</span>'
+          +'<span style="color:var(--muted)">'+pj+'%</span><span></span></div></div>';
+      }).join('');
+    }
+    var activeRequests=document.getElementById('ractive');
+    var recentRequests=document.getElementById('rrecent');
+    activeRequests.innerHTML = renderRequests(d.activeRequests, 'No active requests.', false);
+    recentRequests.innerHTML = renderRequests(d.recentRequests, 'No recent requests.', true);
   }).catch(function(){});
 }
 

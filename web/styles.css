@@ -599,6 +599,7 @@ button[data-error="true"],
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+  align-items: stretch;
 }
 
 .feature-doc-grid {
@@ -625,6 +626,17 @@ button[data-error="true"],
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  align-content: start;
+  justify-items: start;
+}
+
+.model-card .candidate-copy {
+  padding-top: 2px;
+}
+
+.model-card-empty {
+  padding: 2px 0 0;
+  color: var(--muted);
 }
 
 .docs-section {

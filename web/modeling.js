@@ -74,9 +74,15 @@
     node.className = isError ? 'message error' : 'message';
   }
 
-  function formatMetric(value) {
+  function formatMetric(value, decimals = 3) {
     if (value === null || value === undefined || value === '') return '';
-    if (typeof value === 'number') return String(Math.round(value * 1000) / 1000);
+    if (typeof value === 'number') {
+      const precision = Number.isFinite(decimals) ? Math.max(0, Math.min(6, Math.floor(decimals))) : 3;
+      if (precision <= 3) {
+        return String(Math.round(value * 1000) / 1000);
+      }
+      return Number(value).toFixed(precision);
+    }
     return String(value);
   }
 
@@ -181,6 +187,21 @@
     const negativeWeights = model.reliance && Array.isArray(model.reliance.negative_weights)
       ? model.reliance.negative_weights.slice(0, 5)
       : [];
+    const renderWeightList = (entries, tone, emptyMessage) => {
+      if (!entries.length) {
+        return `<p class="candidate-copy model-card-empty">${escapeHtml(emptyMessage)}</p>`;
+      }
+      return `
+        <div class="feature-chip-list">
+          ${entries.map((entry) => `
+            <span class="feature-chip ${tone}">
+              <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
+              <span>${escapeHtml(formatMetric(entry.weight, 5))}</span>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    };
 
     trainResult.className = 'model-card-grid';
     trainResult.innerHTML = `
@@ -205,7 +226,7 @@
           ${familyImportance.map((family) => `
             <span class="feature-chip plain">
               <strong>${escapeHtml(family.family)}</strong>
-              <span>${escapeHtml(formatMetric(family.total_absolute_weight))}</span>
+              <span>${escapeHtml(formatMetric(family.total_absolute_weight, 5))}</span>
             </span>
           `).join('')}
         </div>
@@ -214,26 +235,12 @@
       <article class="model-card">
         <p class="eyebrow subtle">Positive Drivers</p>
         <h3>Top Positive Signals</h3>
-        <div class="feature-chip-list">
-          ${positiveWeights.map((entry) => `
-            <span class="feature-chip good">
-              <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
-              <span>${escapeHtml(formatMetric(entry.weight))}</span>
-            </span>
-          `).join('')}
-        </div>
+        ${renderWeightList(positiveWeights, 'good', 'No positive signals surfaced in the current rounded summary.')}
       </article>
       <article class="model-card">
         <p class="eyebrow subtle">Negative Drivers</p>
         <h3>Top Negative Signals</h3>
-        <div class="feature-chip-list">
-          ${negativeWeights.map((entry) => `
-            <span class="feature-chip muted">
-              <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
-              <span>${escapeHtml(formatMetric(entry.weight))}</span>
-            </span>
-          `).join('')}
-        </div>
+        ${renderWeightList(negativeWeights, 'muted', 'No negative signals surfaced in the current rounded summary.')}
       </article>
     `;
   }

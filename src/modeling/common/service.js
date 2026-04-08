@@ -13,9 +13,38 @@ const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifac
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
 
-function buildOverview(items, artifactRoot) {
+function emitProgress(progress, patch) {
+  if (typeof progress !== 'function') {
+    return;
+  }
+
+  try {
+    progress(patch);
+  } catch (_) {
+    // Progress reporting must never interrupt model work.
+  }
+}
+
+function buildOverview(items, artifactRoot, options = {}) {
+  const progress = typeof options.progress === 'function' ? options.progress : null;
   return listModelArtifacts(artifactRoot).then((models) => {
-    const dataset = extractCandidateDataset(items, {});
+    const dataset = extractCandidateDataset(items, {
+      progress: progress ? (patch) => emitProgress(progress, {
+        ...patch,
+        stage: 'overview',
+      }) : null,
+      progressInterval: options.progressInterval,
+    });
+    emitProgress(progress, {
+      stage: 'overview',
+      message: `Overview ready (${dataset.summary.item_count} item(s))`,
+      progress: {
+        current: dataset.summary.item_count,
+        total: dataset.summary.item_count || 1,
+        unit: 'items',
+        indeterminate: false,
+      },
+    });
     return {
       dataset: dataset.summary,
       variants: listModelVariants().map((variant) => ({
@@ -238,14 +267,29 @@ function summarizeContributions(vectorizer, contributions, options = {}) {
   };
 }
 
-function buildFeatureReliance(vectorizer, artifact, rows) {
+function buildFeatureReliance(vectorizer, artifact, rows, options = {}) {
   const descriptors = Array.isArray(vectorizer && vectorizer.descriptors) ? vectorizer.descriptors : [];
   const rowCount = Array.isArray(rows) ? rows.length : 0;
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
   const signedTotals = new Array(descriptors.length).fill(0);
   const absoluteTotals = new Array(descriptors.length).fill(0);
   const familyMap = new Map();
 
-  (Array.isArray(rows) ? rows : []).forEach((row) => {
+  (Array.isArray(rows) ? rows : []).forEach((row, index) => {
+    if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === rowCount)) {
+      emitProgress(progress, {
+        stage: 'reliance',
+        message: `Computing feature reliance ${index + 1}/${rowCount}`,
+        progress: {
+          current: index + 1,
+          total: rowCount,
+          unit: 'rows',
+          indeterminate: rowCount === 0,
+        },
+      });
+    }
+
     const vector = transformRow(row, vectorizer);
     const contributions = explainModelContributions(artifact, vector, vectorizer);
 
@@ -320,14 +364,32 @@ function explainScoredRow(row, vectorizer, artifact, options = {}) {
 
 function scoreRows(rows, artifact, options = {}) {
   const vectorizer = artifact.vectorizer;
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const totalRows = sourceRows.length;
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
+  const threshold = Number(options.threshold) || 0.5;
 
-  return (Array.isArray(rows) ? rows : []).map((row) => {
+  return sourceRows.map((row, index) => {
+    if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === totalRows)) {
+      emitProgress(progress, {
+        stage: 'scoring',
+        message: `Scoring candidate rows ${index + 1}/${totalRows}`,
+        progress: {
+          current: index + 1,
+          total: totalRows,
+          unit: 'rows',
+          indeterminate: totalRows === 0,
+        },
+      });
+    }
+
     const vector = transformRow(row, vectorizer);
     const probability = predictProbabilityForArtifact(artifact, vector);
     return {
       ...row,
       probability: roundNumber(probability),
-      predicted_label: probability >= (Number(options.threshold) || 0.5) ? 1 : 0,
+      predicted_label: probability >= threshold ? 1 : 0,
       explanation: options.includeExplanations === false
         ? null
         : explainScoredRow(row, vectorizer, artifact, options),
@@ -487,12 +549,43 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   if (!variant) {
     throw new Error('Select a valid model variant');
   }
+  const progress = typeof trainingInput.progress === 'function' ? trainingInput.progress : null;
+  const progressInterval = Math.max(1, Number(trainingInput.progressInterval) || 100);
 
-  const dataset = extractCandidateDataset(items, { variant });
+  emitProgress(progress, {
+    stage: 'training',
+    message: 'Extracting training dataset',
+    progress: {
+      current: 0,
+      total: Array.isArray(items) ? items.length : 0,
+      unit: 'items',
+      indeterminate: !Array.isArray(items) || items.length === 0,
+    },
+  });
+
+  const dataset = extractCandidateDataset(items, {
+    variant,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'training',
+    }) : null,
+    progressInterval,
+  });
   const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
   if (labeledRows.length < 4) {
     throw new Error('Model training needs at least 4 human-reviewed binary candidate labels');
   }
+
+  emitProgress(progress, {
+    stage: 'training',
+    message: `Found ${labeledRows.length} human-reviewed candidate row(s)`,
+    progress: {
+      current: labeledRows.length,
+      total: labeledRows.length,
+      unit: 'rows',
+      indeterminate: false,
+    },
+  });
 
   let split = splitRowsByDomain(labeledRows, trainingInput.split);
   if (!canTrainRows(split.trainRows)) {
@@ -508,18 +601,59 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     throw new Error('Select a valid training algorithm');
   }
 
+  emitProgress(progress, {
+    stage: 'training',
+    message: `Training ${normalizedAlgorithm.replace(/_/g, ' ')}`,
+    progress: {
+      current: 0,
+      total: 1,
+      unit: 'model',
+      indeterminate: false,
+    },
+  });
+
   const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, trainingInput.trainingOptions);
   const trainingArtifact = {
     algorithm: model.algorithm,
     model,
   };
-  const scoredTrainRows = scoreRows(split.trainRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
-  const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+  const scoredTrainRows = scoreRows(split.trainRows, { vectorizer, ...trainingArtifact }, {
+    includeExplanations: false,
+    progressInterval,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'training',
+    }) : null,
+  });
+  const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, {
+    includeExplanations: false,
+    progressInterval,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'training',
+    }) : null,
+  });
   const evaluation = {
     train: computeAllMetrics(scoredTrainRows, {}),
     test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
   };
-  const reliance = buildFeatureReliance(vectorizer, trainingArtifact, split.trainRows);
+  emitProgress(progress, {
+    stage: 'training',
+    message: 'Computing feature reliance',
+    progress: {
+      current: 0,
+      total: split.trainRows.length || 1,
+      unit: 'rows',
+      indeterminate: split.trainRows.length === 0,
+    },
+  });
+  const reliance = buildFeatureReliance(vectorizer, trainingArtifact, split.trainRows, {
+    progressInterval,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'training',
+    }) : null,
+  });
 
   const artifact = {
     id: buildArtifactId(variant.id),
@@ -548,6 +682,17 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   const artifactPath = await saveModelArtifact(artifactRoot, artifact);
   artifact.file_path = artifactPath;
 
+  emitProgress(progress, {
+    stage: 'training',
+    message: `Saved model artifact ${artifact.id}`,
+    progress: {
+      current: 1,
+      total: 1,
+      unit: 'artifact',
+      indeterminate: false,
+    },
+  });
+
   return {
     artifact,
     summary: summarizeArtifact(artifact),
@@ -565,12 +710,68 @@ async function scoreJobItems(items, artifactRoot, artifactId, options = {}) {
   if (!artifact) {
     throw new Error('Model artifact not found');
   }
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
+
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: 'Extracting scoring dataset',
+    progress: {
+      current: 0,
+      total: Array.isArray(items) ? items.length : 0,
+      unit: 'items',
+      indeterminate: !Array.isArray(items) || items.length === 0,
+    },
+  });
 
   const dataset = extractCandidateDataset(items, {
     featureCatalog: artifact.feature_catalog,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'scoring',
+    }) : null,
+    progressInterval,
   });
-  const scoredRows = scoreRows(dataset.rows, artifact, options);
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: `Scoring ${dataset.rows.length} candidate row(s)`,
+    progress: {
+      current: 0,
+      total: dataset.rows.length || 1,
+      unit: 'rows',
+      indeterminate: dataset.rows.length === 0,
+    },
+  });
+  const scoredRows = scoreRows(dataset.rows, artifact, {
+    ...options,
+    progressInterval,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'scoring',
+    }) : null,
+  });
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: 'Grouping scored rows by item',
+    progress: {
+      current: dataset.rows.length,
+      total: dataset.rows.length || 1,
+      unit: 'rows',
+      indeterminate: false,
+    },
+  });
   const scoredItems = groupScoredRowsByItem(scoredRows);
+
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: `Scored ${scoredItems.length} item(s)`,
+    progress: {
+      current: scoredItems.length,
+      total: scoredItems.length || 1,
+      unit: 'items',
+      indeterminate: false,
+    },
+  });
 
   return {
     artifact: summarizeArtifact(artifact),
@@ -641,11 +842,26 @@ async function scoreSiteGroups(items, artifactRoot, artifactId, text, options = 
   };
 }
 
-function exportDataset(items, variantId) {
+function exportDataset(items, variantId, options = {}) {
   const variant = variantId ? getModelVariant(variantId) : null;
-  const dataset = extractCandidateDataset(items, { variant });
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
+  const dataset = extractCandidateDataset(items, {
+    variant,
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
+      stage: 'exporting',
+    }) : null,
+    progressInterval,
+  });
   return {
-    csv: serializeDatasetCsv(dataset.rows, dataset.featureCatalog),
+    csv: serializeDatasetCsv(dataset.rows, dataset.featureCatalog, {
+      progress: progress ? (patch) => emitProgress(progress, {
+        ...patch,
+        stage: 'exporting',
+      }) : null,
+      progressInterval,
+    }),
     summary: dataset.summary,
     featureCatalog: dataset.featureCatalog,
   };

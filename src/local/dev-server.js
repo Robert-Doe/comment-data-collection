@@ -12,6 +12,7 @@ const runtimeBuildVersion = process.env.BUILD_VERSION || `${Date.now().toString(
 const { getConfig } = require('../shared/config');
 const { parseCsvText } = require('../shared/csv');
 const { resolveProjectPath, sendFileDownload, streamDirectoryZip } = require('../shared/downloads');
+const { loadInBatches } = require('../shared/loadInBatches');
 const { findManualReviewMatches } = require('../shared/manualReviewLookup');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const {
@@ -38,6 +39,7 @@ const {
 const { analyzeManualCapture } = require('../shared/manualCapture');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
+const { createRequestTracker } = require('../shared/requestTracker');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -649,9 +651,17 @@ function createLocalRuntime(options = {}) {
         ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
       const requireCandidates = options.requireCandidates !== false;
+      const limit = Math.max(1, Number(options.limit) || 20000);
+      const offset = Math.max(0, Number(options.offset) || 0);
       return state.items
         .filter((item) => !jobIds.length || jobIds.includes(item.job_id))
-        .filter((item) => !requireCandidates || (Array.isArray(item.candidates) && item.candidates.length > 0));
+        .filter((item) => !requireCandidates || (Array.isArray(item.candidates) && item.candidates.length > 0))
+        .sort((left, right) => {
+          const leftCreated = new Date(left.created_at || 0).getTime();
+          const rightCreated = new Date(right.created_at || 0).getTime();
+          return rightCreated - leftCreated || left.row_number - right.row_number;
+        })
+        .slice(offset, offset + limit);
     },
     getManualReviewTarget() {
       return state.manual_review_target || null;
@@ -764,20 +774,78 @@ function createLocalApp(options = {}) {
   const runtime = createLocalRuntime(options);
   const app = express();
   const webRoot = path.resolve(process.cwd(), 'web');
+  const requestTracker = createRequestTracker({
+    historyLimit: 25,
+    historyThresholdMs: 500,
+  });
 
   app.set('trust proxy', true);
   app.use(cors({ origin: true }));
+  app.use(requestTracker.middleware);
   app.use(express.json({ limit: '1mb' }));
   app.use('/api/modeling', createModelingRouter({
     artifactRoot: runtime.config.modelArtifactRoot,
     listModelArtifacts: () => listModelArtifacts(runtime.config.modelArtifactRoot),
     listItemsForModeling: (options) => runtime.listItemsForModeling(options),
     getJob: (jobId) => runtime.getJob(jobId),
-    getItemsForJob: (jobId, job) => runtime.getJobItems(jobId, Math.max(1, Number(job && job.total_urls) || 100), 0),
+    getItemsForJob: (jobId, job, options = {}) => runtime.getJobItems(
+      jobId,
+      Math.max(1, Number(options.limit) || Number(job && job.total_urls) || 100),
+      Math.max(0, Number(options.offset) || 0),
+    ),
   }));
+
+  async function loadJobItems(jobId, job, progress) {
+    const total = Math.max(1, Number(job && job.total_urls) || 1);
+    return loadInBatches(async ({ limit, offset }) => runtime.getJobItems(jobId, limit, offset), {
+      batchSize: Math.max(100, Number(runtime.config.apiResultsPageSize) || 250),
+      total,
+      label: 'job rows',
+      progress,
+      startMessage: `Loading ${total} job row(s)`,
+      loadedMessage: (count, knownTotal) => `Loaded ${count}${knownTotal ? `/${knownTotal}` : ''} job row(s)`,
+      doneMessage: 'Job rows loaded',
+    });
+  }
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, mode: 'local' });
+  });
+
+  app.get('/api/health/detailed', (_req, res) => {
+    const snapshot = requestTracker.getSnapshot();
+    const jobs = runtime.listJobs(10);
+    const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
+    const activeJobs = jobs.filter((job) => !terminalStatuses.has(String(job.status || '')));
+    res.json({
+      ok: true,
+      mode: 'local',
+      redis: null,
+      diskFree: null,
+      diskTotal: null,
+      diskUsedPct: null,
+      activeJobCount: activeJobs.length,
+      activeJobs: activeJobs.map((job) => ({
+        id: job.id,
+        status: job.status,
+        total_urls: job.total_urls,
+        completed_count: job.completed_count,
+        running_count: job.running_count,
+        queued_count: job.queued_count,
+        failed_count: job.failed_count,
+        pending_count: job.pending_count,
+        in_flight_count: (Number(job.running_count) || 0) + (Number(job.queued_count) || 0),
+        detected_count: job.detected_count,
+      })),
+      activeRequestCount: snapshot.activeRequestCount,
+      recentRequestCount: snapshot.recentRequestCount,
+      activeRequests: snapshot.activeRequests,
+      recentRequests: snapshot.recentRequests,
+    });
+  });
+
+  app.get('/api/events', (_req, res) => {
+    res.json({ events: [] });
   });
 
   app.get('/api/jobs', (req, res) => {
@@ -786,6 +854,7 @@ function createLocalApp(options = {}) {
   });
 
   app.post('/api/jobs', upload.single('file'), (req, res) => {
+    const progress = req.requestProgress;
     const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
     const sourceFilename = req.file ? req.file.originalname : (req.body.filename || 'upload.csv');
     const preferredColumn = req.body.urlColumn || '';
@@ -801,6 +870,16 @@ function createLocalApp(options = {}) {
       res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
       return;
     }
+    progress && progress.update({
+      stage: 'parsing',
+      message: `Parsed ${records.length} URL(s) from the upload`,
+      progress: {
+        current: records.length,
+        total: records.length,
+        unit: 'rows',
+        indeterminate: false,
+      },
+    });
 
     const jobSettings = normalizeJobScanSettings({
       scanDelayMs: req.body.scanDelayMs,
@@ -808,6 +887,16 @@ function createLocalApp(options = {}) {
     }, {
       scanDelayMs: runtime.config.postLoadDelayMs,
       screenshotDelayMs: runtime.config.preScreenshotDelayMs,
+    });
+    progress && progress.update({
+      stage: 'creating',
+      message: `Creating job for ${records.length} row(s)`,
+      progress: {
+        current: 0,
+        total: 1,
+        unit: 'job',
+        indeterminate: false,
+      },
     });
 
     const job = runtime.createJobFromRecords({
@@ -901,6 +990,17 @@ function createLocalApp(options = {}) {
       records,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+    });
+
+    progress && progress.update({
+      stage: 'queueing',
+      message: 'Priming worker queue',
+      progress: {
+        current: 0,
+        total: Math.min(runtime.config.initialQueueFill, job.total_urls),
+        unit: 'rows',
+        indeterminate: false,
+      },
     });
 
     res.json({
@@ -1330,56 +1430,88 @@ function createLocalApp(options = {}) {
     }
   });
 
-  app.get('/api/jobs/:jobId/download.csv', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
+  app.get('/api/jobs/:jobId/download.csv', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
 
-    const items = runtime.getJobItems(req.params.jobId, Math.max(1, job.total_urls), 0);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${job.id}.csv"`);
-    res.send(`${serializeJobItemsCsv(items.map((item) => materializeItem(item, req)))}\n`);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for CSV export' });
+      const items = await loadJobItems(req.params.jobId, job, progress);
+      const materializedItems = items.map((item) => materializeItem(item, req));
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.id}.csv"`);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing CSV export' });
+      res.send(`${serializeJobItemsCsv(materializedItems)}\n`);
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.get('/api/jobs/:jobId/features.csv', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
+  app.get('/api/jobs/:jobId/features.csv', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
 
-    const items = runtime.getJobItems(req.params.jobId, Math.max(1, job.total_urls), 0).map((item) => materializeItem(item, req));
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${job.id}.features.csv"`);
-    res.send(`${serializeJobSiteBreakdownCsv(items)}\n`);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for features export' });
+      const items = await loadJobItems(req.params.jobId, job, progress);
+      const materializedItems = items.map((item) => materializeItem(item, req));
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.id}.features.csv"`);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing features export' });
+      res.send(`${serializeJobSiteBreakdownCsv(materializedItems)}\n`);
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.get('/api/jobs/:jobId/candidates.csv', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
+  app.get('/api/jobs/:jobId/candidates.csv', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
 
-    const items = runtime.getJobItems(req.params.jobId, Math.max(1, job.total_urls), 0).map((item) => materializeItem(item, req));
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${job.id}.candidates.csv"`);
-    res.send(`${serializeJobCandidateDetailsCsv(items)}\n`);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for candidates export' });
+      const items = await loadJobItems(req.params.jobId, job, progress);
+      const materializedItems = items.map((item) => materializeItem(item, req));
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.id}.candidates.csv"`);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing candidates export' });
+      res.send(`${serializeJobCandidateDetailsCsv(materializedItems)}\n`);
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.get('/api/jobs/:jobId/summary.csv', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
-      return;
-    }
+  app.get('/api/jobs/:jobId/summary.csv', async (req, res, next) => {
+    try {
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
 
-    const items = runtime.getJobItems(req.params.jobId, Math.max(1, job.total_urls), 0).map((item) => materializeItem(item, req));
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${job.id}.summary.csv"`);
-    res.send(`${serializeJobSummaryCsv(job, items)}\n`);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for summary export' });
+      const items = await loadJobItems(req.params.jobId, job, progress);
+      const materializedItems = items.map((item) => materializeItem(item, req));
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.id}.summary.csv"`);
+      progress && progress.update({ stage: 'exporting', message: 'Serializing summary export' });
+      res.send(`${serializeJobSummaryCsv(job, materializedItems)}\n`);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/jobs/:jobId/report.xlsx', async (req, res, next) => {
@@ -1390,8 +1522,12 @@ function createLocalApp(options = {}) {
         return;
       }
 
-      const items = runtime.getJobItems(req.params.jobId, Math.max(1, job.total_urls), 0).map((item) => materializeItem(item, req));
-      const workbook = await buildJobReportWorkbook(job, items);
+      const progress = req.requestProgress;
+      progress && progress.update({ stage: 'loading', message: 'Loading job rows for report export' });
+      const items = await loadJobItems(req.params.jobId, job, progress);
+      const materializedItems = items.map((item) => materializeItem(item, req));
+      progress && progress.update({ stage: 'exporting', message: 'Building workbook' });
+      const workbook = await buildJobReportWorkbook(job, materializedItems);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${job.id}.report.xlsx"`);
       res.send(workbook);

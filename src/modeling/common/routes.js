@@ -21,6 +21,7 @@ const {
   exportDataset,
 } = require('./service');
 const { parseJobIdList } = require('./utils');
+const { loadInBatches } = require('../../shared/loadInBatches');
 
 function normalizeJobIds(value) {
   if (Array.isArray(value)) {
@@ -31,19 +32,58 @@ function normalizeJobIds(value) {
 
 function createModelingRouter(dependencies) {
   const router = express.Router();
+  const modelingBatchSize = Math.max(100, Number(process.env.MODELING_BATCH_SIZE) || 250);
 
-  async function loadModelingItems(jobIds) {
-    return dependencies.listItemsForModeling({
+  function requestProgress(req) {
+    return req && req.requestProgress && typeof req.requestProgress.update === 'function'
+      ? (patch) => req.requestProgress.update(patch || {})
+      : null;
+  }
+
+  async function loadModelingItems(jobIds, progress) {
+    return loadInBatches(async ({ limit, offset }) => dependencies.listItemsForModeling({
       jobIds,
       requireCandidates: true,
+      limit,
+      offset,
+    }), {
+      batchSize: modelingBatchSize,
+      label: 'candidate rows',
+      startMessage: jobIds.length
+        ? `Loading candidate rows for ${jobIds.length} job(s)`
+        : 'Loading candidate rows',
+      doneMessage: 'Candidate rows loaded',
+      progress,
+    });
+  }
+
+  async function loadJobItems(jobId, job, progress) {
+    const total = Math.max(0, Number(job && job.total_urls) || 0) || null;
+    return loadInBatches(async ({ limit, offset }) => dependencies.getItemsForJob(jobId, job, {
+      limit,
+      offset,
+    }), {
+      batchSize: modelingBatchSize,
+      total,
+      label: 'job rows',
+      progress,
+      startMessage: total
+        ? `Loading ${total} job row(s)`
+        : 'Loading job rows',
+      loadedMessage: (count, knownTotal) => `Loaded ${count}${knownTotal ? `/${knownTotal}` : ''} job row(s)`,
+      doneMessage: 'Job rows loaded',
     });
   }
 
   router.get('/overview', async (req, res, next) => {
     try {
       const jobIds = normalizeJobIds(req.query.jobIds || '');
-      const items = await loadModelingItems(jobIds);
-      const overview = await buildOverview(items, dependencies.artifactRoot);
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'overview', message: 'Loading overview dataset' });
+      const items = await loadModelingItems(jobIds, progress);
+      const overview = await buildOverview(items, dependencies.artifactRoot, {
+        progress,
+      });
       res.json(overview);
     } catch (error) {
       next(error);
@@ -131,12 +171,15 @@ function createModelingRouter(dependencies) {
       }
 
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
-      const items = await loadModelingItems(jobIds);
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'training', message: 'Loading training dataset' });
+      const items = await loadModelingItems(jobIds, progress);
       const trained = await trainModel(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
         split: req.body && req.body.split ? req.body.split : undefined,
         trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
+        progress,
       });
       res.status(201).json({
         ok: true,
@@ -163,9 +206,12 @@ function createModelingRouter(dependencies) {
         return;
       }
 
-      const items = await dependencies.getItemsForJob(jobId, job);
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'scoring', message: 'Loading job rows for scoring' });
+      const items = await loadJobItems(jobId, job, progress);
       const result = await scoreJobItems(items, dependencies.artifactRoot, modelId, {
         includeExplanations: req.body && req.body.includeExplanations !== false,
+        progress,
       });
       res.json({
         job,
@@ -186,8 +232,12 @@ function createModelingRouter(dependencies) {
         return;
       }
 
-      const items = await loadModelingItems(jobIds);
-      const result = await scoreSiteGroups(items, dependencies.artifactRoot, modelId, siteText, {});
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'scoring', message: 'Loading site groups dataset' });
+      const items = await loadModelingItems(jobIds, progress);
+      const result = await scoreSiteGroups(items, dependencies.artifactRoot, modelId, siteText, {
+        progress,
+      });
       res.json(result);
     } catch (error) {
       next(error);
@@ -198,8 +248,12 @@ function createModelingRouter(dependencies) {
     try {
       const variantId = String(req.query.variantId || '').trim();
       const jobIds = normalizeJobIds(req.query.jobIds || '');
-      const items = await loadModelingItems(jobIds);
-      const exported = exportDataset(items, variantId);
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'exporting', message: 'Loading dataset for export' });
+      const items = await loadModelingItems(jobIds, progress);
+      const exported = exportDataset(items, variantId, {
+        progress,
+      });
       const filenameBase = variantId ? `candidate-dataset-${variantId}` : 'candidate-dataset-all-features';
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.csv"`);
