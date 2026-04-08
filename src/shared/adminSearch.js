@@ -32,7 +32,7 @@ function buildSearchClause(columns, query, params) {
   const clauses = terms.map((term) => {
     params.push(`%${escapeLikePattern(term)}%`);
     const placeholder = `$${params.length}`;
-    return `(${columnList.map((column) => `COALESCE(CAST(${column} AS TEXT), '') ILIKE ${placeholder} ESCAPE '\\\\'`).join(' OR ')})`;
+    return `(${columnList.map((column) => `COALESCE(CAST(${column} AS TEXT), '') ILIKE ${placeholder}`).join(' OR ')})`;
   });
 
   return clauses.join(' AND ');
