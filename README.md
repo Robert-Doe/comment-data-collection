@@ -123,6 +123,7 @@ The intended workflow is:
 Important distinction:
 
 - the full saved model artifact is the training and research record
+- it keeps split metadata and evaluation counts, but not the raw train/test row arrays
 - the `Runtime JSON` export is the intended browser-side handoff bundle
 
 ### Browser Extension

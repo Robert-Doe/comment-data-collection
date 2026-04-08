@@ -98,6 +98,18 @@ function countBinaryLabels(rows) {
   });
 }
 
+function summarizeSplit(split, totalRows) {
+  if (!split || !split.split) return null;
+  return {
+    mode: split.split.mode,
+    modulo: split.split.modulo,
+    holdout_bucket: split.split.holdout_bucket,
+    total_rows: Number(totalRows) || 0,
+    train_rows: Array.isArray(split.trainRows) ? split.trainRows.length : 0,
+    test_rows: Array.isArray(split.testRows) ? split.testRows.length : 0,
+  };
+}
+
 function ensureTrainableRows(rows, segmentName) {
   const counts = countBinaryLabels(rows);
   if (!counts.positive || !counts.negative) {
@@ -520,7 +532,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     feature_catalog: dataset.featureCatalog,
     vectorizer,
     model,
-    split,
+    split: summarizeSplit(split, labeledRows.length),
     training_counts: {
       total_labeled_rows: labeledRows.length,
       train_rows: split.trainRows.length,

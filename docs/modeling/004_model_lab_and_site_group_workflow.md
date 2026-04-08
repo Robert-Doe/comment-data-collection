@@ -94,6 +94,8 @@ Each training run saves a model artifact under:
 - `output/models/<variant-id>/<artifact-id>.json`
 
 That artifact becomes selectable in the rest of the Model Lab.
+It keeps the model, vectorizer, evaluation, and split metadata only, so the saved JSON stays compact.
+The raw train/test row arrays remain in memory during training and are not written into the artifact.
 
 The `Trained Models` table also exposes:
 

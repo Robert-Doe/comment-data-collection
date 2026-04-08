@@ -213,7 +213,7 @@ It includes:
 - feature catalog
 - vectorizer
 - logistic-regression weights and bias
-- train/test split metadata
+- train/test split metadata, summarized only
 - training counts
 - dataset summary
 - evaluation
@@ -228,6 +228,7 @@ This is useful for:
 - comparison across training runs
 
 It is not the preferred direct browser payload.
+The raw train/test row arrays stay in memory during training and are intentionally omitted from the saved artifact.
 
 ### 7.2 Runtime JSON
 
