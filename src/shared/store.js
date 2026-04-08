@@ -3,6 +3,7 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const { upsertCandidateReview: upsertCandidateReviewArray } = require('./candidateReviews');
+const { buildSearchClause } = require('./adminSearch');
 
 let pool;
 
@@ -1089,6 +1090,206 @@ async function listAllEvents(options, databaseUrl) {
   return result.rows;
 }
 
+async function listRecentJobItems(limit = 25, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, job_id, row_number, input_url, normalized_url, status, attempts, title,
+            final_url, ugc_detected, best_score, best_confidence, best_ugc_type,
+            best_xpath, best_css_path, best_sample_text, analysis_source,
+            manual_capture_required, manual_capture_reason, manual_capture_mode,
+            manual_capture_url, manual_capture_title, manual_capture_notes,
+            error_message, created_at, updated_at, started_at, completed_at
+     FROM job_items
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT $1`,
+    [Math.max(1, Number(limit) || 25)],
+  );
+  return result.rows;
+}
+
+async function getDatabaseSummary(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const [
+    jobCountResult,
+    itemCountResult,
+    eventCountResult,
+    targetCountResult,
+    jobStatusResult,
+    itemStatusResult,
+    reviewCountResult,
+    candidateCountResult,
+    manualCaptureCountResult,
+  ] = await Promise.all([
+    db.query('SELECT COUNT(*)::int AS count FROM jobs'),
+    db.query('SELECT COUNT(*)::int AS count FROM job_items'),
+    db.query('SELECT COUNT(*)::int AS count FROM job_events'),
+    db.query('SELECT COUNT(*)::int AS count FROM manual_review_targets'),
+    db.query(`SELECT status, COUNT(*)::int AS count FROM jobs GROUP BY status ORDER BY status`),
+    db.query(`SELECT status, COUNT(*)::int AS count FROM job_items GROUP BY status ORDER BY status`),
+    db.query(`SELECT COUNT(*)::int AS count FROM job_items WHERE candidate_reviews IS NOT NULL AND candidate_reviews <> '[]'::jsonb`),
+    db.query(`SELECT COUNT(*)::int AS count FROM job_items WHERE candidates IS NOT NULL AND jsonb_array_length(candidates) > 0`),
+    db.query(`SELECT COUNT(*)::int AS count FROM job_items WHERE manual_capture_required IS TRUE`),
+  ]);
+
+  return {
+    jobCount: Number(jobCountResult.rows[0] && jobCountResult.rows[0].count) || 0,
+    itemCount: Number(itemCountResult.rows[0] && itemCountResult.rows[0].count) || 0,
+    eventCount: Number(eventCountResult.rows[0] && eventCountResult.rows[0].count) || 0,
+    manualReviewTargetCount: Number(targetCountResult.rows[0] && targetCountResult.rows[0].count) || 0,
+    reviewedItemCount: Number(reviewCountResult.rows[0] && reviewCountResult.rows[0].count) || 0,
+    candidateItemCount: Number(candidateCountResult.rows[0] && candidateCountResult.rows[0].count) || 0,
+    manualCaptureRequiredCount: Number(manualCaptureCountResult.rows[0] && manualCaptureCountResult.rows[0].count) || 0,
+    jobStatusCounts: jobStatusResult.rows,
+    itemStatusCounts: itemStatusResult.rows,
+  };
+}
+
+async function searchJobs(options, databaseUrl) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const db = getPool(databaseUrl);
+  const params = [];
+  const clauses = [];
+  const jobId = String(opts.jobId || '').trim();
+  if (jobId) {
+    params.push(jobId);
+    clauses.push(`id = $${params.length}`);
+  }
+
+  const searchClause = buildSearchClause([
+    'id',
+    'source_filename',
+    'source_column',
+    'status',
+    'error_message',
+  ], opts.query, params);
+  if (searchClause) {
+    clauses.push(searchClause);
+  }
+
+  const limit = Math.max(1, Number(opts.limit) || 25);
+  params.push(limit);
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT id, source_filename, source_column, status, total_urls, pending_count,
+            queued_count, running_count, completed_count, failed_count, detected_count,
+            error_message, created_at, updated_at, finished_at
+     FROM jobs
+     ${where}
+     ORDER BY updated_at DESC, created_at DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
+async function searchJobItems(options, databaseUrl) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const db = getPool(databaseUrl);
+  const params = [];
+  const clauses = [];
+  const jobId = String(opts.jobId || '').trim();
+  if (jobId) {
+    params.push(jobId);
+    clauses.push(`job_id = $${params.length}`);
+  }
+
+  const searchClause = buildSearchClause([
+    'id',
+    'job_id',
+    'input_url',
+    'normalized_url',
+    'status',
+    'title',
+    'final_url',
+    'best_ugc_type',
+    'best_xpath',
+    'best_css_path',
+    'best_sample_text',
+    'analysis_source',
+    'manual_capture_required',
+    'manual_capture_reason',
+    'manual_capture_mode',
+    'manual_capture_url',
+    'manual_capture_title',
+    'manual_capture_notes',
+    'error_message',
+    'scan_result',
+    'candidates',
+    'candidate_reviews',
+    'best_candidate',
+  ], opts.query, params);
+  if (searchClause) {
+    clauses.push(searchClause);
+  }
+
+  const limit = Math.max(1, Number(opts.limit) || 25);
+  params.push(limit);
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT id, job_id, row_number, input_url, normalized_url, status, attempts,
+            title, final_url, ugc_detected, best_score, best_confidence, best_ugc_type,
+            best_xpath, best_css_path, best_sample_text, analysis_source,
+            manual_capture_required, manual_capture_reason, manual_capture_mode,
+            manual_capture_url, manual_capture_title, manual_capture_notes,
+            error_message, created_at, updated_at, started_at, completed_at
+     FROM job_items
+     ${where}
+     ORDER BY updated_at DESC, created_at DESC, row_number ASC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
+async function searchJobEvents(options, databaseUrl) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const db = getPool(databaseUrl);
+  const params = [];
+  const clauses = [];
+  const jobId = String(opts.jobId || '').trim();
+  if (jobId) {
+    params.push(jobId);
+    clauses.push(`je.job_id = $${params.length}`);
+  }
+
+  const itemId = String(opts.itemId || '').trim();
+  if (itemId) {
+    params.push(itemId);
+    clauses.push(`je.item_id = $${params.length}`);
+  }
+
+  const searchClause = buildSearchClause([
+    'je.job_id',
+    'je.item_id',
+    'je.scope',
+    'je.level',
+    'je.event_type',
+    'je.event_key',
+    'je.message',
+    'je.details',
+    'j.source_filename',
+  ], opts.query, params);
+  if (searchClause) {
+    clauses.push(searchClause);
+  }
+
+  const limit = Math.max(1, Number(opts.limit) || 25);
+  params.push(limit);
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const result = await db.query(
+    `SELECT je.id, je.job_id, je.item_id, je.row_number, je.level, je.scope,
+            je.event_type, je.event_key, je.message, je.details, je.created_at,
+            j.source_filename
+     FROM job_events je
+     LEFT JOIN jobs j ON j.id = je.job_id
+     ${where}
+     ORDER BY je.created_at DESC
+     LIMIT $${params.length}`,
+    params,
+  );
+  return result.rows;
+}
+
 async function clearJobArtifactPaths(jobId, databaseUrl) {
   const normalizedJobId = String(jobId || '').trim();
   if (!normalizedJobId) throw new Error('jobId is required');
@@ -1136,14 +1337,19 @@ module.exports = {
   listJobs,
   appendJobEvent,
   listAllEvents,
+  listRecentJobItems,
   listJobEvents,
   listIncompleteJobs,
   getJob,
   getJobItem,
   getJobItems,
+  getDatabaseSummary,
   listItemsForModeling,
   listJobItemsByStatuses,
   listManualReviewCandidates,
+  searchJobs,
+  searchJobItems,
+  searchJobEvents,
   setManualReviewTarget,
   getManualReviewTarget,
   claimPendingItems,

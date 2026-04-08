@@ -6,6 +6,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const runtimeBuildVersion = process.env.BUILD_VERSION || `${Date.now().toString(36)}`;
 
@@ -13,6 +14,7 @@ const { getConfig } = require('../shared/config');
 const { parseCsvText } = require('../shared/csv');
 const { resolveProjectPath, sendFileDownload, streamDirectoryZip } = require('../shared/downloads');
 const { loadInBatches } = require('../shared/loadInBatches');
+const { recordMatchesQuery } = require('../shared/adminSearch');
 const { findManualReviewMatches } = require('../shared/manualReviewLookup');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const {
@@ -770,6 +772,38 @@ function createLocalRuntime(options = {}) {
   };
 }
 
+function buildStatusCounts(rows, selector) {
+  const counts = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const key = String(selector(row) || '').trim() || 'unknown';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([status, count]) => ({ status, count }))
+    .sort((left, right) => String(left.status).localeCompare(String(right.status)));
+}
+
+function sortByUpdatedDesc(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .slice()
+    .sort((left, right) => {
+      const leftUpdated = new Date(left.updated_at || left.created_at || 0).getTime();
+      const rightUpdated = new Date(right.updated_at || right.created_at || 0).getTime();
+      return rightUpdated - leftUpdated || (right.row_number || 0) - (left.row_number || 0);
+    });
+}
+
+function listRecentLocalItems(state, limit = 25) {
+  return sortByUpdatedDesc(state.items).slice(0, Math.max(1, Number(limit) || 25));
+}
+
+function searchLocalRows(rows, query, keys, limit = 25) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((row) => recordMatchesQuery(row, query, keys))
+    .slice(0, Math.max(1, Number(limit) || 25));
+}
+
 function createLocalApp(options = {}) {
   const runtime = createLocalRuntime(options);
   const app = express();
@@ -817,6 +851,8 @@ function createLocalApp(options = {}) {
     const jobs = runtime.listJobs(10);
     const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
     const activeJobs = jobs.filter((job) => !terminalStatuses.has(String(job.status || '')));
+    const items = sortByUpdatedDesc(runtime.state.items);
+    const processUptimeMs = Math.max(0, Math.round(process.uptime() * 1000));
     res.json({
       ok: true,
       mode: 'local',
@@ -824,6 +860,42 @@ function createLocalApp(options = {}) {
       diskFree: null,
       diskTotal: null,
       diskUsedPct: null,
+      system: {
+        pid: process.pid,
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        uptimeMs: processUptimeMs,
+        uptimeSeconds: Math.round(processUptimeMs / 1000),
+        memoryUsage: process.memoryUsage(),
+        loadAverage: os.loadavg(),
+      },
+      queue: {
+        name: 'local-runtime',
+        counts: {
+          waiting: runtime.state.items.filter((item) => item.status === 'queued').length,
+          active: runtime.state.items.filter((item) => item.status === 'running').length,
+          delayed: 0,
+          failed: runtime.state.items.filter((item) => item.status === 'failed').length,
+          completed: runtime.state.items.filter((item) => item.status === 'completed').length,
+          paused: 0,
+          'waiting-children': 0,
+          prioritized: 0,
+        },
+      },
+      database: {
+        jobCount: runtime.state.jobs.length,
+        itemCount: runtime.state.items.length,
+        eventCount: 0,
+        manualReviewTargetCount: runtime.state.manual_review_target ? 1 : 0,
+        reviewedItemCount: runtime.state.items.filter((item) => Array.isArray(item.candidate_reviews) && item.candidate_reviews.length > 0).length,
+        candidateItemCount: runtime.state.items.filter((item) => Array.isArray(item.candidates) && item.candidates.length > 0).length,
+        manualCaptureRequiredCount: runtime.state.items.filter((item) => item.manual_capture_required).length,
+        jobStatusCounts: buildStatusCounts(runtime.state.jobs, (job) => job.status),
+        itemStatusCounts: buildStatusCounts(runtime.state.items, (item) => item.status),
+        recentItems: items.slice(0, 20),
+        recentEvents: [],
+      },
       activeJobCount: activeJobs.length,
       activeJobs: activeJobs.map((job) => ({
         id: job.id,
@@ -836,12 +908,80 @@ function createLocalApp(options = {}) {
         pending_count: job.pending_count,
         in_flight_count: (Number(job.running_count) || 0) + (Number(job.queued_count) || 0),
         detected_count: job.detected_count,
-      })),
+        })),
+      recentJobs: jobs,
       activeRequestCount: snapshot.activeRequestCount,
       recentRequestCount: snapshot.recentRequestCount,
       activeRequests: snapshot.activeRequests,
       recentRequests: snapshot.recentRequests,
+      requestHotspots: snapshot.hotRequests || [],
     });
+  });
+
+  app.get('/api/admin/search', (req, res) => {
+    const scope = String(req.query.scope || 'all').trim().toLowerCase();
+    const query = String(req.query.q != null ? req.query.q : req.query.query || '').trim();
+    const jobId = String(req.query.jobId || '').trim();
+    const itemId = String(req.query.itemId || '').trim();
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 15));
+
+    const response = {
+      ok: true,
+      scope,
+      query,
+      jobId: jobId || null,
+      itemId: itemId || null,
+      limit,
+      jobs: [],
+      items: [],
+      events: [],
+    };
+
+    if (scope === 'all' || scope === 'jobs') {
+      response.jobs = searchLocalRows(sortByUpdatedDesc(runtime.state.jobs), query, ['id', 'source_filename', 'source_column', 'status', 'error_message'], limit);
+    }
+
+    if (scope === 'all' || scope === 'items') {
+      response.items = searchLocalRows(
+        sortByUpdatedDesc(runtime.state.items.filter((item) => !jobId || item.job_id === jobId)),
+        query,
+        [
+          'id',
+          'job_id',
+          'input_url',
+          'normalized_url',
+          'status',
+          'title',
+          'final_url',
+          'best_ugc_type',
+          'best_xpath',
+          'best_css_path',
+          'best_sample_text',
+          'analysis_source',
+          'manual_capture_required',
+          'manual_capture_reason',
+          'manual_capture_mode',
+          'manual_capture_url',
+          'manual_capture_title',
+          'manual_capture_notes',
+          'error_message',
+          'candidates',
+          'candidate_reviews',
+          'best_candidate',
+          'scan_result',
+        ],
+        limit,
+      );
+    }
+
+    if (scope === 'all' || scope === 'events') {
+      response.events = [];
+      if (itemId) {
+        response.events = [];
+      }
+    }
+
+    res.json(response);
   });
 
   app.get('/api/events', (_req, res) => {

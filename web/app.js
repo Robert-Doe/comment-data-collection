@@ -166,7 +166,10 @@
     pollJobId = jobId;
     pollIntervalMs = intervalMs;
     pollHandle = setInterval(() => {
-      refreshJob(jobId).catch((error) => {
+      if (document.hidden) {
+        return;
+      }
+      refreshJob(jobId, { skipRecentJobsRefresh: true }).catch((error) => {
         console.error(error);
       });
     }, intervalMs);
@@ -200,6 +203,9 @@
     }
 
     recentJobsPollHandle = window.setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
       refreshJobs().catch((error) => {
         console.error(error);
       });
@@ -2873,7 +2879,7 @@
     return body;
   }
 
-  async function refreshJob(jobId) {
+  async function refreshJob(jobId, options = {}) {
     if (!jobId) return;
     const previousJobId = currentJobId;
     const [{ job, items, pagination }] = await Promise.all([
@@ -2903,7 +2909,9 @@
         renderJobLabelerReview();
       }
     }
-    refreshJobs().catch((error) => console.error(error));
+    if (!options.skipRecentJobsRefresh) {
+      refreshJobs().catch((error) => console.error(error));
+    }
     startPolling(jobId, pollIntervalForStatus(job.status));
   }
 

@@ -4,6 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs/promises');
+const os = require('os');
 
 const { getConfig } = require('../shared/config');
 const { parseCsvText } = require('../shared/csv');
@@ -45,14 +46,19 @@ const {
   clearAllJobs,
   clearJobArtifactPaths,
   listJobs,
+  listRecentJobItems,
   getJob,
   getJobItem,
   getJobItems,
+  getDatabaseSummary,
   appendJobEvent,
   listAllEvents,
   listJobEvents,
   listItemsForModeling,
   listManualReviewCandidates,
+  searchJobs,
+  searchJobItems,
+  searchJobEvents,
   setManualReviewTarget,
   getManualReviewTarget,
   markItemCompleted,
@@ -1287,6 +1293,7 @@ function createApp(config = getConfig()) {
   app.get('/api/health/detailed', async (req, res, next) => {
     try {
       const { execSync } = require('child_process');
+      const requestSnapshot = requestTracker.getSnapshot();
       let diskFree = null;
       let diskTotal = null;
       try {
@@ -1297,6 +1304,21 @@ function createApp(config = getConfig()) {
       } catch (_) {}
 
       const { getSharedRedis: _getRedis } = require('../shared/queue');
+      const queue = getSharedQueue(config.redisUrl);
+      let queueCounts = null;
+      try {
+        queueCounts = await queue.getJobCounts(
+          'waiting',
+          'active',
+          'delayed',
+          'failed',
+          'completed',
+          'paused',
+          'waiting-children',
+          'prioritized',
+        );
+      } catch (_) {}
+
       let redisOk = false;
       try {
         const r = _getRedis(config.redisUrl);
@@ -1305,9 +1327,12 @@ function createApp(config = getConfig()) {
       } catch (_) {}
 
       const jobs = await listJobs(10, config.databaseUrl);
+      const recentItems = await listRecentJobItems(20, config.databaseUrl);
+      const recentEvents = await listAllEvents({ limit: 25 }, config.databaseUrl);
+      const databaseSummary = await getDatabaseSummary(config.databaseUrl);
       const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
       const activeJobs = jobs.filter((j) => !terminalStatuses.has(String(j.status || '')));
-      const requestSnapshot = requestTracker.getSnapshot();
+      const processUptimeMs = Math.max(0, Math.round(process.uptime() * 1000));
 
       res.json({
         ok: true,
@@ -1315,6 +1340,25 @@ function createApp(config = getConfig()) {
         diskFree,
         diskTotal,
         diskUsedPct: diskTotal ? Math.round((1 - diskFree / diskTotal) * 100) : null,
+        system: {
+          pid: process.pid,
+          nodeVersion: process.version,
+          platform: process.platform,
+          arch: process.arch,
+          uptimeMs: processUptimeMs,
+          uptimeSeconds: Math.round(processUptimeMs / 1000),
+          memoryUsage: process.memoryUsage(),
+          loadAverage: os.loadavg(),
+        },
+        queue: {
+          name: 'ugc-scan-url',
+          counts: queueCounts,
+        },
+        database: {
+          ...databaseSummary,
+          recentItems,
+          recentEvents,
+        },
         activeJobCount: activeJobs.length,
         activeJobs: activeJobs.map((j) => ({
           id: j.id,
@@ -1328,11 +1372,66 @@ function createApp(config = getConfig()) {
           in_flight_count: (Number(j.running_count) || 0) + (Number(j.queued_count) || 0),
           detected_count: j.detected_count,
         })),
+        recentJobs: jobs,
         activeRequestCount: requestSnapshot.activeRequestCount,
         recentRequestCount: requestSnapshot.recentRequestCount,
         activeRequests: requestSnapshot.activeRequests,
         recentRequests: requestSnapshot.recentRequests,
+        requestHotspots: requestSnapshot.hotRequests || [],
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/admin/search', async (req, res, next) => {
+    try {
+      const scope = String(req.query.scope || 'all').trim().toLowerCase();
+      const query = String(req.query.q != null ? req.query.q : req.query.query || '').trim();
+      const jobId = String(req.query.jobId || '').trim();
+      const itemId = String(req.query.itemId || '').trim();
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 15));
+
+      const result = {
+        ok: true,
+        scope,
+        query,
+        jobId: jobId || null,
+        itemId: itemId || null,
+        limit,
+        jobs: [],
+        items: [],
+        events: [],
+      };
+
+      if (scope === 'all' || scope === 'jobs') {
+        const jobs = await searchJobs({
+          query,
+          limit,
+        }, config.databaseUrl);
+        result.jobs = jobs;
+      }
+
+      if (scope === 'all' || scope === 'items') {
+        const items = await searchJobItems({
+          query,
+          limit,
+          jobId: jobId || undefined,
+        }, config.databaseUrl);
+        result.items = items;
+      }
+
+      if (scope === 'all' || scope === 'events') {
+        const events = await searchJobEvents({
+          query,
+          limit,
+          jobId: jobId || undefined,
+          itemId: itemId || undefined,
+        }, config.databaseUrl);
+        result.events = events;
+      }
+
+      res.json(result);
     } catch (error) {
       next(error);
     }

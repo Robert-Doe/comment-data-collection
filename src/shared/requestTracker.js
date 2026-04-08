@@ -21,6 +21,45 @@ function normalizeString(value) {
   return String(value == null ? '' : value).trim();
 }
 
+function safeUrlPath(value) {
+  const raw = normalizeString(value);
+  if (!raw) {
+    return '';
+  }
+  return raw.split('?')[0].split('#')[0] || '';
+}
+
+function safeUrlQuery(value) {
+  const raw = normalizeString(value);
+  if (!raw) {
+    return '';
+  }
+  const queryIndex = raw.indexOf('?');
+  if (queryIndex === -1) {
+    return '';
+  }
+  return raw.slice(queryIndex + 1).split('#')[0] || '';
+}
+
+function toReadableUrl(value) {
+  const raw = normalizeString(value);
+  if (!raw) {
+    return '';
+  }
+
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.pathname}${parsed.search || ''}`;
+  } catch (_) {
+    return raw;
+  }
+}
+
+function toMillis(value) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function normalizeProgress(value) {
   if (!value || typeof value !== 'object') {
     return null;
@@ -55,6 +94,8 @@ function snapshotEntry(entry) {
     id: entry.id,
     method: entry.method,
     path: entry.path,
+    fullPath: entry.fullPath,
+    query: entry.query,
     label: entry.label,
     scope: entry.scope,
     jobId: entry.jobId,
@@ -65,11 +106,95 @@ function snapshotEntry(entry) {
     message: entry.message,
     details: cloneValue(entry.details),
     progress: entry.progress ? cloneValue(entry.progress) : null,
+    referer: entry.referer,
+    origin: entry.origin,
+    userAgent: entry.userAgent,
+    remoteAddress: entry.remoteAddress,
+    initiator: entry.initiator,
     startedAt: entry.startedAt,
     updatedAt: entry.updatedAt,
     finishedAt: entry.finishedAt,
     durationMs,
   };
+}
+
+function buildRequestHotspots(entries, options = {}) {
+  const list = Array.isArray(entries) ? entries.filter(Boolean) : [];
+  const limit = Math.max(1, Number(options.limit) || 12);
+  const buckets = new Map();
+
+  for (const entry of list) {
+    const method = normalizeString(entry.method).toUpperCase() || 'GET';
+    const path = normalizeString(entry.path) || normalizeString(entry.fullPath) || '';
+    if (!path) {
+      continue;
+    }
+    const key = `${method} ${path}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        method,
+        path,
+        count: 0,
+        activeCount: 0,
+        errorCount: 0,
+        totalDurationMs: 0,
+        maxDurationMs: 0,
+        averageDurationMs: 0,
+        lastSeenAt: null,
+        lastStatus: null,
+        lastStatusCode: null,
+        lastMessage: null,
+        lastStage: null,
+        lastFullPath: normalizeString(entry.fullPath) || path,
+        lastReferer: normalizeString(entry.referer) || '',
+        lastOrigin: normalizeString(entry.origin) || '',
+        lastUserAgent: normalizeString(entry.userAgent) || '',
+        lastRemoteAddress: normalizeString(entry.remoteAddress) || '',
+        sample: snapshotEntry(entry),
+      };
+      buckets.set(key, bucket);
+    }
+
+    bucket.count += 1;
+    bucket.totalDurationMs += Number(entry.durationMs) || 0;
+    bucket.maxDurationMs = Math.max(bucket.maxDurationMs, Number(entry.durationMs) || 0);
+    if (entry.status === 'running') {
+      bucket.activeCount += 1;
+    }
+    if (entry.status === 'failed' || entry.status === 'aborted' || Number(entry.statusCode) >= 400) {
+      bucket.errorCount += 1;
+    }
+
+    const seenAt = toMillis(entry.updatedAt || entry.finishedAt || entry.startedAt || 0);
+    if (!bucket.lastSeenAt || seenAt >= toMillis(bucket.lastSeenAt)) {
+      bucket.lastSeenAt = entry.updatedAt || entry.finishedAt || entry.startedAt || null;
+      bucket.lastStatus = entry.status || null;
+      bucket.lastStatusCode = entry.statusCode || null;
+      bucket.lastMessage = entry.message || null;
+      bucket.lastStage = entry.stage || null;
+      bucket.lastFullPath = normalizeString(entry.fullPath) || path;
+      bucket.lastReferer = normalizeString(entry.referer) || '';
+      bucket.lastOrigin = normalizeString(entry.origin) || '';
+      bucket.lastUserAgent = normalizeString(entry.userAgent) || '';
+      bucket.lastRemoteAddress = normalizeString(entry.remoteAddress) || '';
+      bucket.sample = snapshotEntry(entry);
+    }
+  }
+
+  return Array.from(buckets.values())
+    .map((bucket) => ({
+      ...bucket,
+      averageDurationMs: bucket.count ? Math.round(bucket.totalDurationMs / bucket.count) : 0,
+    }))
+    .sort((left, right) => (
+      (right.count - left.count)
+      || (right.activeCount - left.activeCount)
+      || (right.errorCount - left.errorCount)
+      || (toMillis(right.lastSeenAt) - toMillis(left.lastSeenAt))
+      || (right.averageDurationMs - left.averageDurationMs)
+    ))
+    .slice(0, limit);
 }
 
 function createRequestTracker(options = {}) {
@@ -178,10 +303,20 @@ function createRequestTracker(options = {}) {
 
   function startRequest(req, res) {
     const startedAtMs = Date.now();
+    const originalUrl = normalizeString(req && (req.originalUrl || req.url));
+    const path = safeUrlPath(originalUrl);
+    const query = safeUrlQuery(originalUrl);
+    const headers = req && req.headers ? req.headers : {};
+    const referer = normalizeString(headers.referer || headers.referrer || '');
+    const origin = normalizeString(headers.origin || '');
+    const userAgent = normalizeString(headers['user-agent'] || '');
+    const remoteAddress = normalizeString(req && (req.ip || req.socket && req.socket.remoteAddress || req.connection && req.connection.remoteAddress || ''));
     const entry = {
       id: crypto.randomUUID(),
       method: String(req && req.method || '').toUpperCase(),
-      path: String(req && req.originalUrl ? req.originalUrl : req && req.url ? req.url : '').split('?')[0] || '',
+      path,
+      fullPath: originalUrl ? `${path}${query ? `?${query}` : ''}` : path,
+      query: query || '',
       label: null,
       scope: 'request',
       jobId: null,
@@ -192,6 +327,11 @@ function createRequestTracker(options = {}) {
       message: null,
       details: null,
       progress: null,
+      referer,
+      origin,
+      userAgent,
+      remoteAddress,
+      initiator: toReadableUrl(referer),
       startedAtMs,
       startedAt: new Date(startedAtMs).toISOString(),
       updatedAtMs: startedAtMs,
@@ -269,15 +409,16 @@ function createRequestTracker(options = {}) {
   }
 
   function getSnapshot() {
+    const activeRequests = Array.from(active.values())
+      .sort((left, right) => left.startedAtMs - right.startedAtMs)
+      .map((entry) => snapshotEntry(entry));
+    const recentRequests = history.map((entry) => ({ ...entry }));
     return {
       activeRequestCount: active.size,
       recentRequestCount: history.length,
-      activeRequests: Array.from(active.values())
-        .sort((left, right) => left.startedAtMs - right.startedAtMs)
-        .map((entry) => snapshotEntry(entry)),
-      recentRequests: history.map((entry) => ({
-        ...entry,
-      })),
+      activeRequests,
+      recentRequests,
+      hotRequests: buildRequestHotspots([...activeRequests, ...recentRequests]),
     };
   }
 
@@ -289,4 +430,5 @@ function createRequestTracker(options = {}) {
 
 module.exports = {
   createRequestTracker,
+  buildRequestHotspots,
 };

@@ -88,6 +88,52 @@
     .chip { display: inline-flex; padding: 2px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); color: var(--muted); }
     .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
     .chip:not(.on):hover { border-color: var(--accent); color: var(--accent); }
+    .search-form { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) 180px auto auto; gap: 8px; align-items: center; }
+    .search-form input, .search-form select { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font: inherit; padding: 9px 10px; }
+    .search-form input::placeholder { color: var(--muted); }
+    .search-form select { cursor: pointer; }
+    .search-form .btn { white-space: nowrap; }
+    .overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .overview-card { background: var(--panel2); border-radius: 8px; padding: 10px; border: 1px solid rgba(255,255,255,0.03); min-height: 100px; }
+    .overview-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+    .overview-value { font-size: 18px; font-weight: 700; color: var(--text); }
+    .overview-sub { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.5; word-break: break-word; }
+    .overview-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .overview-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); }
+    .overview-row strong { color: var(--text); }
+    .overview-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .overview-chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.16); min-width: 120px; }
+    .overview-chip em { font-style: normal; font-size: 10px; color: var(--muted); }
+    .overview-chip strong { font-size: 11px; color: var(--text); word-break: break-word; }
+    .result-list { display: flex; flex-direction: column; gap: 8px; }
+    .result-group { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: start; }
+    .result-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); padding-top: 8px; }
+    .result-card { background: var(--panel2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); padding: 10px; }
+    .result-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .result-title { font-size: 12px; font-weight: 700; color: var(--text); word-break: break-word; }
+    .result-sub { margin-top: 4px; font-size: 11px; color: var(--muted); word-break: break-word; line-height: 1.5; }
+    .result-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .result-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .mini { padding: 5px 10px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .mini:hover { border-color: var(--accent); color: var(--accent); }
+    .mini.on { border-color: var(--accent); color: white; background: rgba(59,130,246,0.14); }
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .detail-card { background: var(--panel2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); padding: 10px; }
+    .detail-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+    .detail-table th, .detail-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    .detail-table th { text-align: left; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    .detail-table td { color: var(--text); word-break: break-word; }
+    .detail-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .detail-table .muted { color: var(--muted); }
+    .detail-pre { background: #0c111b; color: #d7e3ff; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; font-size: 11px; overflow: auto; max-height: 280px; margin-top: 10px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.06); font-size: 10px; color: var(--muted); }
+    .status-pill.good { color: var(--green); background: rgba(34,197,94,0.08); }
+    .status-pill.warn { color: var(--yellow); background: rgba(245,158,11,0.08); }
+    .status-pill.bad { color: var(--red); background: rgba(239,68,68,0.08); }
+    .compact-list { display: flex; flex-direction: column; gap: 6px; }
+    .compact-item { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); }
+    .compact-item .label { color: var(--text); word-break: break-word; }
+    .compact-item .value { color: var(--muted); white-space: nowrap; }
     .rlist { display: flex; flex-direction: column; gap: 8px; }
     .rcard { background: var(--panel2); border-radius: 6px; padding: 10px; }
     .rtop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
@@ -95,8 +141,16 @@
     .rmeta { font-size: 10px; color: var(--muted); white-space: nowrap; }
     .rmsg { margin-top: 6px; font-size: 11px; color: var(--text); word-break: break-word; }
     .rsub { margin-top: 4px; font-size: 10px; color: var(--muted); word-break: break-word; }
+    .hot-list { display: flex; flex-direction: column; gap: 6px; }
+    .hot-item { background: var(--panel2); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.03); cursor: pointer; }
+    .hot-item:hover { border-color: var(--accent); }
+    .hot-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .hot-title { font-size: 11px; color: var(--text); word-break: break-word; }
+    .hot-count { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .hot-sub { font-size: 10px; color: var(--muted); margin-top: 4px; word-break: break-word; }
     a.back { color: var(--accent); text-decoration: none; font-size: 12px; }
-    @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } }
+    @media (max-width: 1080px) { .overview-grid, .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .search-form { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } .overview-grid, .detail-grid, .search-form { grid-template-columns: 1fr; } .result-group { grid-template-columns: 1fr; } .result-group-title { padding-top: 0; } }
   </style>
 </head>
 <body>
@@ -111,6 +165,7 @@
       <span id="stxt">Connecting</span>
       <span id="lts" style="margin-left:10px;font-size:11px;opacity:0.6"></span>
     </div>
+    <button class="btn" id="btn-live-toggle" onclick="toggleLiveRefresh()">Pause Live</button>
     <button class="btn" onclick="doRefresh()">Refresh</button>
   </div>
 </header>
@@ -173,6 +228,41 @@
   </aside>
 
   <div class="main">
+    <div class="card">
+      <div class="card-title">Overview</div>
+      <div id="overview-grid"><div class="note">Loading dashboard snapshot...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Database Search</div>
+      <form id="search-form" class="search-form">
+        <input id="search-query" type="text" placeholder="Search jobs, items, events, URLs, status text" autocomplete="off">
+        <input id="search-job-id" type="text" placeholder="Job ID filter (optional)" autocomplete="off">
+        <select id="search-scope">
+          <option value="all">All Records</option>
+          <option value="jobs">Jobs</option>
+          <option value="items">Items</option>
+          <option value="events">Events</option>
+        </select>
+        <button class="btn" type="submit">Search</button>
+        <button class="btn" type="button" id="search-clear">Clear</button>
+      </form>
+      <div class="note" style="margin-top:8px">Search covers the live database on the droplet. Use it to trace a job, inspect item state, or find event messages without leaving the monitor.</div>
+      <div id="search-summary" class="note" style="margin-top:10px">Run a search to inspect records.</div>
+      <div id="search-results" style="margin-top:10px"><div class="note">No search results yet.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Job Inspector</div>
+      <form id="job-form" class="search-form">
+        <input id="job-id-input" type="text" placeholder="Paste a job ID to inspect" autocomplete="off">
+        <button class="btn" type="submit">Load Job</button>
+        <button class="btn" type="button" id="job-copy-id">Copy ID</button>
+      </form>
+      <div class="note" style="margin-top:8px">Shows row-level status, recent events, and the current item window for the selected job.</div>
+      <div id="job-inspector" style="margin-top:10px"><div class="note">Load a job to inspect its rows and events.</div></div>
+    </div>
+
     <div class="log-bar">
       <span class="log-bar-title">Live Activity Log</span>
       <span class="chip on" data-lv="all" onclick="setLv('all')">All</span>
@@ -191,6 +281,11 @@
 <script>
 var API = window.location.origin;
 var evs = [], lv = 'all', lastTs = null, MAX = 500;
+var liveRefreshEnabled = true;
+var latestDashboard = null;
+var selectedInspectorJobId = '';
+var selectedInspectorItemId = '';
+var currentSearch = { query: '', jobId: '', scope: 'all', itemId: '' };
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtTs(iso) {
@@ -201,6 +296,20 @@ function fmtBytes(b) {
   if (!b) return '--';
   var gb=b/1073741824;
   return gb>=1 ? gb.toFixed(1)+' GB' : Math.round(b/1048576)+' MB';
+}
+function fmtMaybe(value) {
+  return value == null || value === '' ? '--' : String(value);
+}
+function statusClass(status) {
+  var value = String(status || '').toLowerCase();
+  if (value === 'running' || value === 'completed' || value === 'completed_with_errors' || value === 'ok') return 'good';
+  if (value === 'queued' || value === 'pending' || value === 'warn' || value === 'warning') return 'warn';
+  if (value === 'failed' || value === 'error' || value === 'aborted') return 'bad';
+  return '';
+}
+function safeJson(value) {
+  try { return JSON.stringify(value, null, 2); }
+  catch (_) { return String(value); }
 }
 function fmtDuration(ms) {
   var value = Number(ms) || 0;
@@ -222,6 +331,7 @@ function fmtRequestMeta(req) {
   if (req.stage) pieces.push(req.stage);
   if (req.status) pieces.push(req.status);
   pieces.push(fmtDuration(req.durationMs));
+  if (req.initiator) pieces.push('from ' + req.initiator);
   return pieces.filter(Boolean).join(' | ');
 }
 function fmtRequestProgress(req) {
@@ -265,6 +375,232 @@ function renderRequests(list, emptyText, isRecent) {
       +'</div>';
   }).join('')+'</div>';
 }
+function jsQuote(value) {
+  return JSON.stringify(String(value == null ? '' : value));
+}
+function overviewCard(title, body, footer) {
+  return '<div class="overview-card">'
+    +'<div class="overview-label">'+esc(title)+'</div>'
+    +body
+    +(footer ? '<div class="overview-sub">'+footer+'</div>' : '')
+    +'</div>';
+}
+function renderStatusPill(status) {
+  var tone = statusClass(status);
+  return '<span class="status-pill'+(tone ? ' '+tone : '')+'">'+esc(status || '--')+'</span>';
+}
+function renderOverview(data) {
+  var system = data && data.system ? data.system : {};
+  var queue = data && data.queue ? data.queue : {};
+  var db = data && data.database ? data.database : {};
+  var jobs = Array.isArray(data && data.recentJobs) ? data.recentJobs.slice(0, 5) : [];
+  var hot = Array.isArray(data && data.requestHotspots) ? data.requestHotspots.slice(0, 5) : [];
+  var activeRequests = Array.isArray(data && data.activeRequests) ? data.activeRequests : [];
+  var queueCounts = queue.counts || {};
+  var memory = system.memoryUsage || {};
+  var activeJobCount = Number(data && data.activeJobCount) || 0;
+
+  var processCard = overviewCard('Process', [
+    '<div class="overview-value">PID '+esc(system.pid == null ? '--' : system.pid)+'</div>',
+    '<div class="overview-sub">Node '+esc(system.nodeVersion || '--')+' on '+esc(system.platform || '--')+' / '+esc(system.arch || '--')+'</div>',
+    '<div class="overview-list">',
+      '<div class="overview-row"><span>Uptime</span><strong>'+esc(fmtDuration(system.uptimeMs || 0))+'</strong></div>',
+      '<div class="overview-row"><span>RSS</span><strong>'+esc(fmtBytes(memory.rss || 0))+'</strong></div>',
+      '<div class="overview-row"><span>Heap</span><strong>'+esc(fmtBytes(memory.heapUsed || 0))+'</strong></div>',
+      '<div class="overview-row"><span>Load</span><strong>'+esc((Array.isArray(system.loadAverage) ? system.loadAverage : [0, 0, 0]).map(function(v){ return Number(v || 0).toFixed(2); }).join(', '))+'</strong></div>',
+    '</div>',
+  ].join(''));
+
+  var queueCard = overviewCard('Queue', [
+    '<div class="overview-value">'+esc((queueCounts.waiting || 0)+' waiting')+'</div>',
+    '<div class="overview-sub">'+esc(queue.name || 'queue')+'</div>',
+    '<div class="overview-chip-list">',
+      '<span class="overview-chip"><em>Active</em><strong>'+esc(queueCounts.active || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Delayed</em><strong>'+esc(queueCounts.delayed || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Failed</em><strong>'+esc(queueCounts.failed || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Completed</em><strong>'+esc(queueCounts.completed || 0)+'</strong></span>',
+    '</div>',
+  ].join(''));
+
+  var databaseCard = overviewCard('Database', [
+    '<div class="overview-value">'+esc((db.jobCount || 0)+' jobs')+'</div>',
+    '<div class="overview-sub">'+esc((db.itemCount || 0)+' items | '+(db.eventCount || 0)+' events | '+(db.reviewedItemCount || 0)+' reviewed')+'</div>',
+    '<div class="overview-chip-list">',
+      '<span class="overview-chip"><em>Candidates</em><strong>'+esc(db.candidateItemCount || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Manual capture</em><strong>'+esc(db.manualCaptureRequiredCount || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Targets</em><strong>'+esc(db.manualReviewTargetCount || 0)+'</strong></span>',
+      '<span class="overview-chip"><em>Active jobs</em><strong>'+esc(activeJobCount)+'</strong></span>',
+    '</div>',
+    '<div class="overview-sub" style="margin-top:10px;font-weight:600;color:var(--text)">Recent jobs</div>',
+    '<div class="compact-list">',
+      jobs.length ? jobs.map(function(job) {
+        var label = job.source_filename || job.id;
+        return '<div class="compact-item" onclick=\'inspectJob('+jsQuote(job.id)+')\' style="cursor:pointer">'
+          +'<span class="label">'+esc(label)+'</span>'
+          +'<span class="value">'+esc((job.completed_count || 0)+'/'+(job.total_urls || 0)+' '+(job.status || ''))+'</span>'
+          +'</div>';
+      }).join('') : '<div class="note">No jobs yet.</div>',
+    '</div>',
+  ].join(''));
+
+  var requestsCard = overviewCard('Hot Requests', [
+    '<div class="overview-value">'+esc((data && data.activeRequestCount) || 0)+' active</div>',
+    '<div class="overview-sub">'+esc((data && data.recentRequestCount) || 0)+' recent long requests recorded</div>',
+    '<div class="hot-list" style="margin-top:10px">',
+      hot.length ? hot.map(function(req) {
+        var requestTitle = (req.method || 'GET') + ' ' + (req.path || req.fullPath || '');
+        var sampleJobId = req.sample && req.sample.jobId ? req.sample.jobId : '';
+        var action = sampleJobId ? 'inspectJob('+jsQuote(sampleJobId)+')' : 'focusRequest('+jsQuote(req.path || '' )+','+jsQuote(req.fullPath || '')+')';
+        return '<div class="hot-item" onclick=\''+action+'\'>'+
+          '<div class="hot-top"><div class="hot-title">'+esc(requestTitle)+'</div><div class="hot-count">'+esc(req.count)+'x | '+esc(fmtDuration(req.averageDurationMs || req.maxDurationMs || 0))+'</div></div>'+
+          '<div class="hot-sub">'+esc(req.lastFullPath || req.path || '')+'</div>'+
+          '<div class="hot-sub">'+esc((req.sample && req.sample.initiator) ? ('from ' + req.sample.initiator) : (req.lastReferer || req.lastOrigin || ''))+'</div>'+
+          '<div class="hot-sub">'+esc(req.lastStatus || '--')+(req.lastMessage ? ' | '+req.lastMessage : '')+'</div>'+
+          '</div>';
+      }).join('') : '<div class="note">No request hotspots yet.</div>',
+    '</div>',
+  ].join(''));
+
+  var activityCard = overviewCard('Live Activity', [
+    '<div class="overview-value">'+esc(activeRequests.length)+' active</div>',
+    '<div class="overview-sub">The main feed below shows every event as it lands. Pause live refresh if you want to inspect a static state.</div>',
+  ].join(''));
+
+  return '<div class="overview-grid">'+processCard+queueCard+databaseCard+requestsCard+activityCard+'</div>';
+}
+function renderSearchResults(data) {
+  var jobs = Array.isArray(data && data.jobs) ? data.jobs : [];
+  var items = Array.isArray(data && data.items) ? data.items : [];
+  var events = Array.isArray(data && data.events) ? data.events : [];
+  var pieces = [];
+  if (!jobs.length && !items.length && !events.length) {
+    return '<div class="note">No search results.</div>';
+  }
+
+  function renderJob(job) {
+    return '<div class="result-card" onclick=\'inspectJob('+jsQuote(job.id)+')\' style="cursor:pointer">'
+      +'<div class="result-top"><div><div class="result-title">'+esc(job.id)+'</div>'
+      +'<div class="result-sub">'+esc(job.source_filename || '--')+' | '+esc(job.source_column || '--')+'</div></div>'
+      +'<div class="result-meta">'+esc(job.status || '--')+'</div></div>'
+      +'<div class="result-sub">'+esc((job.completed_count || 0)+'/'+(job.total_urls || 0)+' completed | '+(job.failed_count || 0)+' failed | '+(job.detected_count || 0)+' detected')+'</div>'
+      +'</div>';
+  }
+
+  function renderItem(item) {
+    return '<div class="result-card" onclick=\'inspectJob('+jsQuote(item.job_id)+','+jsQuote(item.id)+')\' style="cursor:pointer">'
+      +'<div class="result-top"><div><div class="result-title">Row '+esc(item.row_number || '?')+' | '+esc(item.status || '--')+'</div>'
+      +'<div class="result-sub">'+esc(item.title || item.input_url || item.normalized_url || item.id)+'</div></div>'
+      +'<div class="result-meta">'+esc(item.job_id || '--')+'</div></div>'
+      +'<div class="result-sub">'+esc(item.final_url || item.normalized_url || item.input_url || '')+'</div>'
+      +'</div>';
+  }
+
+  function renderEvent(event) {
+    return '<div class="result-card" onclick=\'inspectJob('+jsQuote(event.job_id)+')\' style="cursor:pointer">'
+      +'<div class="result-top"><div><div class="result-title">'+esc(event.message || event.event_type || 'Event')+'</div>'
+      +'<div class="result-sub">'+esc((event.scope || '--')+'/'+(event.event_type || '--'))+' | '+esc(event.source_filename || event.job_id || '--')+'</div></div>'
+      +'<div class="result-meta">'+esc(event.level || '--')+'</div></div>'
+      +'<div class="result-sub">'+esc(fmtTs(event.created_at || ''))+'</div>'
+      +'</div>';
+  }
+
+  if (jobs.length) {
+    pieces.push('<div class="result-group"><div class="result-group-title">Jobs</div><div class="result-list">'+jobs.map(renderJob).join('')+'</div></div>');
+  }
+  if (items.length) {
+    pieces.push('<div class="result-group"><div class="result-group-title">Items</div><div class="result-list">'+items.map(renderItem).join('')+'</div></div>');
+  }
+  if (events.length) {
+    pieces.push('<div class="result-group"><div class="result-group-title">Events</div><div class="result-list">'+events.map(renderEvent).join('')+'</div></div>');
+  }
+
+  return '<div class="result-list">'+pieces.join('')+'</div>';
+}
+function renderJobInspector(data) {
+  if (!data || !data.job) {
+    return '<div class="note">Load a job to inspect its rows and events.</div>';
+  }
+
+  var job = data.job;
+  var items = Array.isArray(data.items) ? data.items : [];
+  var events = Array.isArray(data.events) ? data.events : [];
+  var selectedItem = data.selectedItem || null;
+  var counts = [
+    ['Completed', job.completed_count || 0],
+    ['Queued', job.queued_count || 0],
+    ['Running', job.running_count || 0],
+    ['Failed', job.failed_count || 0],
+  ];
+
+  var summary = '<div class="detail-grid">'
+    +'<div class="detail-card"><div class="overview-label">Job ID</div><div class="overview-value" style="font-size:14px">'+esc(job.id)+'</div><div class="overview-sub">'+esc(job.source_filename || '--')+'</div></div>'
+    +'<div class="detail-card"><div class="overview-label">Status</div><div>'+renderStatusPill(job.status)+'</div><div class="overview-sub">Updated '+esc(fmtTs(job.updated_at || job.created_at || ''))+'</div></div>'
+    +'<div class="detail-card"><div class="overview-label">Progress</div><div class="overview-value" style="font-size:14px">'+esc((job.completed_count || 0)+'/'+(job.total_urls || 0))+'</div><div class="overview-sub">Detected '+esc(job.detected_count || 0)+' | Failed '+esc(job.failed_count || 0)+'</div></div>'
+    +'<div class="detail-card"><div class="overview-label">Window</div><div class="overview-value" style="font-size:14px">'+esc(items.length)+' rows</div><div class="overview-sub">Limit '+esc((data.pagination && data.pagination.limit) || items.length || 0)+' | Offset '+esc((data.pagination && data.pagination.offset) || 0)+'</div></div>'
+    +'</div>';
+
+  var selectedItemCard = selectedItem ? (
+    '<div class="detail-card" style="margin-top:10px">'
+      +'<div class="overview-label">Selected Item</div>'
+      +'<div class="overview-value" style="font-size:14px">Row '+esc(selectedItem.row_number || '?')+' | '+esc(selectedItem.status || '--')+'</div>'
+      +'<div class="overview-sub">'+esc(selectedItem.title || selectedItem.input_url || selectedItem.normalized_url || selectedItem.id)+'</div>'
+      +'<div class="overview-sub">'+esc(selectedItem.final_url || selectedItem.normalized_url || selectedItem.input_url || '')+'</div>'
+      +'<pre class="detail-pre">'+esc(safeJson(selectedItem))+'</pre>'
+    +'</div>'
+  ) : '';
+
+  var tableRows = items.length ? items.map(function(item) {
+    return '<tr onclick=\'inspectJob('+jsQuote(job.id)+','+jsQuote(item.id)+')\' style="cursor:pointer">'
+      +'<td>'+esc(item.row_number || '')+'</td>'
+      +'<td>'+renderStatusPill(item.status)+'</td>'
+      +'<td>'+esc(item.title || item.input_url || item.normalized_url || item.id)+'</td>'
+      +'<td class="muted">'+esc(item.analysis_source || '--')+'</td>'
+      +'<td class="muted">'+esc(item.best_ugc_type || '--')+'</td>'
+      +'<td class="muted">'+esc(fmtMaybe(item.best_score))+'</td>'
+      +'</tr>';
+  }).join('') : '<tr><td colspan="6" class="muted">No rows found.</td></tr>';
+
+  var eventRows = events.length ? events.map(function(event) {
+    return '<div class="compact-item">'
+      +'<span class="label">'+esc(fmtTs(event.created_at || ''))+' | '+esc((event.scope || '--')+'/'+(event.event_type || '--'))+' | '+esc(event.message || '')+'</span>'
+      +'<span class="value">'+esc(event.level || '--')+'</span>'
+      +'</div>';
+  }).join('') : '<div class="note">No job events found.</div>';
+
+  var controls = '<div class="result-actions" style="margin-top:10px">'
+    +'<span class="mini on">Job: '+esc(job.id)+'</span>'
+    +'<span class="mini">'+esc(job.source_column || 'No CSV column')+'</span>'
+    +'<span class="mini">'+esc((job.total_urls || 0)+' URLs')+'</span>'
+    +'<span class="mini">'+esc((counts[0][1] || 0)+' done')+'</span>'
+    +'</div>';
+
+  return summary
+    +controls
+    +selectedItemCard
+    +'<div class="detail-card" style="margin-top:10px">'
+      +'<div class="overview-label">Rows</div>'
+      +'<table class="detail-table"><thead><tr><th>Row</th><th>Status</th><th>Title / URL</th><th>Source</th><th>UGC</th><th>Score</th></tr></thead><tbody>'+tableRows+'</tbody></table>'
+    +'</div>'
+    +'<div class="detail-card" style="margin-top:10px">'
+      +'<div class="overview-label">Recent Events</div>'
+      +'<div class="compact-list">'+eventRows+'</div>'
+    +'</div>';
+}
+function focusRequest(jobId, path, fullPath) {
+  if (jobId) {
+    inspectJob(jobId);
+    return;
+  }
+  var queryInput = document.getElementById('search-query');
+  var scopeInput = document.getElementById('search-scope');
+  if (queryInput) {
+    queryInput.value = fullPath || path || '';
+  }
+  if (scopeInput) {
+    scopeInput.value = 'all';
+  }
+  runSearch();
+}
 
 function setLv(l) {
   lv = l;
@@ -300,7 +636,8 @@ function showToast(msg, isErr) {
 }
 
 function loadHealth() {
-  fetch(API+'/api/health/detailed').then(function(r){ return r.json(); }).then(function(d){
+  return fetch(API+'/api/health/detailed').then(function(r){ return r.json(); }).then(function(d){
+    latestDashboard = d;
     var re=document.getElementById('h-redis');
     var redisState = d.redis === null || d.redis === undefined ? null : !!d.redis;
     re.textContent=redisState===null?'--':(redisState?'OK':'DOWN');
@@ -343,7 +680,143 @@ function loadHealth() {
     var recentRequests=document.getElementById('rrecent');
     activeRequests.innerHTML = renderRequests(d.activeRequests, 'No active requests.', false);
     recentRequests.innerHTML = renderRequests(d.recentRequests, 'No recent requests.', true);
+    var overview=document.getElementById('overview-grid');
+    if (overview) {
+      overview.innerHTML = renderOverview(d);
+    }
+    updateLiveToggle();
+    if (selectedInspectorJobId) {
+      var inspector = document.getElementById('job-inspector');
+      if (inspector && inspector.dataset && inspector.dataset.loadedJobId === selectedInspectorJobId) {
+        // Keep the inspector in sync when live refresh is enabled.
+        inspectJob(selectedInspectorJobId, selectedInspectorItemId, true).catch(function(error){ console.error(error); });
+      }
+    }
   }).catch(function(){});
+}
+
+function updateLiveToggle() {
+  var btn = document.getElementById('btn-live-toggle');
+  if (btn) {
+    btn.textContent = liveRefreshEnabled ? 'Pause Live' : 'Resume Live';
+  }
+}
+
+function toggleLiveRefresh() {
+  liveRefreshEnabled = !liveRefreshEnabled;
+  updateLiveToggle();
+  if (liveRefreshEnabled) {
+    doRefresh();
+  } else {
+    setStatus('warn', 'Paused');
+  }
+}
+
+function loadSearchResults() {
+  var queryInput = document.getElementById('search-query');
+  var jobInput = document.getElementById('search-job-id');
+  var scopeInput = document.getElementById('search-scope');
+  var query = queryInput ? queryInput.value.trim() : '';
+  var jobId = jobInput ? jobInput.value.trim() : '';
+  var scope = scopeInput ? scopeInput.value : 'all';
+  currentSearch = { query: query, jobId: jobId, scope: scope, itemId: '' };
+  var summary = document.getElementById('search-summary');
+  var results = document.getElementById('search-results');
+  if (summary) {
+    summary.textContent = 'Searching...';
+  }
+  if (results) {
+    results.innerHTML = '<div class="note">Loading search results...</div>';
+  }
+
+  var url = API+'/api/admin/search?scope='+encodeURIComponent(scope)+'&limit=15';
+  if (query) url += '&q='+encodeURIComponent(query);
+  if (jobId) url += '&jobId='+encodeURIComponent(jobId);
+
+  return fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (summary) {
+      summary.textContent = (d.jobs ? d.jobs.length : 0)+' jobs, '+(d.items ? d.items.length : 0)+' items, '+(d.events ? d.events.length : 0)+' events';
+    }
+    if (results) {
+      results.innerHTML = renderSearchResults(d);
+    }
+  }).catch(function(error){
+    if (summary) {
+      summary.textContent = error && error.message ? error.message : 'Search failed';
+    }
+    if (results) {
+      results.innerHTML = '<div class="note">Search failed.</div>';
+    }
+  });
+}
+
+function runSearch(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  return loadSearchResults();
+}
+
+function clearSearch() {
+  var queryInput = document.getElementById('search-query');
+  var jobInput = document.getElementById('search-job-id');
+  var scopeInput = document.getElementById('search-scope');
+  if (queryInput) queryInput.value = '';
+  if (jobInput) jobInput.value = '';
+  if (scopeInput) scopeInput.value = 'all';
+  currentSearch = { query: '', jobId: '', scope: 'all', itemId: '' };
+  var summary = document.getElementById('search-summary');
+  var results = document.getElementById('search-results');
+  if (summary) summary.textContent = 'Run a search to inspect records.';
+  if (results) results.innerHTML = '<div class="note">No search results yet.</div>';
+}
+
+function inspectJob(jobId, itemId, silent) {
+  var normalizedJobId = String(jobId || '').trim();
+  var normalizedItemId = String(itemId || '').trim();
+  if (!normalizedJobId) {
+    return Promise.resolve();
+  }
+  selectedInspectorJobId = normalizedJobId;
+  selectedInspectorItemId = normalizedItemId;
+  var jobInput = document.getElementById('job-id-input');
+  if (jobInput) {
+    jobInput.value = normalizedJobId;
+  }
+  var inspector = document.getElementById('job-inspector');
+  if (inspector && !silent) {
+    inspector.innerHTML = '<div class="note">Loading job '+esc(normalizedJobId)+'...</div>';
+  }
+  if (inspector) {
+    inspector.dataset.loadedJobId = normalizedJobId;
+  }
+
+  var jobPromise = fetch(API+'/api/jobs/'+encodeURIComponent(normalizedJobId)+'?limit=20&offset=0').then(function(r){ return r.json(); });
+  var eventsPromise = fetch(API+'/api/jobs/'+encodeURIComponent(normalizedJobId)+'/events?limit=25').then(function(r){ return r.json(); });
+  var itemPromise = normalizedItemId ? fetch(API+'/api/jobs/'+encodeURIComponent(normalizedJobId)+'/items/'+encodeURIComponent(normalizedItemId)).then(function(r){ return r.json(); }) : Promise.resolve(null);
+
+  return Promise.all([jobPromise, eventsPromise, itemPromise]).then(function(values){
+    var jobBody = values[0] || {};
+    var eventsBody = values[1] || {};
+    var itemBody = values[2] || null;
+    var payload = {
+      job: jobBody.job || null,
+      items: Array.isArray(jobBody.items) ? jobBody.items : [],
+      events: Array.isArray(eventsBody.events) ? eventsBody.events : [],
+      pagination: jobBody.pagination || {},
+      selectedItem: itemBody && itemBody.item ? itemBody.item : null,
+    };
+    if (inspector) {
+      inspector.innerHTML = renderJobInspector(payload);
+      inspector.dataset.loadedJobId = normalizedJobId;
+    }
+    return payload;
+  }).catch(function(error){
+    if (inspector) {
+      inspector.innerHTML = '<div class="note">Failed to load job: '+esc(error && error.message ? error.message : String(error))+'</div>';
+    }
+    throw error;
+  });
 }
 
 function loadModelStats() {
@@ -357,6 +830,9 @@ function loadModelStats() {
 }
 
 function loadEvents(isRefresh) {
+  if (!liveRefreshEnabled && !isRefresh) {
+    return Promise.resolve();
+  }
   var since=(!isRefresh&&lastTs)?'&since='+encodeURIComponent(lastTs):'';
   fetch(API+'/api/events?limit=200'+since).then(function(r){ return r.json(); }).then(function(d){
     var list=Array.isArray(d&&d.events)?d.events:[];
@@ -368,12 +844,23 @@ function loadEvents(isRefresh) {
       lastTs=list[0].created_at;
       render();
     }
-    setStatus('ok','Live');
+    setStatus(liveRefreshEnabled ? 'ok' : 'warn', liveRefreshEnabled ? 'Live' : 'Paused');
     document.getElementById('lts').textContent='Updated '+new Date().toLocaleTimeString();
   }).catch(function(){ setStatus('error','Disconnected'); });
 }
 
-function doRefresh() { loadHealth(); loadEvents(true); loadModelStats(); }
+function doRefresh() {
+  updateLiveToggle();
+  loadHealth();
+  loadEvents(true);
+  loadModelStats();
+  if (selectedInspectorJobId) {
+    inspectJob(selectedInspectorJobId, selectedInspectorItemId, true).catch(function(error){ console.error(error); });
+  }
+  if (currentSearch.query || currentSearch.jobId || currentSearch.scope !== 'all') {
+    loadSearchResults().catch(function(error){ console.error(error); });
+  }
+}
 
 function restartWorker() {
   if (!confirm('Send a restart signal to the worker? In-progress scans will be retried.')) return;
@@ -401,8 +888,55 @@ function purgeArtifacts() {
     .catch(function(){ showToast('Purge failed',true); btn.disabled=false; });
 }
 
+function tickLiveRefresh() {
+  if (!liveRefreshEnabled) {
+    return;
+  }
+  loadHealth();
+  loadEvents(false);
+}
+
+var searchForm = document.getElementById('search-form');
+if (searchForm) {
+  searchForm.addEventListener('submit', runSearch);
+}
+var searchClear = document.getElementById('search-clear');
+if (searchClear) {
+  searchClear.addEventListener('click', clearSearch);
+}
+var jobForm = document.getElementById('job-form');
+if (jobForm) {
+  jobForm.addEventListener('submit', function(event) {
+    event.preventDefault();
+    var input = document.getElementById('job-id-input');
+    var jobId = input ? input.value.trim() : '';
+    if (!jobId) return;
+    inspectJob(jobId).catch(function(error) { console.error(error); });
+  });
+}
+var jobCopyButton = document.getElementById('job-copy-id');
+if (jobCopyButton) {
+  jobCopyButton.addEventListener('click', function() {
+    var input = document.getElementById('job-id-input');
+    var value = selectedInspectorJobId || (input ? input.value.trim() : '');
+    if (!value) return;
+    copyText(value).then(function() {
+      showToast('Job ID copied');
+    }).catch(function() {
+      showToast('Failed to copy job ID', true);
+    });
+  });
+}
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden && liveRefreshEnabled) {
+    liveRefreshEnabled = false;
+    updateLiveToggle();
+    setStatus('warn', 'Paused');
+  }
+});
+
 doRefresh();
-setInterval(function(){ loadHealth(); loadEvents(false); }, 5000);
+setInterval(tickLiveRefresh, 5000);
 </script>
 </body>
 </html>
