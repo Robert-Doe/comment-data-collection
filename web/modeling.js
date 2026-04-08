@@ -7,6 +7,7 @@
   const variantCards = document.getElementById('variant-cards');
   const trainJobIds = document.getElementById('train-job-ids');
   const downloadAllDataset = document.getElementById('download-all-dataset');
+  const trainAlgorithm = document.getElementById('train-algorithm');
   const trainMessage = document.getElementById('train-message');
   const trainResult = document.getElementById('train-result');
   const modelList = document.getElementById('model-list');
@@ -113,24 +114,35 @@
     }
 
     variantCards.className = 'model-card-grid';
-    variantCards.innerHTML = currentVariants.map((variant) => `
-      <article class="model-card">
-        <p class="eyebrow subtle">${escapeHtml(variant.id)}</p>
-        <h3>${escapeHtml(variant.title)}</h3>
-        <p>${escapeHtml(variant.description)}</p>
-        <div class="feature-chip-list">
-          <span class="feature-chip plain"><strong>Feature Count</strong><span>${escapeHtml(variant.feature_count)}</span></span>
-          <span class="feature-chip ${variant.excludeKeywordFeatures ? 'muted' : 'good'}">
-            <strong>Keyword Family</strong>
-            <span>${variant.excludeKeywordFeatures ? 'excluded' : 'included'}</span>
-          </span>
-        </div>
-        <div class="candidate-actions">
-          <button class="primary" type="button" data-train-variant="${escapeHtml(variant.id)}">Train ${escapeHtml(variant.title)}</button>
-          <a class="link-button" data-dataset-variant="${escapeHtml(variant.id)}" href="#">Download Variant Dataset</a>
-        </div>
-      </article>
-    `).join('');
+    variantCards.innerHTML = currentVariants.map((variant) => {
+      const usesKeywords = !variant.excludeKeywordFeatures;
+      const algorithmLabel = trainAlgorithm
+        ? (trainAlgorithm.options[trainAlgorithm.selectedIndex] || {}).text || trainAlgorithm.value
+        : 'Logistic Regression';
+      return `
+        <article class="model-card">
+          <p class="eyebrow subtle">${escapeHtml(variant.id)}</p>
+          <h3>${escapeHtml(variant.title)}</h3>
+          <p>${escapeHtml(variant.description)}</p>
+          <div class="feature-chip-list">
+            <span class="feature-chip plain">
+              <strong>Feature Count</strong><span>${escapeHtml(variant.feature_count)}</span>
+            </span>
+            <span class="feature-chip ${usesKeywords ? 'good' : 'muted'}" title="${usesKeywords ? 'Text keywords (e.g. "comments", "reply") are included as features' : 'Only structural DOM signals used — no text keywords'}">
+              <strong>${usesKeywords ? '🔤 Keywords' : '🏗 Structure'}</strong>
+              <span>${usesKeywords ? 'included' : 'excluded'}</span>
+            </span>
+            <span class="feature-chip plain" title="The classifier algorithm that will be used when you click Train">
+              <strong>Algorithm</strong><span>${escapeHtml(algorithmLabel)}</span>
+            </span>
+          </div>
+          <div class="candidate-actions">
+            <button class="primary" type="button" data-train-variant="${escapeHtml(variant.id)}">Train ${escapeHtml(variant.title)}</button>
+            <a class="link-button" data-dataset-variant="${escapeHtml(variant.id)}" href="#">Download Variant Dataset</a>
+          </div>
+        </article>
+      `;
+    }).join('');
     updateDatasetDownloadLink();
   }
 
@@ -471,10 +483,12 @@
   }
 
   async function trainVariant(variantId) {
-    setMessage(trainMessage, 'Training model...', false);
+    const algorithm = trainAlgorithm ? trainAlgorithm.value : 'logistic_regression';
+    setMessage(trainMessage, `Training model using ${algorithm.replace(/_/g, ' ')}…`, false);
     const body = {
       variantId,
       jobIds: trainJobIds.value.trim(),
+      algorithm,
     };
     const result = await fetchJson('/api/modeling/train', {
       method: 'POST',
@@ -495,6 +509,12 @@
   });
 
   trainJobIds.addEventListener('input', updateDatasetDownloadLink);
+
+  if (trainAlgorithm) {
+    trainAlgorithm.addEventListener('change', () => {
+      if (currentVariants.length) renderVariantCards(currentVariants);
+    });
+  }
 
   variantCards.addEventListener('click', (event) => {
     const button = event.target.closest('[data-train-variant]');

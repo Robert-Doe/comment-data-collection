@@ -1,0 +1,1799 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UGC Scanner — Model Lab Demo Tour</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    /* ── Demo Shell ─────────────────────────────────────── */
+    .demo-shell {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 120px);
+    }
+    /* ── Narrator (left sticky panel) ──────────────────── */
+    .narrator {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      padding-right: 24px;
+    }
+    .narrator-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+    .step-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .step-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(11,87,208,0.08);
+      border-radius: 999px;
+      padding: 4px 12px;
+    }
+    .step-fraction { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .demo-progress-track {
+      height: 6px;
+      background: rgba(11,87,208,0.1);
+      border-radius: 3px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .demo-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+    }
+    .step-icon {
+      font-size: 2.4rem;
+      margin-bottom: 10px;
+      display: block;
+      transition: opacity 0.4s;
+    }
+    .step-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 10px;
+      font-family: "Space Grotesk","Segoe UI",sans-serif;
+      min-height: 3rem;
+      transition: opacity 0.4s;
+    }
+    .step-desc {
+      font-size: 0.87rem;
+      color: var(--muted);
+      line-height: 1.65;
+      margin: 0 0 14px;
+      min-height: 5rem;
+      transition: opacity 0.4s;
+    }
+    .tip-box {
+      background: rgba(11,87,208,0.06);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 10px 10px 0;
+      padding: 10px 14px;
+      font-size: 0.81rem;
+      color: var(--text);
+      margin-bottom: 8px;
+      transition: all 0.4s;
+    }
+    .tip-box strong { color: var(--accent); display: block; margin-bottom: 2px; }
+    .tip-box.tip-success { background: rgba(29,107,87,0.07); border-color: var(--success); }
+    .tip-box.tip-success strong { color: var(--success); }
+    .tip-box.tip-warn { background: rgba(139,90,16,0.07); border-color: var(--warning); }
+    .tip-box.tip-warn strong { color: var(--warning); }
+    .narrator-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .narrator-controls button {
+      flex: 1;
+      padding: 10px 6px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .narrator-controls button:hover { background: rgba(11,87,208,0.06); }
+    #btn-play-pause {
+      background: var(--accent) !important;
+      color: #fff !important;
+      border-color: var(--accent) !important;
+      flex: 2;
+    }
+    .step-dots {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: rgba(11,87,208,0.15);
+      transition: all 0.3s;
+    }
+    .step-dot.done { background: var(--accent); }
+    .step-dot.active { background: var(--accent); transform: scale(1.5); box-shadow: 0 0 0 3px rgba(11,87,208,0.2); }
+
+    /* ── Replica area (right) ───────────────────────────── */
+    .replica-area { position: relative; }
+    .replica-section {
+      transition: opacity 0.5s, transform 0.5s, box-shadow 0.5s;
+      border-radius: 28px;
+    }
+    .replica-section.dimmed { opacity: 0.28; pointer-events: none; }
+    .replica-section.active-section {
+      box-shadow: 0 0 0 3px var(--accent), 0 20px 60px rgba(11,87,208,0.18) !important;
+      transform: translateY(-2px);
+    }
+
+    /* ── Fake cursor ────────────────────────────────────── */
+    #demo-cursor {
+      position: fixed;
+      width: 22px; height: 22px;
+      background: var(--accent);
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 2px 12px rgba(11,87,208,0.5);
+      pointer-events: none;
+      z-index: 9000;
+      opacity: 0;
+      transition: left 0.9s cubic-bezier(0.34,1.4,0.64,1),
+                  top  0.9s cubic-bezier(0.34,1.4,0.64,1),
+                  opacity 0.3s,
+                  transform 0.15s;
+    }
+    #demo-cursor.visible { opacity: 1; }
+    #demo-cursor.clicking { transform: scale(1.8); background: var(--accent-strong, #0842a0); }
+
+    /* ── Toasts ─────────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      top: 18px; right: 22px;
+      z-index: 9500;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .demo-toast {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 18px;
+      max-width: 340px;
+      box-shadow: 0 12px 36px rgba(15,23,42,0.15);
+      transform: translateX(140%);
+      transition: transform 0.5s cubic-bezier(0.34,1.3,0.64,1), opacity 0.4s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .demo-toast.show { transform: translateX(0); opacity: 1; }
+    .demo-toast.hiding { transform: translateX(140%); opacity: 0; }
+    .toast-header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.85rem; margin-bottom: 5px; }
+    .toast-icon { font-size: 1.1rem; }
+    .toast-body { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+    .toast-bar { height: 3px; border-radius: 2px; background: var(--accent); margin-top: 10px; animation: shrink-bar linear forwards; }
+    @keyframes shrink-bar { from { width: 100%; } to { width: 0%; } }
+
+    /* ── Spinners & progress bars ───────────────────────── */
+    .demo-spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(11,87,208,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 5px;
+    }
+    .demo-spinner.white {
+      border-color: rgba(255,255,255,0.3);
+      border-top-color: white;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .demo-loading-bar-wrap {
+      height: 5px;
+      background: rgba(11,87,208,0.1);
+      border-radius: 3px;
+      margin: 8px 0;
+      overflow: hidden;
+    }
+    .demo-loading-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #4d90ff);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.35s ease;
+    }
+    .demo-loading-bar-fill.indeterminate {
+      width: 40% !important;
+      animation: indeterminate 1.2s infinite;
+    }
+    @keyframes indeterminate {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(400%); }
+    }
+
+    /* ── Replica: overview stats ────────────────────────── */
+    .rep-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .rep-stat {
+      background: rgba(11,87,208,0.05);
+      border: 1px solid rgba(11,87,208,0.1);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+    .rep-stat.accent-stat { background: rgba(11,87,208,0.1); border-color: rgba(11,87,208,0.25); }
+    .rep-stat-val {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--accent);
+      display: block;
+      font-family: "Space Grotesk","Segoe UI",sans-serif;
+    }
+    .rep-stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ── Replica: variant train cards ───────────────────── */
+    .rep-variant-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .rep-variant-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: var(--panel-soft);
+    }
+    .rep-variant-card .rep-variant-eyebrow {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .rep-variant-card h4 { margin: 0 0 6px; font-size: 0.92rem; }
+    .rep-variant-card p { margin: 0 0 10px; font-size: 0.78rem; color: var(--muted); }
+    .rep-chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .rep-chip {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .rep-chip.good { background: rgba(29,107,87,0.1); color: var(--success); }
+    .rep-chip.muted-chip { background: rgba(0,0,0,0.06); color: var(--muted); }
+    .rep-chip.plain { background: rgba(11,87,208,0.08); color: var(--accent); }
+    .rep-train-btn {
+      width: 100%;
+      padding: 9px;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .rep-train-btn.loading { background: #6b9de8; }
+    .rep-link-btn {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* ── Replica: training result (4 cards) ─────────────── */
+    .rep-result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .rep-result-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: var(--panel-soft);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.5s;
+    }
+    .rep-result-card.visible { opacity: 1; transform: none; }
+    .rep-result-card.highlighted { border-color: var(--accent); background: rgba(11,87,208,0.04); }
+    .rep-result-card .card-eyebrow {
+      font-size: 0.67rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .rep-result-card h4 { margin: 0 0 10px; font-size: 0.88rem; }
+    .rep-summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 0.78rem;
+    }
+    .rep-summary-grid div strong { color: var(--text); }
+    .rep-summary-grid div span { color: var(--accent); font-weight: 700; }
+    .rep-chip-list { display: flex; flex-wrap: wrap; gap: 5px; }
+
+    /* ── Replica: models table ──────────────────────────── */
+    .rep-table {
+      width: 100%;
+      font-size: 0.8rem;
+      border-collapse: collapse;
+    }
+    .rep-table th {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+    .rep-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .rep-table tr:last-child td { border-bottom: none; }
+    .rep-table .mono { font-family: monospace; font-size: 0.74rem; color: var(--muted); }
+    .rep-table-row {
+      opacity: 0;
+      transform: translateY(6px);
+      transition: all 0.4s;
+    }
+    .rep-table-row.visible { opacity: 1; transform: none; }
+    .rep-action-stack { display: flex; gap: 6px; align-items: center; }
+    .rep-use-btn {
+      padding: 4px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(11,87,208,0.3);
+      background: rgba(11,87,208,0.06);
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .rep-use-btn:hover, .rep-use-btn.highlighted {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .rep-use-btn.highlighted { animation: pulse-btn 0.8s ease 3; }
+    @keyframes pulse-btn {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.1); box-shadow: 0 0 0 5px rgba(11,87,208,0.2); }
+    }
+    .rep-runtime-link {
+      font-size: 0.74rem;
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .rep-badge {
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .rep-badge.new { background: rgba(11,87,208,0.1); color: var(--accent); }
+
+    /* ── Replica: jobs list ─────────────────────────────── */
+    .rep-job-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.8rem;
+    }
+    .rep-job-row:last-child { border-bottom: none; }
+    .rep-job-id { font-family: monospace; font-size: 0.74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rep-status-pill { font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+    .rep-status-pill.running { background: rgba(139,90,16,0.1); color: var(--warning); }
+    .rep-status-pill.done { background: rgba(29,107,87,0.1); color: var(--success); }
+    .rep-status-pill.errors { background: rgba(179,38,30,0.1); color: var(--danger); }
+
+    /* ── Replica: scoring progress ──────────────────────── */
+    .rep-score-progress {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    /* ── Replica: score summary ─────────────────────────── */
+    .rep-score-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .rep-score-stat {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+    .rep-score-stat-val {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--text);
+      display: block;
+      font-family: "Space Grotesk","Segoe UI",sans-serif;
+    }
+    .rep-score-stat-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ── Replica: results table rows ────────────────────── */
+    .rep-result-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 80px 80px 100px auto;
+      gap: 8px;
+      align-items: start;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.78rem;
+      opacity: 0;
+      transform: translateY(7px);
+      transition: all 0.4s;
+    }
+    .rep-result-row.visible { opacity: 1; transform: none; }
+    .rep-result-row.hdr {
+      opacity: 1 !important; transform: none !important;
+      font-size: 0.66rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted);
+      align-items: center;
+    }
+    .rep-result-url { color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rep-prob-bar-wrap { display: flex; align-items: center; gap: 5px; }
+    .rep-prob-bar { height: 4px; border-radius: 2px; flex: 1; background: rgba(11,87,208,0.1); }
+    .rep-prob-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.8s ease; }
+    .rep-prob-fill.hi { background: var(--success); }
+    .rep-prob-fill.md { background: var(--warning); }
+    .rep-details-btn {
+      padding: 3px 10px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.8);
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .rep-details-btn.highlighted, .rep-details-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+    .rep-details-btn.highlighted { animation: pulse-btn 0.8s ease 3; }
+
+    /* ── Replica: inline inspect expand ────────────────── */
+    .rep-inspect-expand {
+      display: none;
+      grid-column: 1 / -1;
+      background: rgba(11,87,208,0.03);
+      border: 1px solid rgba(11,87,208,0.12);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 4px;
+      font-size: 0.8rem;
+    }
+    .rep-inspect-expand.open { display: block; }
+    .rep-inspect-sample {
+      color: var(--muted);
+      margin: 0 0 10px;
+      font-style: italic;
+      font-size: 0.79rem;
+    }
+    .rep-contrib-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    /* ── Replica: probe results table ───────────────────── */
+    .rep-probe-table-row {
+      display: grid;
+      grid-template-columns: 1fr 80px 80px 100px 100px auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.78rem;
+      opacity: 0;
+      transform: translateX(-8px);
+      transition: all 0.5s;
+    }
+    .rep-probe-table-row.visible { opacity: 1; transform: none; }
+    .rep-probe-table-row.hdr {
+      opacity: 1 !important; transform: none !important;
+      font-size: 0.66rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .rep-probe-table-row:last-child { border-bottom: none; }
+    .rep-probe-host { font-family: monospace; font-size: 0.78rem; color: var(--text); font-weight: 700; }
+    .rep-conf-pill {
+      font-size: 0.7rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px;
+      white-space: nowrap;
+    }
+    .rep-conf-pill.hi { background: rgba(29,107,87,0.1); color: var(--success); }
+    .rep-conf-pill.md { background: rgba(139,90,16,0.1); color: var(--warning); }
+    .rep-conf-pill.lo { background: rgba(179,38,30,0.1); color: var(--danger); }
+
+    /* ── Intro screen ───────────────────────────────────── */
+    #intro-screen {
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #0b57d0, #0842a0);
+      z-index: 10000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; color: white; padding: 40px;
+      transition: opacity 0.7s, transform 0.7s;
+    }
+    #intro-screen.hidden { opacity: 0; pointer-events: none; transform: scale(1.04); }
+    .intro-eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.7; margin-bottom: 16px; animation: fade-up 0.8s 0.2s both; }
+    .intro-title { font-family: "Space Grotesk","Segoe UI",sans-serif; font-size: clamp(2rem,6vw,4rem); font-weight: 800; line-height: 1.05; margin: 0 0 20px; animation: fade-up 0.8s 0.4s both; }
+    .intro-sub { font-size: 1rem; opacity: 0.8; max-width: 520px; line-height: 1.65; margin-bottom: 36px; animation: fade-up 0.8s 0.6s both; }
+    .intro-start-btn { padding: 17px 50px; border-radius: 999px; background: white; color: var(--accent); font-size: 1rem; font-weight: 800; border: none; cursor: pointer; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.2s, box-shadow 0.2s; animation: fade-up 0.8s 0.8s both; }
+    .intro-start-btn:hover { transform: translateY(-3px) scale(1.04); box-shadow: 0 16px 48px rgba(0,0,0,0.3); }
+    .intro-features { display: flex; gap: 22px; margin-top: 44px; flex-wrap: wrap; justify-content: center; animation: fade-up 0.8s 1s both; }
+    .intro-feature { display: flex; align-items: center; gap: 7px; font-size: 0.84rem; opacity: 0.74; }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Completion screen ──────────────────────────────── */
+    #completion-screen {
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #1d6b57, #0b4d3c);
+      z-index: 10000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; color: white; padding: 40px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.7s;
+    }
+    #completion-screen.show { opacity: 1; pointer-events: auto; }
+    .completion-emoji { font-size: 4.5rem; animation: bounce-in 0.8s both; margin-bottom: 18px; }
+    @keyframes bounce-in { 0% { transform: scale(0) rotate(-10deg); opacity: 0; } 70% { transform: scale(1.15) rotate(5deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+    .completion-title { font-family: "Space Grotesk","Segoe UI",sans-serif; font-size: 2.6rem; font-weight: 800; margin: 0 0 14px; animation: fade-up 0.8s 0.3s both; }
+    .completion-sub { font-size: 1rem; opacity: 0.82; max-width: 480px; margin-bottom: 32px; animation: fade-up 0.8s 0.5s both; line-height: 1.6; }
+    .completion-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; max-width: 600px; width: 100%; margin-bottom: 32px; animation: fade-up 0.8s 0.7s both; }
+    .comp-stat { background: rgba(255,255,255,0.12); border-radius: 14px; padding: 16px; }
+    .comp-stat-val { font-size: 1.9rem; font-weight: 800; display: block; }
+    .comp-stat-lbl { font-size: 0.7rem; opacity: 0.74; text-transform: uppercase; letter-spacing: 0.1em; }
+    .completion-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: fade-up 0.8s 0.9s both; }
+    .completion-btn { padding: 14px 40px; border-radius: 999px; font-size: 0.95rem; font-weight: 800; cursor: pointer; transition: all 0.2s; text-decoration: none; display: inline-block; border: none; }
+    .completion-btn.primary { background: white; color: var(--success); }
+    .completion-btn.outline { background: rgba(255,255,255,0.15); color: white; border: 2px solid rgba(255,255,255,0.4); }
+    .completion-btn:hover { transform: translateY(-2px); }
+
+    /* ── Misc ───────────────────────────────────────────── */
+    .info-callout { background: rgba(11,87,208,0.05); border: 1px solid rgba(11,87,208,0.14); border-radius: 12px; padding: 11px 15px; font-size: 0.82rem; margin-top: 12px; display: flex; gap: 9px; align-items: flex-start; }
+    .info-callout-icon { font-size: 1.05rem; flex-shrink: 0; margin-top: 1px; }
+    .info-callout p { margin: 0; line-height: 1.5; color: var(--text); }
+    code { background: rgba(11,87,208,0.07); border-radius: 4px; padding: 1px 5px; font-size: 0.85em; }
+    .fade-in { animation: fade-in-up 0.5s both; }
+    @keyframes fade-in-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .rep-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .rep-field label { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+    .rep-field input, .rep-field select, .rep-field textarea {
+      border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px;
+      font-size: 0.85rem; background: var(--panel); color: var(--text);
+      font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .rep-field input.typing, .rep-field textarea.typing { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(11,87,208,0.12); }
+    .rep-primary-btn {
+      padding: 10px 22px; border-radius: 12px; border: none;
+      background: var(--accent); color: white; font-size: 0.87rem;
+      font-weight: 700; cursor: pointer; transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .rep-primary-btn.loading { background: #6b9de8; }
+
+    @media (max-width: 900px) {
+      .demo-shell { grid-template-columns: 1fr; }
+      .narrator { position: static; padding-right: 0; margin-bottom: 20px; }
+      .rep-result-row { grid-template-columns: 30px 1fr 70px 70px 80px auto; }
+      .rep-probe-table-row { grid-template-columns: 1fr 60px 60px 80px 80px auto; }
+      .rep-result-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════ INTRO SCREEN ════════════════ -->
+<div id="intro-screen">
+  <p class="intro-eyebrow">UGC Scanner — Interactive Tutorial</p>
+  <h1 class="intro-title">Model Lab<br>Demo Tour</h1>
+  <p class="intro-sub">
+    A guided, animated walkthrough of the exact workflow you follow on the
+    Model Lab page — from checking your dataset and training a model, through
+    scoring jobs and probing site groups, to exporting the Runtime JSON that
+    powers the browser extension.
+  </p>
+  <button class="intro-start-btn" onclick="startDemo()">▶ &nbsp; Start Demo</button>
+  <div class="intro-features">
+    <div class="intro-feature">🎯 9 step workflow</div>
+    <div class="intro-feature">📊 Animated stats</div>
+    <div class="intro-feature">🔍 Spotlight effects</div>
+    <div class="intro-feature">🖱️ Animated cursor</div>
+    <div class="intro-feature">💬 Live toasts</div>
+  </div>
+</div>
+
+<!-- ════════════════ COMPLETION SCREEN ════════════════ -->
+<div id="completion-screen">
+  <div class="completion-emoji">🎉</div>
+  <h2 class="completion-title">Demo Complete!</h2>
+  <p class="completion-sub">
+    The cycle never stops — every label you add, every model you retrain, and
+    every scored job you inspect makes the model smarter. When you're happy
+    with your F1 score, export the Runtime JSON and load it into the browser
+    extension.
+  </p>
+  <div class="completion-summary">
+    <div class="comp-stat"><span class="comp-stat-val">47</span><span class="comp-stat-lbl">Labeled Candidates</span></div>
+    <div class="comp-stat"><span class="comp-stat-val">0.91</span><span class="comp-stat-lbl">Best Precision</span></div>
+    <div class="comp-stat"><span class="comp-stat-val">0.89</span><span class="comp-stat-lbl">Best F1</span></div>
+    <div class="comp-stat"><span class="comp-stat-val">8</span><span class="comp-stat-lbl">Sites Probed</span></div>
+  </div>
+  <div class="completion-btns">
+    <a href="./modeling.html" class="completion-btn primary">→ Open Model Lab</a>
+    <button class="completion-btn outline" onclick="restartDemo()">↺ Replay Demo</button>
+  </div>
+</div>
+
+<!-- ════════════════ FAKE CURSOR ════════════════ -->
+<div id="demo-cursor"></div>
+
+<!-- ════════════════ TOAST CONTAINER ════════════════ -->
+<div id="toast-container"></div>
+
+<!-- ════════════════ APP SHELL ════════════════ -->
+<main class="app-shell">
+  <nav class="site-nav" aria-label="Primary">
+    <a class="site-nav-link" href="./index.html">Scanner</a>
+    <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+    <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+    <a class="site-nav-link active" href="./demo.html">Demo Tour</a>
+  </nav>
+
+  <section class="hero">
+    <p class="eyebrow">Interactive Tutorial</p>
+    <h1>Model Lab Demo</h1>
+    <p class="lede">An animated walkthrough of every step you take on the Model Lab page. Controls on the left let you step through manually or let it auto-play.</p>
+  </section>
+
+  <div class="demo-shell">
+
+    <!-- ── LEFT: NARRATOR ───────────────────────────────── -->
+    <aside class="narrator">
+      <div class="narrator-card">
+        <div class="step-meta">
+          <span class="step-badge" id="step-badge">Overview</span>
+          <span class="step-fraction" id="step-fraction">1 / 9</span>
+        </div>
+        <div class="step-dots" id="step-dots"></div>
+        <div class="demo-progress-track">
+          <div class="demo-progress-fill" id="demo-progress-fill" style="width:11%"></div>
+        </div>
+        <span class="step-icon" id="step-icon">📊</span>
+        <h2 class="step-title" id="step-title">Dataset Health Check</h2>
+        <p class="step-desc" id="step-desc">The Overview panel shows the state of your labeled dataset. This is the data the model trains on.</p>
+        <div id="step-tips"></div>
+        <div class="narrator-controls">
+          <button id="btn-prev" onclick="prevStep()">← Prev</button>
+          <button id="btn-play-pause" onclick="togglePlay()">⏸ Pause</button>
+          <button id="btn-next" onclick="nextStep()">Next →</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── RIGHT: MODEL LAB REPLICA ─────────────────────── -->
+    <div class="replica-area">
+
+      <!-- ① OVERVIEW ──────────────────────────────────── -->
+      <section class="panel replica-section active-section" id="rep-overview" style="margin-bottom:22px">
+        <div class="panel-header">
+          <h2>Overview</h2>
+          <button style="padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,0.7);font-size:0.78rem;cursor:pointer">Refresh</button>
+        </div>
+        <div class="rep-stat-grid">
+          <div class="rep-stat accent-stat"><span class="rep-stat-val" id="ov-labeled">0</span><div class="rep-stat-label">Labeled Candidates</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-positive">0</span><div class="rep-stat-label">Positive Labels</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-negative">0</span><div class="rep-stat-label">Negative Labels</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-uncertain">0</span><div class="rep-stat-label">Uncertain Labels</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-candidates">0</span><div class="rep-stat-label">Candidate Rows</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-reviewed">0</span><div class="rep-stat-label">Reviewed Items</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-hostnames">0</span><div class="rep-stat-label">Hostnames</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-models">0</span><div class="rep-stat-label">Saved Models</div></div>
+          <div class="rep-stat"><span class="rep-stat-val" id="ov-families">0</span><div class="rep-stat-label">Feature Families</div></div>
+        </div>
+        <div class="info-callout" style="margin-top:14px">
+          <span class="info-callout-icon">💡</span>
+          <p><strong>Labeled Candidates</strong> is the number that drives model quality. You need at least <strong>20 balanced labels</strong> (mix of Positive and Negative) before training produces a reliable model. Aim for 50+.</p>
+        </div>
+      </section>
+
+      <!-- ② TRAIN VARIANTS ─────────────────────────────── -->
+      <section class="panel replica-section dimmed" id="rep-train" style="margin-bottom:22px">
+        <div class="panel-header"><h2>Train Variants</h2></div>
+        <p style="font-size:0.84rem;color:var(--muted);margin:0 0 16px">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates stored, or enter comma-separated Job IDs to scope training to a specific batch.</p>
+
+        <!-- Job filter + algorithm + dataset download row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="rep-field" style="margin:0">
+            <label>Job IDs Filter</label>
+            <input id="rep-job-filter" type="text" placeholder="Optional: job-1, job-2">
+          </div>
+          <div class="rep-field" style="margin:0">
+            <label>Training Algorithm</label>
+            <select id="rep-train-algorithm" title="The classifier used to fit the model. More algorithms will be available here in future iterations.">
+              <option value="logistic_regression" selected>Logistic Regression</option>
+            </select>
+          </div>
+          <div class="rep-field" style="margin:0">
+            <label>Dataset Export</label>
+            <span class="rep-link-btn" id="rep-dataset-link" style="margin-top:4px">↓ Download Candidate Dataset CSV</span>
+          </div>
+        </div>
+
+        <!-- Variant cards -->
+        <div class="rep-variant-grid" id="rep-variant-cards">
+          <div class="rep-variant-card">
+            <div class="rep-variant-eyebrow">keyword-aware</div>
+            <h4>Keyword-Aware Model</h4>
+            <p>Uses text keywords (e.g. "comments", "reply", "posted by") combined with structural HTML features. Best accuracy for UGC detection.</p>
+            <div class="rep-chip-row">
+              <span class="rep-chip plain" title="Number of HTML features extracted per candidate">Feature Count: 42</span>
+              <span class="rep-chip good" title="Text keywords are included as features">🔤 Keywords: included</span>
+              <span class="rep-chip plain" title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
+            </div>
+            <button class="rep-train-btn" id="rep-train-kw-btn">Train Keyword-Aware Model</button>
+            <span class="rep-link-btn" style="font-size:0.74rem">↓ Download Variant Dataset</span>
+          </div>
+          <div class="rep-variant-card">
+            <div class="rep-variant-eyebrow">structure-only</div>
+            <h4>Structure-Only Model</h4>
+            <p>Uses only DOM shape signals — element depth, sibling counts, ARIA roles. No text keywords. Useful as a baseline to measure keyword contribution.</p>
+            <div class="rep-chip-row">
+              <span class="rep-chip plain" title="Number of HTML features extracted per candidate">Feature Count: 28</span>
+              <span class="rep-chip muted-chip" title="Text keywords are excluded — only structural signals used">🏗 Keywords: excluded</span>
+              <span class="rep-chip plain" title="Classifier that will be used when you click Train">Algorithm: Logistic Regression</span>
+            </div>
+            <button class="rep-train-btn" id="rep-train-struct-btn">Train Structure-Only Model</button>
+            <span class="rep-link-btn" style="font-size:0.74rem">↓ Download Variant Dataset</span>
+          </div>
+        </div>
+
+        <!-- Training progress (hidden) -->
+        <div id="rep-train-progress" style="display:none;margin-top:4px">
+          <div class="demo-loading-bar-wrap"><div class="demo-loading-bar-fill indeterminate"></div></div>
+          <p style="font-size:0.8rem;color:var(--muted);margin:4px 0 0" id="rep-train-status">Training model…</p>
+        </div>
+
+        <!-- Training result cards (hidden until trained) -->
+        <div class="rep-result-grid" id="rep-train-result" style="display:none">
+          <div class="rep-result-card highlighted" id="rc-metrics">
+            <div class="card-eyebrow">Latest Training Result</div>
+            <h4>Keyword-Aware Model</h4>
+            <div class="rep-summary-grid">
+              <div><strong>Train Rows:</strong> <span id="rc-train-rows">0</span></div>
+              <div><strong>Test Rows:</strong> <span id="rc-test-rows">0</span></div>
+              <div><strong>Precision:</strong> <span id="rc-precision">—</span></div>
+              <div><strong>Recall:</strong> <span id="rc-recall">—</span></div>
+              <div><strong>F1:</strong> <span id="rc-f1">—</span></div>
+              <div><strong>Top-1 Acc:</strong> <span id="rc-top1">—</span></div>
+            </div>
+          </div>
+          <div class="rep-result-card" id="rc-reliance">
+            <div class="card-eyebrow">Feature Reliance</div>
+            <h4>Most Influential Families</h4>
+            <div class="rep-chip-list" id="rc-reliance-chips"></div>
+            <p style="font-size:0.74rem;color:var(--muted);margin:8px 0 0">Summed absolute coefficient weight per family.</p>
+          </div>
+          <div class="rep-result-card" id="rc-positive">
+            <div class="card-eyebrow">Positive Drivers</div>
+            <h4>Top Positive Weights</h4>
+            <div class="rep-chip-list" id="rc-positive-chips"></div>
+          </div>
+          <div class="rep-result-card" id="rc-negative">
+            <div class="card-eyebrow">Negative Drivers</div>
+            <h4>Top Negative Weights</h4>
+            <div class="rep-chip-list" id="rc-negative-chips"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ③ TRAINED MODELS ──────────────────────────────── -->
+      <section class="panel replica-section dimmed" id="rep-models" style="margin-bottom:22px">
+        <div class="panel-header"><h2>Trained Models</h2></div>
+        <p style="font-size:0.84rem;color:var(--muted);margin:0 0 14px">Use <code>Runtime JSON</code> when the browser extension needs a compact deployable inference bundle. Click <strong>Use</strong> to select a model for scoring jobs or the site-group probe.</p>
+        <div style="overflow-x:auto">
+          <table class="rep-table">
+            <thead>
+              <tr>
+                <th>Artifact</th><th>Variant</th><th>Created</th>
+                <th>Precision</th><th>Recall</th><th>F1</th><th>Top-1</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="rep-model-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ④ SCORE EXISTING JOB ─────────────────────────── -->
+      <section class="panel replica-section dimmed" id="rep-score" style="margin-bottom:22px">
+        <div class="panel-header"><h2>Score Existing Job</h2></div>
+        <p style="font-size:0.84rem;color:var(--muted);margin:0 0 16px">Use a trained model against a completed job. This scores every stored candidate, re-ranks each page, and shows whether the top candidate is confident or needs manual review.</p>
+
+        <!-- Score form -->
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:end;margin-bottom:16px">
+          <div class="rep-field" style="margin:0">
+            <label>Model</label>
+            <select id="rep-score-model"><option>keyword-aware-2026-04-01T10:51:02</option></select>
+          </div>
+          <div class="rep-field" style="margin:0">
+            <label>Job ID</label>
+            <input id="rep-score-job-id" type="text" placeholder="Paste a completed job ID">
+          </div>
+          <button class="rep-primary-btn" id="rep-score-btn">Score Job</button>
+        </div>
+
+        <!-- Recent jobs list -->
+        <div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+          <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:8px">Recent Jobs</div>
+          <div class="rep-job-row">
+            <div class="rep-job-id">badffc6c-8464-4675-af85-1f4e3a762a31</div>
+            <div class="rep-status-pill running">running</div>
+            <div style="font-size:0.78rem;color:var(--muted)">227/332</div>
+            <div style="font-size:0.78rem;color:var(--muted)">89 detected</div>
+            <button class="rep-use-btn" id="rep-use-job-1">Use Job</button>
+          </div>
+          <div class="rep-job-row">
+            <div class="rep-job-id">cc919aa8-d163-43c4-9fa9-ccdf799aab28</div>
+            <div class="rep-status-pill errors">completed_with_errors</div>
+            <div style="font-size:0.78rem;color:var(--muted)">77/79</div>
+            <div style="font-size:0.78rem;color:var(--muted)">34 detected</div>
+            <button class="rep-use-btn" id="rep-use-job-2">Use Job</button>
+          </div>
+        </div>
+
+        <!-- Scoring progress (hidden) -->
+        <div id="rep-score-progress" style="display:none;margin-bottom:14px">
+          <div class="rep-score-progress">
+            <span class="demo-spinner"></span>
+            <span id="rep-score-status">Scoring candidates…</span>
+            <span style="margin-left:auto;font-weight:700;color:var(--accent)" id="rep-score-pct">0%</span>
+          </div>
+          <div class="demo-loading-bar-wrap"><div class="demo-loading-bar-fill" id="rep-score-bar" style="width:0%"></div></div>
+        </div>
+
+        <!-- Results (hidden) -->
+        <div id="rep-score-results" style="display:none">
+          <div class="rep-score-summary">
+            <div class="rep-score-stat"><span class="rep-score-stat-val" id="rs-items">0</span><div class="rep-score-stat-lbl">Items</div></div>
+            <div class="rep-score-stat"><span class="rep-score-stat-val" id="rs-cands">0</span><div class="rep-score-stat-lbl">Candidates</div></div>
+            <div class="rep-score-stat"><span class="rep-score-stat-val" id="rs-pos">0</span><div class="rep-score-stat-lbl">Predicted Positives</div></div>
+            <div class="rep-score-stat"><span class="rep-score-stat-val" id="rs-review">0</span><div class="rep-score-stat-lbl">Manual Review</div></div>
+            <div class="rep-score-stat"><span class="rep-score-stat-val" id="rs-prob">0.000</span><div class="rep-score-stat-lbl">Mean Top Prob.</div></div>
+          </div>
+          <!-- Results table -->
+          <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
+            <div style="padding:0 12px">
+              <div class="rep-result-row hdr">
+                <span>Row</span><span>URL</span><span>Top Prob.</span>
+                <span>Top Label</span><span>Manual Review</span><span>Notes</span>
+              </div>
+              <div id="rep-result-rows"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⑤ SITE GROUP PROBE ────────────────────────────── -->
+      <section class="panel replica-section dimmed" id="rep-probe" style="margin-bottom:22px">
+        <div class="panel-header"><h2>Site Group Probe</h2></div>
+        <p style="font-size:0.84rem;color:var(--muted);margin:0 0 16px">Paste or upload URLs or hostnames. The probe matches them against pages you have already scanned, scores with the selected model, and groups results by hostname.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="rep-field" style="margin:0">
+            <label>Model</label>
+            <select><option>keyword-aware-2026-04-01T10:51:02</option></select>
+          </div>
+          <div class="rep-field" style="margin:0">
+            <label>Optional Job IDs Filter</label>
+            <input type="text" placeholder="Optional: limit probe to some jobs">
+          </div>
+        </div>
+        <div class="rep-field">
+          <label>Upload CSV Or Text File</label>
+          <input type="file" accept=".csv,.txt" style="padding:5px">
+        </div>
+        <div class="rep-field">
+          <label>URLs Or Hostnames</label>
+          <textarea id="rep-probe-textarea" rows="5" placeholder="https://example.com/post&#10;reddit.com&#10;tiktok.com"></textarea>
+        </div>
+        <button class="rep-primary-btn" id="rep-probe-btn" style="margin-bottom:12px">Run Site Probe</button>
+
+        <!-- Probe progress (hidden) -->
+        <div id="rep-probe-progress" style="display:none;margin-bottom:14px">
+          <div class="rep-score-progress">
+            <span class="demo-spinner"></span>
+            <span>Matching sites against scanned data…</span>
+          </div>
+          <div class="demo-loading-bar-wrap"><div class="demo-loading-bar-fill indeterminate"></div></div>
+        </div>
+
+        <!-- Probe results table (hidden) -->
+        <div id="rep-probe-results" style="display:none">
+          <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;padding:0 12px">
+            <div class="rep-probe-table-row hdr">
+              <span>Hostname</span><span>Matched</span><span>Review</span>
+              <span>Mean Prob.</span><span>Max Prob.</span><span>Inspect</span>
+            </div>
+            <div id="rep-probe-rows"></div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /replica-area -->
+  </div><!-- /demo-shell -->
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  DEMO DATA
+// ══════════════════════════════════════════════════════════════
+const DEMO_DATA = {
+  resultRows: [
+    { row: 23,  url: 'https://nypost.com/2025/10/19/opinion/jane-fonda-pops-up-at-nycs-annual-animal-blessing/', prob: 1.00, label: 'unlabeled',       review: 'no',  sample: 'Comments (47) — @JohnD: Great article! @SarahM: I disagree…', posFeats: ['css:comments-section', 'kw:comment', 'kw:reply'], negFeats: ['depth:shallow'] },
+    { row: 28,  url: 'https://news.slashdot.org/story/25/10/20/0230212/', prob: 1.00,                           label: 'comment_region',   review: 'no',  sample: 'Discussion (312) — Score: 5, Funny by anon…', posFeats: ['css:comment', 'kw:score', 'aria:comments'], negFeats: [] },
+    { row: 31,  url: 'https://www.reddit.com/r/programming/comments/abc123', prob: 0.97,                        label: 'comment_region',   review: 'no',  sample: '2.4k comments — u/dev42: Have you tried…', posFeats: ['css:Comment', 'kw:posted by', 'sibling:high'], negFeats: ['depth:deep'] },
+    { row: 45,  url: 'https://news.ycombinator.com/item?id=38291047', prob: 0.94,                               label: 'unlabeled',        review: 'no',  sample: '187 points | 94 comments | user: thrw…', posFeats: ['kw:comments', 'css:comment-tree', 'kw:reply'], negFeats: [] },
+    { row: 67,  url: 'https://stackoverflow.com/questions/78234/', prob: 0.89,                                  label: 'comment_region',   review: 'no',  sample: '12 Answers — Answered by: user42 (rep: 4.2k)…', posFeats: ['kw:answer', 'css:answer', 'aria:main'], negFeats: ['kw:question'] },
+    { row: 72,  url: 'https://theguardian.com/technology/2025/oct/20/ai-comment/', prob: 0.61,                  label: 'unlabeled',        review: 'yes', sample: 'View comments (243) — Powered by Guardian Comments…', posFeats: ['kw:view comments', 'css:discussion'], negFeats: ['depth:shallow', 'sibling:low'] },
+    { row: 88,  url: 'https://medium.com/@author/article-12345', prob: 0.52,                                    label: 'unlabeled',        review: 'yes', sample: 'Responses (8) — user: This is a great take…', posFeats: ['kw:responses', 'kw:clap'], negFeats: ['depth:deep', 'kw:highlight'] },
+    { row: 101, url: 'https://news.bbc.co.uk/2/hi/science/nature/article123.stm', prob: 0.11,                   label: 'not_comment_region', review: 'no', sample: 'Share this article — Email, Facebook, Twitter…', posFeats: [], negFeats: ['kw:share', 'css:share-tools', 'no_ugc_kw'] },
+  ],
+  probeUrls: ['reddit.com', 'slashdot.org', 'news.ycombinator.com', 'stackoverflow.com', 'nypost.com', 'theguardian.com', 'medium.com', 'news.bbc.co.uk'],
+  probeResults: [
+    { host: 'reddit.com',           matched: 12, review: 2, mean: 0.97, max: 0.99, level: 'hi' },
+    { host: 'slashdot.org',         matched: 8,  review: 1, mean: 0.93, max: 1.00, level: 'hi' },
+    { host: 'news.ycombinator.com', matched: 15, review: 3, mean: 0.91, max: 0.98, level: 'hi' },
+    { host: 'stackoverflow.com',    matched: 6,  review: 0, mean: 0.88, max: 0.94, level: 'hi' },
+    { host: 'nypost.com',           matched: 9,  review: 4, mean: 0.62, max: 0.83, level: 'md' },
+    { host: 'theguardian.com',      matched: 7,  review: 3, mean: 0.47, max: 0.71, level: 'md' },
+    { host: 'medium.com',           matched: 11, review: 5, mean: 0.41, max: 0.65, level: 'md' },
+    { host: 'news.bbc.co.uk',       matched: 4,  review: 0, mean: 0.12, max: 0.18, level: 'lo' },
+  ],
+};
+
+// ══════════════════════════════════════════════════════════════
+//  STEPS — match the actual manual workflow on modeling.html
+// ══════════════════════════════════════════════════════════════
+const STEPS = [
+  {
+    id: 'overview',
+    icon: '📊',
+    badge: 'Overview',
+    title: 'Dataset Health Check',
+    desc: 'The first thing you check on the Model Lab page is the Overview. It shows how many candidates have been labeled and whether you have enough balanced training data to build a useful model.',
+    tips: [
+      { type: 'info', title: 'What is a Labeled Candidate?', body: 'When the Scanner runs a job, the worker finds candidate HTML regions on each page. You then review each one and assign a label: Positive (comment_region), Negative (not_comment_region), or Uncertain.' },
+      { type: 'warn', title: 'Minimum needed', body: 'You need at least 20 balanced labels before training. Aim for 50+ — roughly half Positive, half Negative — for a model you can trust for the browser extension.' },
+    ],
+    section: 'rep-overview',
+    action: 'runOverview',
+  },
+  {
+    id: 'filter',
+    icon: '🔎',
+    badge: 'Scope & Algorithm',
+    title: 'Set Scope & Choose Algorithm',
+    desc: 'Before training, set two optional parameters: the Job IDs Filter scopes which candidates to train on; the Training Algorithm dropdown selects the classifier. Currently only Logistic Regression is available — a dropdown makes it easy to plug in SVM, Random Forest, or others later.',
+    tips: [
+      { type: 'info', title: 'Leave Job IDs blank for all data', body: 'Most of the time you leave this empty to use every labeled candidate regardless of which job found it. Enter job IDs to isolate a specific batch.' },
+      { type: 'success', title: 'Algorithm dropdown is future-proof', body: 'Logistic Regression is the default. As you experiment with other classifiers, you\'ll select them here — no code changes needed. The algorithm is recorded in every saved model artifact.' },
+    ],
+    section: 'rep-train',
+    action: 'runFilter',
+  },
+  {
+    id: 'train',
+    icon: '🏋️',
+    badge: 'Train',
+    title: 'Training a Model Variant',
+    desc: 'Click "Train [Variant]" on one of the two variant cards. Each card shows its feature count, whether keywords are included, and which algorithm will run. The result shows Precision, Recall, F1, Top-1 Accuracy, the most influential feature families, and the top positive and negative weight drivers.',
+    tips: [
+      { type: 'info', title: '🔤 Keyword-Aware vs 🏗 Structure-Only', body: 'Keyword-Aware includes text signals ("comments", "reply", "posted by") on top of DOM structure — typically 10–15 F1 points better. Structure-Only is a useful control to measure how much keywords actually contribute.' },
+      { type: 'success', title: 'Train both, compare F1', body: 'Train the Keyword-Aware variant first, then the Structure-Only variant. Compare their F1 scores in the Trained Models table to decide which to export for the browser extension.' },
+    ],
+    section: 'rep-train',
+    action: 'runTrain',
+  },
+  {
+    id: 'models',
+    icon: '🗂️',
+    badge: 'Trained Models',
+    title: 'Review Models & Export for Extension',
+    desc: 'Every trained model is saved in the table with Precision, Recall, F1, and Top-1 Accuracy. Click "Use" to select a model for scoring jobs or probing sites. Click "Runtime JSON" to download the compact artifact the browser extension loads.',
+    tips: [
+      { type: 'info', title: 'Precision vs Recall', body: 'Precision = few false positives (flagged pages that aren\'t UGC). Recall = few false negatives (real UGC pages you missed). F1 is the balance.' },
+      { type: 'success', title: 'Runtime JSON → Browser Extension', body: 'The browser extension loads this compact JSON bundle to score pages in real time without hitting your API. Export it once your F1 exceeds your quality bar.' },
+    ],
+    section: 'rep-models',
+    action: 'runModels',
+  },
+  {
+    id: 'score-select',
+    icon: '🎯',
+    badge: 'Score Job',
+    title: 'Selecting a Job to Score',
+    desc: 'With a model selected, click "Use Job" on any batch from the Recent Jobs list. The Job ID fills in automatically — no copying needed. Then click "Score Job" to run the model against every candidate in that batch.',
+    tips: [
+      { type: 'info', title: 'What scoring does', body: 'The API loads all candidates for the job, extracts their HTML features, runs them through the model\'s learned weights, and returns a 0–1 probability for each page.' },
+      { type: 'warn', title: 'Still-running jobs', body: 'You can score a job that is still running — it will score only the candidates completed so far. Re-score later for full results.' },
+    ],
+    section: 'rep-score',
+    action: 'runScoreSelect',
+  },
+  {
+    id: 'score-run',
+    icon: '⚙️',
+    badge: 'Scoring…',
+    title: 'Running the Score',
+    desc: 'After clicking Score Job, the API runs through: loading job items from the database, extracting HTML features for all candidates, running model inference, re-ranking pages by top-candidate probability, then building the results table.',
+    tips: [
+      { type: 'info', title: 'Under the hood', body: 'Each candidate\'s ~40 HTML features are dot-multiplied with the model\'s learned weight vector to produce a 0–1 probability score. The highest-scoring candidate per page becomes the "top candidate".' },
+    ],
+    section: 'rep-score',
+    action: 'runScoreRun',
+  },
+  {
+    id: 'results',
+    icon: '📈',
+    badge: 'Results',
+    title: 'Reading Score Results & Inspect',
+    desc: 'Results rank every URL by Top Probability. "Manual Review: yes" rows (20–80% confidence) are where labeling helps most. Expand "Inspect" on any row to see the sample text and feature contributions that drove the model\'s decision.',
+    tips: [
+      { type: 'success', title: 'Top Label', body: 'Shows the human label assigned to the top candidate ("comment_region", "not_comment_region", or "unlabeled"). Labeling happens in the Scanner page — open a job row → Labeler tab.' },
+      { type: 'warn', title: 'Inspect ≠ labeling UI', body: 'Expand "Inspect" to see sample text + the positive and negative feature contributions that shaped the score. To actually label, go to the Scanner page.' },
+    ],
+    section: 'rep-score',
+    action: 'runResults',
+  },
+  {
+    id: 'probe',
+    icon: '🌐',
+    badge: 'Site Probe',
+    title: 'Site Group Probe',
+    desc: 'Paste hostnames or URLs (or upload a CSV/TXT file). The probe matches them against all scanned candidates, scores with the model, and groups results by hostname — showing Matched Items, Manual Review count, Mean and Max Top Probability per site.',
+    tips: [
+      { type: 'info', title: 'Use case', body: 'Check: "Does our model agree that Reddit, HackerNews, and StackOverflow all have comment sections?" Results group by hostname so you can compare confidence across site families.' },
+      { type: 'success', title: 'Mean vs Max', body: 'Mean Top Probability shows the average confidence across all matching pages for a hostname. Max shows the best single page. High Max, low Mean = the model is confident for some pages but not others.' },
+    ],
+    section: 'rep-probe',
+    action: 'runProbe',
+  },
+  {
+    id: 'done',
+    icon: '🎓',
+    badge: 'Complete',
+    title: 'The Improvement Loop',
+    desc: 'The cycle is: Scan URLs (Scanner page) → Label Candidates (Scanner page → Labeler tab) → Train Model (here) → Score Jobs (here) → Inspect results (here) → Label more → Retrain. Each iteration makes the model smarter.',
+    tips: [
+      { type: 'success', title: 'Your next action', body: 'Go to the Scanner page → open a completed job → click any row → use the Labeler tab to mark True/False → come back here and retrain.' },
+      { type: 'info', title: 'Target for the browser extension', body: 'Aim for 50+ balanced labels (25 Positive, 25 Negative) and F1 ≥ 0.85 before exporting Runtime JSON for production use in the extension.' },
+    ],
+    section: null,
+    action: 'runDone',
+  },
+];
+
+// ══════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════
+let currentStep = 0;
+let isPlaying = true;
+let stepTimer = null;
+let actionTimer = null;
+let actionRunning = false;
+
+// ══════════════════════════════════════════════════════════════
+//  DOM REFS
+// ══════════════════════════════════════════════════════════════
+const cursor        = document.getElementById('demo-cursor');
+const toastContainer = document.getElementById('toast-container');
+const stepBadge     = document.getElementById('step-badge');
+const stepFraction  = document.getElementById('step-fraction');
+const stepIcon      = document.getElementById('step-icon');
+const stepTitle     = document.getElementById('step-title');
+const stepDesc      = document.getElementById('step-desc');
+const stepTips      = document.getElementById('step-tips');
+const progressFill  = document.getElementById('demo-progress-fill');
+const stepDotsEl    = document.getElementById('step-dots');
+
+// ══════════════════════════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════════════════════════
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function countUp(el, to, dur = 1100, isFloat = false) {
+  return new Promise(res => {
+    const t0 = performance.now();
+    const from = parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0;
+    (function tick(now) {
+      const p = Math.min((now - t0) / dur, 1);
+      const e = 1 - Math.pow(1 - p, 3);
+      const v = from + (to - from) * e;
+      el.textContent = isFloat ? v.toFixed(3) : Math.round(v);
+      if (p < 1) requestAnimationFrame(tick); else res();
+    })(performance.now());
+  });
+}
+
+async function typeInto(el, text, speed = 28) {
+  el.value = '';
+  el.classList.add('typing');
+  for (let i = 1; i <= text.length; i++) {
+    el.value = text.slice(0, i);
+    await sleep(speed);
+  }
+  el.classList.remove('typing');
+}
+
+function moveCursor(el) {
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  cursor.classList.add('visible');
+  cursor.style.left = (r.left + r.width / 2 - 11) + 'px';
+  cursor.style.top  = (r.top  + r.height / 2 - 11) + 'px';
+}
+
+async function clickEl(el) {
+  moveCursor(el);
+  await sleep(700);
+  cursor.classList.add('clicking');
+  await sleep(200);
+  cursor.classList.remove('clicking');
+  await sleep(200);
+}
+
+function hideCursor() { cursor.classList.remove('visible'); }
+
+function showToast(title, body, icon = 'ℹ️', dur = 5000) {
+  const t = document.createElement('div');
+  t.className = 'demo-toast';
+  t.innerHTML = `
+    <div class="toast-header"><span class="toast-icon">${icon}</span>${title}</div>
+    <div class="toast-body">${body}</div>
+    <div class="toast-bar" style="animation-duration:${dur}ms"></div>
+  `;
+  toastContainer.appendChild(t);
+  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+  setTimeout(() => {
+    t.classList.add('hiding');
+    setTimeout(() => t.remove(), 500);
+  }, dur);
+}
+
+function clearToasts() { toastContainer.innerHTML = ''; }
+
+function setActiveSection(sectionId) {
+  document.querySelectorAll('.replica-section').forEach(s => {
+    s.classList.remove('active-section', 'dimmed');
+    if (sectionId) s.classList.add('dimmed');
+  });
+  if (sectionId) {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.classList.remove('dimmed');
+      el.classList.add('active-section');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
+
+function makeChip(text, type) {
+  const span = document.createElement('span');
+  span.className = 'rep-chip ' + (type === 'good' ? 'good' : type === 'muted' ? 'muted-chip' : 'plain');
+  span.textContent = text;
+  return span;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NARRATOR RENDERING
+// ══════════════════════════════════════════════════════════════
+function renderNarrator(idx) {
+  const s = STEPS[idx];
+  [stepIcon, stepTitle, stepDesc, stepTips].forEach(el => { el.style.opacity = '0'; });
+  setTimeout(() => {
+    stepBadge.textContent     = s.badge;
+    stepFraction.textContent  = `${idx + 1} / ${STEPS.length}`;
+    stepIcon.textContent      = s.icon;
+    stepTitle.textContent     = s.title;
+    stepDesc.textContent      = s.desc;
+    progressFill.style.width  = `${((idx + 1) / STEPS.length) * 100}%`;
+    stepDotsEl.innerHTML = STEPS.map((_, i) =>
+      `<div class="step-dot ${i < idx ? 'done' : i === idx ? 'active' : ''}"></div>`
+    ).join('');
+    stepTips.innerHTML = (s.tips || []).map(tip => `
+      <div class="tip-box ${tip.type === 'success' ? 'tip-success' : tip.type === 'warn' ? 'tip-warn' : ''}">
+        <strong>${tip.title}</strong>${tip.body}
+      </div>
+    `).join('');
+    [stepIcon, stepTitle, stepDesc, stepTips].forEach(el => { el.style.opacity = '1'; });
+    setActiveSection(s.section || null);
+  }, 220);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  STEP ACTIONS
+// ══════════════════════════════════════════════════════════════
+const actions = {
+
+  async runOverview() {
+    showToast('Dataset Overview', 'Watch the stats animate in. These are the real numbers that tell you whether you have enough data to train.', '📊', 5000);
+    await sleep(800);
+    await Promise.all([
+      countUp(document.getElementById('ov-labeled'),    47, 1000),
+      countUp(document.getElementById('ov-positive'),   28, 1100),
+      countUp(document.getElementById('ov-negative'),   19, 1000),
+    ]);
+    await Promise.all([
+      countUp(document.getElementById('ov-uncertain'),   8,  900),
+      countUp(document.getElementById('ov-candidates'), 671, 1200),
+      countUp(document.getElementById('ov-reviewed'),   47, 1000),
+    ]);
+    await Promise.all([
+      countUp(document.getElementById('ov-hostnames'),  23,  900),
+      countUp(document.getElementById('ov-models'),      2,  800),
+      countUp(document.getElementById('ov-families'),    8,  800),
+    ]);
+    await sleep(1200);
+    showToast('47 labeled candidates — solid start', '28 Positive, 19 Negative. Not perfectly balanced, but enough to train a first model and evaluate it.', '✅', 6000);
+    await sleep(5500);
+  },
+
+  async runFilter() {
+    showToast('Job IDs Filter', 'Leave blank to train on ALL labeled candidates. Enter job IDs to scope training to a specific batch.', '🔎', 5000);
+    await sleep(1500);
+
+    // Demonstrate job filter
+    const filterInput = document.getElementById('rep-job-filter');
+    await clickEl(filterInput);
+    filterInput.focus();
+    await typeInto(filterInput, 'badffc6c, cc919aa8', 30);
+    await sleep(1400);
+    showToast('Scoped to two jobs', 'Training would only use candidates from those two scan batches. Clear it to use all labeled data.', 'ℹ️', 4000);
+    await sleep(2000);
+    filterInput.value = '';
+    filterInput.classList.remove('typing');
+    hideCursor();
+    await sleep(900);
+
+    // Demonstrate algorithm dropdown
+    const algoSelect = document.getElementById('rep-train-algorithm');
+    await clickEl(algoSelect);
+    await sleep(600);
+    showToast('Training Algorithm', 'Currently only Logistic Regression is available. The dropdown is ready for SVM, Random Forest, or any other classifier you add later — just add an option here.', '⚙️', 6500);
+    hideCursor();
+    await sleep(3500);
+
+    // Demonstrate dataset download
+    const datasetLink = document.getElementById('rep-dataset-link');
+    moveCursor(datasetLink);
+    await sleep(1200);
+    showToast('Inspect before training', '"Download Candidate Dataset CSV" lets you verify the exact rows the model will train on — useful before a production training run.', '📥', 5000);
+    hideCursor();
+    await sleep(4500);
+  },
+
+  async runTrain() {
+    showToast('Train Keyword-Aware Model', 'Click the "Train" button on the Keyword-Aware variant. The cursor will show you.', '🏋️', 4000);
+    await sleep(1200);
+    const trainBtn = document.getElementById('rep-train-kw-btn');
+    await clickEl(trainBtn);
+    trainBtn.innerHTML = '<span class="demo-spinner white"></span> Training…';
+    trainBtn.classList.add('loading');
+
+    const progress = document.getElementById('rep-train-progress');
+    const status   = document.getElementById('rep-train-status');
+    progress.style.display = 'block';
+    hideCursor();
+
+    const stages = [
+      'Loading labeled candidates from database…',
+      'Extracting ~40 HTML features per candidate…',
+      'Splitting dataset: 80% train / 20% test…',
+      'Fitting Logistic Regression classifier…',
+      'Computing Precision / Recall / F1 on test set…',
+      'Saving model artifact…',
+    ];
+    for (const msg of stages) {
+      status.textContent = msg;
+      await sleep(900);
+    }
+
+    progress.style.display = 'none';
+    trainBtn.innerHTML = '✓ Trained';
+    trainBtn.style.background = 'var(--success)';
+    trainBtn.classList.remove('loading');
+
+    // Show 4-card result
+    const resultGrid = document.getElementById('rep-train-result');
+    resultGrid.style.display = 'grid';
+    await sleep(300);
+
+    const cards = ['rc-metrics', 'rc-reliance', 'rc-positive', 'rc-negative'];
+    for (const id of cards) {
+      document.getElementById(id).classList.add('visible');
+      await sleep(250);
+    }
+
+    // Fill metrics
+    document.getElementById('rc-train-rows').textContent = '37';
+    document.getElementById('rc-test-rows').textContent = '10';
+    await sleep(400);
+    document.getElementById('rc-precision').textContent = '0.91';
+    document.getElementById('rc-recall').textContent = '0.87';
+    document.getElementById('rc-f1').textContent = '0.89';
+    document.getElementById('rc-top1').textContent = '0.94';
+
+    // Fill reliance chips
+    const relianceData = [['keywords', '2.34'], ['structure', '1.87'], ['depth', '0.92'], ['sibling', '0.71'], ['aria', '0.58']];
+    const relianceEl = document.getElementById('rc-reliance-chips');
+    relianceData.forEach(([k, v]) => relianceEl.appendChild(makeChip(`${k}: ${v}`, 'plain')));
+
+    // Fill positive weights
+    const posData = ['css:comments-section', 'kw:comment', 'kw:reply', 'aria:live', 'css:comment-list'];
+    const posEl = document.getElementById('rc-positive-chips');
+    posData.forEach(f => posEl.appendChild(makeChip(f, 'good')));
+
+    // Fill negative weights
+    const negData = ['kw:share', 'css:share-tools', 'depth:root', 'sibling:single'];
+    const negEl = document.getElementById('rc-negative-chips');
+    negData.forEach(f => negEl.appendChild(makeChip(f, 'muted')));
+
+    await sleep(1000);
+    showToast('Model trained! F1: 0.89 — Top-1 Accuracy: 0.94', 'Feature Reliance shows "keywords" contributed most. Keyword signals are the strongest signal for UGC detection.', '✅', 6000);
+    await sleep(5500);
+  },
+
+  async runModels() {
+    showToast('Trained Models', 'Both variants appear here. Compare F1 scores to decide which to use for scoring jobs.', '🗂️', 5000);
+    const tbody = document.getElementById('rep-model-rows');
+    tbody.innerHTML = '';
+
+    const modelData = [
+      { id: 'keyword-aware-2026-04-01T10-51-02-528Z', variant: 'Keyword-Aware', created: '2026-04-01', p: '0.91', r: '0.87', f1: '0.89', top1: '0.94', isNew: true },
+      { id: 'structure-only-2026-04-01T09-30-11-120Z', variant: 'Structure-Only', created: '2026-04-01', p: '0.78', r: '0.72', f1: '0.75', top1: '0.81', isNew: false },
+    ];
+
+    for (const m of modelData) {
+      await sleep(550);
+      const tr = document.createElement('tr');
+      tr.className = 'rep-table-row';
+      tr.innerHTML = `
+        <td class="mono">
+          ${m.isNew ? '<span class="rep-badge new" style="margin-right:5px">Latest</span>' : ''}
+          <span style="font-size:0.72rem">${m.id}</span>
+        </td>
+        <td>${m.variant}</td>
+        <td style="font-size:0.78rem;color:var(--muted)">${m.created}</td>
+        <td style="font-weight:700;color:var(--success)">${m.p}</td>
+        <td style="font-weight:700;color:var(--success)">${m.r}</td>
+        <td style="font-weight:700;color:var(--accent)">${m.f1}</td>
+        <td style="font-weight:700">${m.top1}</td>
+        <td>
+          <div class="rep-action-stack">
+            <button class="rep-use-btn${m.isNew ? ' highlighted' : ''}" id="rep-use-model-${m.isNew ? 'kw' : 'st'}">Use</button>
+            <span class="rep-runtime-link">Runtime JSON</span>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+      await sleep(80);
+      tr.classList.add('visible');
+    }
+
+    await sleep(1500);
+    showToast('Keyword-Aware wins: F1 0.89 vs 0.75', 'The keyword family adds ~14 F1 points. Always compare variants before exporting for the extension.', '📊', 5000);
+    await sleep(2500);
+
+    // Click "Use" on keyword-aware
+    const useBtn = document.getElementById('rep-use-model-kw');
+    await clickEl(useBtn);
+    useBtn.classList.add('highlighted');
+    showToast('Model selected for scoring', 'This model is now active in the Score Job and Site Group Probe forms.', '✅', 4000);
+    await sleep(2000);
+
+    // Highlight Runtime JSON
+    const runtimeLinks = document.querySelectorAll('.rep-runtime-link');
+    if (runtimeLinks[0]) {
+      moveCursor(runtimeLinks[0]);
+      await sleep(1200);
+      showToast('Runtime JSON → Browser Extension', 'Download this when you\'re ready. The browser extension loads this compact bundle to score pages in real time without API calls.', '🔗', 6000);
+    }
+    hideCursor();
+    await sleep(5500);
+  },
+
+  async runScoreSelect() {
+    showToast('Score a Job', 'Click "Use Job" on the first batch in the Recent Jobs list. The cursor will show you.', '🎯', 5000);
+    await sleep(1500);
+    const useBtn = document.getElementById('rep-use-job-1');
+    useBtn.classList.add('highlighted');
+    await clickEl(useBtn);
+    useBtn.classList.remove('highlighted');
+
+    // Fill job ID input
+    const jobInput = document.getElementById('rep-score-job-id');
+    await typeInto(jobInput, 'badffc6c-8464-4675-af85-1f4e3a762a31', 20);
+    showToast('Job ID filled automatically!', 'No manual copying needed. The "Use Job" button populates the field from the Recent Jobs table.', '✅', 4500);
+    await sleep(3000);
+
+    // Highlight score button
+    const scoreBtn = document.getElementById('rep-score-btn');
+    moveCursor(scoreBtn);
+    await sleep(1200);
+    showToast('Ready to score', 'Click "Score Job" to run the model against all 332 candidates in this batch.', 'ℹ️', 3500);
+    hideCursor();
+    await sleep(3000);
+  },
+
+  async runScoreRun() {
+    showToast('Scoring in progress…', 'The API runs candidates through 5 stages. Watch the progress bar.', '⚙️', 6000);
+    const scoreBtn = document.getElementById('rep-score-btn');
+    await clickEl(scoreBtn);
+    scoreBtn.innerHTML = '<span class="demo-spinner white"></span> Scoring…';
+    scoreBtn.classList.add('loading');
+    hideCursor();
+
+    const progress = document.getElementById('rep-score-progress');
+    const bar      = document.getElementById('rep-score-bar');
+    const pct      = document.getElementById('rep-score-pct');
+    const status   = document.getElementById('rep-score-status');
+    progress.style.display = 'block';
+
+    const stages = [
+      [15, 'Loading job items from database…'],
+      [35, 'Extracting HTML features for 671 candidates…'],
+      [60, 'Running model inference on feature vectors…'],
+      [82, 'Re-ranking pages by top-candidate probability…'],
+      [95, 'Building results table…'],
+      [100, 'Complete!'],
+    ];
+    for (const [p, msg] of stages) {
+      bar.style.width = p + '%';
+      pct.textContent = p + '%';
+      status.textContent = msg;
+      await sleep(750);
+    }
+
+    await sleep(400);
+    scoreBtn.innerHTML = '✓ Scored';
+    scoreBtn.style.background = 'var(--success)';
+    progress.style.display = 'none';
+    showToast('Scoring complete', '332 URLs scored. 671 candidates evaluated in total.', '✅', 4000);
+    await sleep(3500);
+  },
+
+  async runResults() {
+    const resultsArea = document.getElementById('rep-score-results');
+    resultsArea.style.display = 'block';
+    showToast('Results are in!', '177 items scored. 57 predicted positives, 13 need manual review.', '📈', 5500);
+    await sleep(600);
+
+    // Count up summary stats
+    await Promise.all([
+      countUp(document.getElementById('rs-items'), 177, 1000),
+      countUp(document.getElementById('rs-cands'), 671, 1200),
+    ]);
+    await Promise.all([
+      countUp(document.getElementById('rs-pos'),    57,  900),
+      countUp(document.getElementById('rs-review'), 13,  800),
+    ]);
+    await countUp(document.getElementById('rs-prob'), 0.323, 1000, true);
+    await sleep(700);
+
+    // Animate result rows
+    const rowsEl = document.getElementById('rep-result-rows');
+    rowsEl.innerHTML = '';
+    for (const r of DEMO_DATA.resultRows) {
+      const probClass = r.prob >= 0.8 ? 'hi' : r.prob >= 0.5 ? 'md' : '';
+      const inspectId = `inspect-${r.row}`;
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display:grid;grid-template-rows:auto auto;';
+      const row = document.createElement('div');
+      row.className = 'rep-result-row';
+      row.innerHTML = `
+        <span style="color:var(--muted)">${r.row}</span>
+        <span class="rep-result-url" title="${r.url}">${r.url.replace('https://', '')}</span>
+        <div class="rep-prob-bar-wrap">
+          <span style="font-size:0.8rem;font-weight:700;min-width:30px">${r.prob.toFixed(2)}</span>
+          <div class="rep-prob-bar"><div class="rep-prob-fill ${probClass}" style="width:0%" data-target="${r.prob * 100}"></div></div>
+        </div>
+        <span style="font-size:0.74rem;color:var(--muted)">${r.label}</span>
+        <span style="font-size:0.74rem;${r.review === 'yes' ? 'color:var(--warning);font-weight:700' : 'color:var(--muted)'}">${r.review}</span>
+        <button class="rep-details-btn" data-inspect="${inspectId}">Inspect ▾</button>
+      `;
+      const expand = document.createElement('div');
+      expand.className = 'rep-inspect-expand';
+      expand.id = inspectId;
+      expand.innerHTML = `
+        <p class="rep-inspect-sample"><strong>Sample text:</strong> ${r.sample}</p>
+        ${r.posFeats.length ? `<div class="rep-contrib-label">Positive Drivers</div><div class="rep-chip-list" style="margin-bottom:8px">${r.posFeats.map(f => `<span class="rep-chip good">${f}</span>`).join('')}</div>` : ''}
+        ${r.negFeats.length ? `<div class="rep-contrib-label">Negative Drivers</div><div class="rep-chip-list">${r.negFeats.map(f => `<span class="rep-chip muted-chip">${f}</span>`).join('')}</div>` : ''}
+      `;
+      wrapper.appendChild(row);
+      wrapper.appendChild(expand);
+      rowsEl.appendChild(wrapper);
+      await sleep(180);
+      row.classList.add('visible');
+      setTimeout(() => {
+        const fill = row.querySelector('.rep-prob-fill');
+        if (fill) fill.style.width = fill.getAttribute('data-target') + '%';
+      }, 100);
+    }
+
+    // Wire up inspect toggles
+    rowsEl.querySelectorAll('[data-inspect]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const el = document.getElementById(btn.getAttribute('data-inspect'));
+        if (!el) return;
+        const open = el.classList.toggle('open');
+        btn.textContent = open ? 'Inspect ▴' : 'Inspect ▾';
+      });
+    });
+
+    await sleep(2000);
+    showToast('Tip: sort by probability', 'Rows are ranked highest-to-lowest. Top rows = most confident UGC candidates.', 'ℹ️', 5000);
+    await sleep(2500);
+
+    // Animate clicking Inspect on first row
+    const firstInspectBtn = rowsEl.querySelector('[data-inspect]');
+    if (firstInspectBtn) {
+      firstInspectBtn.classList.add('highlighted');
+      await clickEl(firstInspectBtn);
+      firstInspectBtn.classList.remove('highlighted');
+      firstInspectBtn.click();
+    }
+    hideCursor();
+    await sleep(1500);
+    showToast('Feature contributions', 'Inspect shows the sample text and which features pushed the score up (green) or down (gray) — not a labeling UI. Label rows in the Scanner page.', '🔍', 7000);
+    await sleep(6500);
+  },
+
+  async runProbe() {
+    showToast('Site Group Probe', 'Paste a list of hostnames. The probe matches them against your scanned data and shows confidence per site.', '🌐', 5000);
+    await sleep(1500);
+    const textarea = document.getElementById('rep-probe-textarea');
+    textarea.value = '';
+    textarea.classList.add('typing');
+    textarea.focus();
+    for (const url of DEMO_DATA.probeUrls) {
+      textarea.value += (textarea.value ? '\n' : '') + url;
+      await sleep(140);
+    }
+    textarea.classList.remove('typing');
+    await sleep(800);
+    showToast('8 hostnames entered', 'Click "Run Site Probe" to match them against your scanned data and score each group.', 'ℹ️', 4000);
+
+    const probeBtn = document.getElementById('rep-probe-btn');
+    moveCursor(probeBtn);
+    await sleep(1400);
+    await clickEl(probeBtn);
+    hideCursor();
+    probeBtn.innerHTML = '<span class="demo-spinner white"></span> Running probe…';
+    probeBtn.classList.add('loading');
+
+    const probeProgress = document.getElementById('rep-probe-progress');
+    probeProgress.style.display = 'block';
+    await sleep(2800);
+    probeProgress.style.display = 'none';
+    probeBtn.innerHTML = '✓ Done';
+    probeBtn.style.background = 'var(--success)';
+
+    // Show results table
+    const resultsEl = document.getElementById('rep-probe-results');
+    resultsEl.style.display = 'block';
+    const rowsEl = document.getElementById('rep-probe-rows');
+    rowsEl.innerHTML = '';
+
+    for (const r of DEMO_DATA.probeResults) {
+      const row = document.createElement('div');
+      row.className = 'rep-probe-table-row';
+      row.innerHTML = `
+        <span class="rep-probe-host">${r.host}</span>
+        <span style="font-size:0.8rem;text-align:center">${r.matched}</span>
+        <span style="font-size:0.8rem;text-align:center;${r.review > 0 ? 'color:var(--warning);font-weight:700' : 'color:var(--muted)'}">${r.review}</span>
+        <span style="font-size:0.8rem;font-weight:700;text-align:center">${r.mean.toFixed(2)}</span>
+        <span style="font-size:0.8rem;font-weight:700;text-align:center">${r.max.toFixed(2)}</span>
+        <span class="rep-conf-pill ${r.level}">${r.level === 'hi' ? 'UGC ✓' : r.level === 'md' ? 'Uncertain' : 'No UGC'}</span>
+      `;
+      rowsEl.appendChild(row);
+      await sleep(300);
+      row.classList.add('visible');
+    }
+
+    await sleep(2000);
+    showToast('Reddit, HN, SO = high confidence (≥0.88)', 'All known UGC-heavy sites. The model agrees they have comment sections.', '✅', 5500);
+    await sleep(3000);
+    showToast('BBC = low confidence (0.12)', 'BBC uses a tightly moderated comment structure in a very different DOM. Model correctly scores it low.', '⚠️', 5500);
+    await sleep(5000);
+  },
+
+  async runDone() {
+    hideCursor();
+    clearToasts();
+    setActiveSection(null);
+    await sleep(1200);
+    document.getElementById('completion-screen').classList.add('show');
+  },
+};
+
+// ══════════════════════════════════════════════════════════════
+//  STEP RUNNER
+// ══════════════════════════════════════════════════════════════
+async function runStep(idx) {
+  if (actionRunning) return;
+  actionRunning = true;
+  clearTimeout(stepTimer);
+  clearTimeout(actionTimer);
+  clearToasts();
+
+  renderNarrator(idx);
+  const step = STEPS[idx];
+  if (step && step.action && actions[step.action]) {
+    try {
+      await actions[step.action]();
+    } catch (_) {}
+  }
+  actionRunning = false;
+
+  if (isPlaying && idx < STEPS.length - 1) {
+    stepTimer = setTimeout(() => {
+      currentStep++;
+      runStep(currentStep);
+    }, 800);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CONTROLS
+// ══════════════════════════════════════════════════════════════
+function nextStep() {
+  if (currentStep >= STEPS.length - 1) return;
+  actionRunning = false;
+  currentStep++;
+  runStep(currentStep);
+}
+
+function prevStep() {
+  if (currentStep <= 0) return;
+  actionRunning = false;
+  currentStep--;
+  runStep(currentStep);
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  document.getElementById('btn-play-pause').textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+  if (isPlaying && !actionRunning && currentStep < STEPS.length - 1) {
+    currentStep++;
+    runStep(currentStep);
+  }
+}
+
+function startDemo() {
+  document.getElementById('intro-screen').classList.add('hidden');
+  renderNarrator(0);
+  runStep(0);
+}
+
+function restartDemo() {
+  document.getElementById('completion-screen').classList.remove('show');
+  currentStep = 0;
+  isPlaying = true;
+  actionRunning = false;
+  document.getElementById('btn-play-pause').textContent = '⏸ Pause';
+
+  // Reset all animated elements
+  ['ov-labeled','ov-positive','ov-negative','ov-uncertain','ov-candidates','ov-reviewed','ov-hostnames','ov-models','ov-families']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+  const filterInput = document.getElementById('rep-job-filter');
+  if (filterInput) filterInput.value = '';
+  const trainKwBtn = document.getElementById('rep-train-kw-btn');
+  if (trainKwBtn) { trainKwBtn.innerHTML = 'Train Keyword-Aware Model'; trainKwBtn.style.background = ''; trainKwBtn.classList.remove('loading'); }
+  document.getElementById('rep-train-progress').style.display = 'none';
+  document.getElementById('rep-train-result').style.display = 'none';
+  ['rc-metrics','rc-reliance','rc-positive','rc-negative'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  });
+  ['rc-reliance-chips','rc-positive-chips','rc-negative-chips'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  document.getElementById('rep-model-rows').innerHTML = '';
+  const jobInput = document.getElementById('rep-score-job-id');
+  if (jobInput) jobInput.value = '';
+  const scoreBtn = document.getElementById('rep-score-btn');
+  if (scoreBtn) { scoreBtn.innerHTML = 'Score Job'; scoreBtn.style.background = ''; scoreBtn.classList.remove('loading'); }
+  document.getElementById('rep-score-progress').style.display = 'none';
+  document.getElementById('rep-score-results').style.display = 'none';
+  ['rs-items','rs-cands','rs-pos','rs-review'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+  const rsProb = document.getElementById('rs-prob'); if (rsProb) rsProb.textContent = '0.000';
+  document.getElementById('rep-result-rows').innerHTML = '';
+  const probeTextarea = document.getElementById('rep-probe-textarea');
+  if (probeTextarea) probeTextarea.value = '';
+  const probeBtn = document.getElementById('rep-probe-btn');
+  if (probeBtn) { probeBtn.innerHTML = 'Run Site Probe'; probeBtn.style.background = ''; probeBtn.classList.remove('loading'); }
+  document.getElementById('rep-probe-progress').style.display = 'none';
+  document.getElementById('rep-probe-results').style.display = 'none';
+  document.getElementById('rep-probe-rows').innerHTML = '';
+  document.querySelectorAll('.replica-section').forEach(s => { s.classList.remove('active-section','dimmed'); });
+
+  runStep(0);
+}
+</script>
+</body>
+</html>
