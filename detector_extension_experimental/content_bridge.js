@@ -1,66 +1,79 @@
 /**
- * content_bridge.js — Content Script (Isolated World)
+ * content_bridge.js - content script bridge for the PseudoDOM wrapper.
  *
- * run_at: document_start — fires before any page script executes.
- *
- * This script runs in Chrome's isolated extension world so it cannot
- * directly patch page prototype methods. Its job is to:
- *
- *   1. Inject injected_wrapper.js into the MAIN world (page JS context)
- *      using chrome.scripting.executeScript with world: 'MAIN'.
- *      This gives the wrapper script access to the real prototype chain.
- *
- *   2. Relay messages between the MAIN world wrapper (which cannot use
- *      chrome.runtime directly) and the background service worker.
- *
- *   3. Receive the serialized PseudoDOM and candidate features from the
- *      wrapper via window.postMessage and forward them to the background.
- *
- * Timing note:
- *   chrome.scripting.executeScript with world: 'MAIN' and
- *   injectImmediately: true is equivalent to run_at: document_start
- *   in the MAIN world — it fires before any <script> in the page body.
- *
- *   For belt-and-suspenders coverage, the background also injects via
- *   Page.addScriptToEvaluateOnNewDocument when in CDP/scanning mode.
+ * Responsibilities:
+ * - inject injected_wrapper.js into the page world
+ * - inject the feature extractor runtime module
+ * - relay wrapper <-> background messages
+ * - hydrate the wrapper with page signals and the runtime model
  */
 
 (function () {
   'use strict';
 
-  // ── Step 1: inject the wrapper into MAIN world immediately ─────────────────
+  let wrapperReady = false;
+  let featureExtractorReady = false;
+  let pendingPageSignals = null;
+  let pendingRuntimeModel = null;
 
-  chrome.scripting.executeScript({
-    target: { tabId: chrome.runtime.id },   // placeholder; actual injection below
-    world: 'MAIN',
-    injectImmediately: true,
-    files: ['injected_wrapper.js'],
-  }).catch(() => {
-    // Fallback: inject as a script tag if executeScript is unavailable
-    // (e.g., in older MV3 implementations)
+  function injectScript(src, options = {}) {
     const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('injected_wrapper.js');
-    // Prepend to <head> or <html> to execute as early as possible
+    if (options.module) {
+      script.type = 'module';
+    }
+    script.src = chrome.runtime.getURL(src);
+    script.async = false;
+    if (typeof options.onLoad === 'function') {
+      script.onload = options.onLoad;
+    }
+    if (typeof options.onError === 'function') {
+      script.onerror = options.onError;
+    }
     (document.head || document.documentElement).prepend(script);
-  });
+  }
 
-  // ── Step 2: message relay between MAIN world and background ────────────────
+  function postToPage(type, payload) {
+    window.postMessage({
+      __pseudodom: true,
+      __push: true,
+      type,
+      payload,
+    }, '*');
+  }
 
-  /**
-   * The injected_wrapper.js in the MAIN world communicates with this
-   * bridge via window.postMessage with a sentinel namespace.
-   *
-   * We listen for those messages and forward them to the background
-   * via chrome.runtime.sendMessage.
-   */
+  function flushPendingPushes() {
+    if (!wrapperReady) return;
+    if (pendingPageSignals) {
+      postToPage('PAGE_SIGNALS', pendingPageSignals);
+      pendingPageSignals = null;
+    }
+    if (pendingRuntimeModel) {
+      postToPage('RUNTIME_MODEL', pendingRuntimeModel);
+      pendingRuntimeModel = null;
+    }
+    if (featureExtractorReady) {
+      postToPage('FEATURE_EXTRACTOR_READY', { ready: true });
+      featureExtractorReady = false;
+    }
+  }
+
+  // Relay wrapper messages to the background.
   window.addEventListener('message', (event) => {
-    // Only accept messages from the same window (our injected wrapper)
     if (event.source !== window) return;
     if (!event.data || event.data.__pseudodom !== true) return;
 
     const { type, payload } = event.data;
 
-    // Forward to background; receive response and echo back to MAIN world
+    if (type === 'WRAPPER_READY') {
+      wrapperReady = true;
+      flushPendingPushes();
+      return;
+    }
+
+    if (type === 'PAGE_SIGNALS' || type === 'RUNTIME_MODEL' || type === 'FEATURE_EXTRACTOR_READY') {
+      return;
+    }
+
     chrome.runtime.sendMessage({ type, payload }, (response) => {
       window.postMessage({
         __pseudodom: true,
@@ -71,21 +84,30 @@
     });
   });
 
-  // ── Step 3: push pre-parse signals into MAIN world on request ─────────────
-
-  /**
-   * The wrapper may ask for page signals (pre-parse metadata collected
-   * from response headers before any JS ran). We retrieve them from
-   * the background and push them into the MAIN world via postMessage.
-   */
+  // Fetch background data. The wrapper receives it once it announces
+  // WRAPPER_READY, so we do not lose the payload if the page loads fast.
   chrome.runtime.sendMessage({ type: 'GET_PAGE_SIGNALS' }, (signals) => {
     if (!signals) return;
-    window.postMessage({
-      __pseudodom: true,
-      __push: true,
-      type: 'PAGE_SIGNALS',
-      payload: signals,
-    }, '*');
+    pendingPageSignals = signals;
+    flushPendingPushes();
   });
 
+  chrome.runtime.sendMessage({ type: 'GET_RUNTIME_MODEL' }, (bundle) => {
+    if (!bundle) return;
+    pendingRuntimeModel = bundle;
+    flushPendingPushes();
+  });
+
+  injectScript('feature_extractor_runtime.js', {
+    module: true,
+    onLoad: () => {
+      featureExtractorReady = true;
+      flushPendingPushes();
+    },
+    onError: () => {
+      featureExtractorReady = false;
+    },
+  });
+
+  injectScript('injected_wrapper.js');
 })();

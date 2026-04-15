@@ -41,4 +41,4 @@ The imported file should be the runtime bundle returned by the modeling server, 
 
 ## Important limitation
 
-This clone currently stores and surfaces the runtime bundle. It does not yet perform full in-extension candidate scoring on its own. That is still a separate integration step if you want the extension popup or content scripts to classify pages directly.
+This clone is still experimental. It now exposes the live page debug surface, loads the feature extractor runtime module, relays page signals and the runtime bundle into the wrapper, and can fall back to heuristic scoring when no model is loaded. What it still does not guarantee is parity with the server-side scanner on every page shape, especially on dynamic sites and odd frame/shadow-DOM layouts.

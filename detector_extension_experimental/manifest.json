@@ -9,7 +9,8 @@
     "scripting",
     "storage",
     "debugger",
-    "webRequest"
+    "webRequest",
+    "webNavigation"
   ],
 
   "host_permissions": [
@@ -36,7 +37,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["injected_wrapper.js"],
+      "resources": ["injected_wrapper.js", "feature_extractor.js", "feature_extractor_runtime.js"],
       "matches": ["<all_urls>"]
     }
   ]

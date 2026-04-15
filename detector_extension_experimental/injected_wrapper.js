@@ -130,6 +130,8 @@
 
     // The node registry: id → PseudoNode
     const nodes = new Map();
+    // Live DOM lookup: id → DOM node / shadow root
+    const liveNodeById = new Map();
     // Ordered mutation log
     const mutations = [];
     let _seq = 0;
@@ -148,6 +150,7 @@
       }
       const id = nodeId(domNode);
       if (nodes.has(id)) return id;
+      liveNodeById.set(id, domNode);
 
       const parentId = parentDomNode ? nodeId(parentDomNode) : null;
 
@@ -219,6 +222,9 @@
       if (removedId && targetId && nodes.has(targetId)) {
         const targetNode = nodes.get(targetId);
         targetNode.children = targetNode.children.filter(c => c !== removedId);
+      }
+      if (removedId) {
+        liveNodeById.delete(removedId);
       }
 
       mutations.push({
@@ -301,6 +307,7 @@
     function registerShadowRoot(hostDomNode, shadowRoot, mode) {
       const hostId = nodeId(hostDomNode);
       const srId   = nodeId(shadowRoot);
+      liveNodeById.set(srId, shadowRoot);
       nodes.set(srId, {
         id:           srId,
         tag:          '#shadow-root',
@@ -408,6 +415,15 @@
       ugcRegionMap.set(id, score);
     }
 
+    /**
+     * Record a UGC confidence score using a PseudoNode ID directly.
+     * Used when the live DOM node is unavailable but the candidate ID is known.
+     */
+    function setUGCConfidenceById(id, score) {
+      if (!id) return;
+      ugcRegionMap.set(id, score);
+    }
+
     function isInUGCRegion(domNode) {
       const id = nodeId(domNode);
       if (!id) return false;
@@ -437,6 +453,10 @@
       };
     }
 
+    function getLiveNode(id) {
+      return liveNodeById.get(id) || null;
+    }
+
     return {
       nodeId,
       record,
@@ -447,9 +467,11 @@
       getCandidateRoots,
       getUGCConfidence,
       setUGCConfidence,
+      setUGCConfidenceById,
       isInUGCRegion,
       parseHTMLString,
       serialize,
+      getLiveNode,
       nodes,
       mutations,
     };
@@ -511,7 +533,7 @@
      * Score a single candidate root node.
      * Returns a score in [0, 1].
      */
-    function scoreCandidate(candidate, domNode) {
+    function scoreCandidateHeuristic(candidate, domNode) {
       let score = 0;
 
       // ── Structural repetition ──────────────────────────────────────────────
@@ -597,7 +619,7 @@
 
     function hasSchemaOrgComment(el) {
       if (!el) return false;
-      const itemtype = (el.getAttribute('itemtype') || '').toLowerCase();
+      const itemtype = (el.getAttribute?.('itemtype') || '').toLowerCase();
       const text = el.innerHTML?.slice(0, 500) || '';
       return itemtype.includes('comment') ||
              itemtype.includes('review') ||
@@ -691,22 +713,95 @@
              el.querySelector?.('tr') !== null;
     }
 
+    function normalizeCategoryValue(value) {
+      const text = String(value || '').trim();
+      return text || '__missing__';
+    }
+
+    function vectorizeFeatureValues(featureValues, runtime) {
+      const vectorizer = runtime?.vectorizer || {};
+      const vector = new Array(Number(vectorizer.dimension) || 0).fill(0);
+
+      for (const descriptor of (vectorizer.descriptors || [])) {
+        if (descriptor.type === 'number') {
+          const stats = vectorizer.numericStats?.[descriptor.feature_key] || { mean: 0, std: 1 };
+          const raw = Number(featureValues?.[descriptor.feature_key]) || 0;
+          vector[descriptor.index] = (raw - stats.mean) / (stats.std || 1);
+          continue;
+        }
+
+        if (descriptor.type === 'boolean') {
+          vector[descriptor.index] = featureValues?.[descriptor.feature_key] ? 1 : 0;
+          continue;
+        }
+
+        if (descriptor.type === 'categorical') {
+          const categoryValue = normalizeCategoryValue(featureValues?.[descriptor.feature_key]);
+          vector[descriptor.index] = categoryValue === descriptor.category ? 1 : 0;
+        }
+      }
+
+      return vector;
+    }
+
+    function predictRuntimeProbability(runtime, featureValues) {
+      const vector = vectorizeFeatureValues(featureValues, runtime);
+      const weights = runtime?.model?.weights || [];
+      let logit = Number(runtime?.model?.bias) || 0;
+
+      for (let i = 0; i < vector.length; i += 1) {
+        logit += (vector[i] || 0) * (Number(weights[i]) || 0);
+      }
+
+      return 1 / (1 + Math.exp(-logit));
+    }
+
+    function scoreCandidateWithRuntime(candidate, domNode, extractFeatures, snapshot) {
+      if (!domNode || typeof extractFeatures !== 'function') return null;
+      const pseudoNode = snapshot?.nodes?.[candidate.id] || null;
+      const featureValues = extractFeatures(domNode, pseudoNode, candidate, _pageSignals || null);
+      return predictRuntimeProbability(_runtimeModel, featureValues);
+    }
+
     /**
      * Run classification on all current PseudoDOM candidate roots.
      * Updates ugcRegionMap.
      * Called at DOMContentLoaded and after significant SPA mutations.
      */
-    function classify() {
+    async function classify() {
       const candidates = PseudoDOM.getCandidateRoots();
+      const featureExtractor = getRuntimeFeatureExtractor();
+      const useRuntime = Boolean(
+        _runtimeModel?.model?.weights &&
+        _runtimeModel?.vectorizer?.descriptors &&
+        featureExtractor
+      );
+      let snapshot = null;
+
+      if (useRuntime) {
+        snapshot = PseudoDOM.serialize();
+      }
 
       for (const candidate of candidates) {
-        // Find the real DOM node for live-DOM feature access
-        // We use the PseudoNode's id to locate the real node via the WeakMap.
-        // Since WeakMap is not iterable we query the DOM directly.
         const domNode = findDOMNodeById(candidate.id);
-        const score   = scoreCandidate(candidate, domNode);
+        let score = scoreCandidateHeuristic(candidate, domNode);
 
-        PseudoDOM.setUGCConfidence(domNode || {}, score);
+        if (useRuntime && domNode && domNode.nodeType === Node.ELEMENT_NODE) {
+          try {
+            const runtimeScore = scoreCandidateWithRuntime(candidate, domNode, featureExtractor, snapshot);
+            if (Number.isFinite(runtimeScore)) {
+              score = runtimeScore;
+            }
+          } catch (error) {
+            console.warn('[PseudoDOM Guard] Runtime scoring failed:', error?.message || error);
+          }
+        }
+
+        // Always record the score against the stable pseudo-ID so isInUGCRegion
+        // ancestor walks can find it even when the live node is unavailable.
+        PseudoDOM.setUGCConfidenceById(candidate.id, score);
+        // Also sync via the live DOM node so nodeId(domNode) lookups work.
+        if (domNode) PseudoDOM.setUGCConfidence(domNode, score);
 
         if (score >= UGC_HIGH_THRESHOLD) {
           _sendToBackground('CANDIDATE_FEATURES', {
@@ -725,14 +820,19 @@
 
     /**
      * Locate a real DOM element corresponding to a PseudoNode id.
-     * We tag each element with a data attribute at ensureNode time
-     * only when classification is needed, to avoid polluting the DOM.
      */
     function findDOMNodeById(id) {
-      return document.querySelector(`[data-pgid="${id}"]`) || null;
+      return PseudoDOM.getLiveNode(id) || null;
     }
 
-    return { classify, scoreCandidate };
+    function getRuntimeFeatureExtractor() {
+      const runtimeExtractor = window.__PSEUDODOM_FEATURE_EXTRACTOR__;
+      return runtimeExtractor && typeof runtimeExtractor.extractFeatures === 'function'
+        ? runtimeExtractor.extractFeatures
+        : null;
+    }
+
+    return { classify };
   })();
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1365,7 +1465,7 @@
    */
   document.addEventListener('DOMContentLoaded', () => {
     PseudoDOM.seedFromLiveDOM();
-    HeuristicClassifier.classify();
+    void HeuristicClassifier.classify();
 
     // Export PseudoDOM snapshot to background for data collection
     _sendToBackground('PSEUDO_DOM_SNAPSHOT', PseudoDOM.serialize());
@@ -1388,7 +1488,7 @@
       // Debounce: wait for burst to settle before re-classifying
       clearTimeout(_observer._timer);
       _observer._timer = setTimeout(() => {
-        HeuristicClassifier.classify();
+        void HeuristicClassifier.classify();
       }, 300);
     }
   });
@@ -1406,33 +1506,49 @@
     window.postMessage({ __pseudodom: true, type, payload }, '*');
   }
 
-  // Listen for page signals pushed by content_bridge
+  let _pageSignals = null;
+  let _runtimeModel = null;
+
+  // Listen for page signals and runtime model pushes from content_bridge.
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     if (!event.data?.__pseudodom || !event.data.__push) return;
+
     if (event.data.type === 'PAGE_SIGNALS') {
-      // Page signals from pre-parse analysis are now available
-      // They can be used to bias initial UGC classification
-      // (e.g., og:type === 'article' → boost comment region threshold)
-      _pageSignals = event.data.payload;
+      _pageSignals = event.data.payload || null;
+      void HeuristicClassifier.classify();
+      return;
+    }
+
+    if (event.data.type === 'RUNTIME_MODEL') {
+      _runtimeModel = event.data.payload || null;
+      void HeuristicClassifier.classify();
+      return;
+    }
+
+    if (event.data.type === 'FEATURE_EXTRACTOR_READY') {
+      void HeuristicClassifier.classify();
     }
   });
-
-  let _pageSignals = null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // § 7 — Debug / Development Helpers (stripped in production build)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  if (typeof window.__PSEUDODOM_DEBUG !== 'undefined') {
-    window.__PSEUDODOM_DEBUG = {
-      getPseudoDOM:   () => PseudoDOM.serialize(),
-      getCandidates:  () => PseudoDOM.getCandidateRoots(),
-      reclassify:     () => HeuristicClassifier.classify(),
-      checkString:    (s) => SecurityGate.checkString(s),
-      checkAttribute: (n, v) => SecurityGate.checkAttribute(n, v),
-      pageSignals:    () => _pageSignals,
-    };
-  }
+  window.__PSEUDODOM_DEBUG = {
+    ...(typeof window.__PSEUDODOM_DEBUG === 'object' && window.__PSEUDODOM_DEBUG
+      ? window.__PSEUDODOM_DEBUG
+      : {}),
+    getPseudoDOM:   () => PseudoDOM.serialize(),
+    getCandidates:  () => PseudoDOM.getCandidateRoots(),
+    reclassify:     () => HeuristicClassifier.classify(),
+    checkString:    (s) => SecurityGate.checkString(s),
+    checkAttribute: (n, v) => SecurityGate.checkAttribute(n, v),
+    pageSignals:    () => _pageSignals,
+    runtimeModel:   () => _runtimeModel,
+    featureExtractorReady: () => Boolean(window.__PSEUDODOM_FEATURE_EXTRACTOR__?.extractFeatures),
+  };
+
+  _sendToBackground('WRAPPER_READY', { ready: true });
 
 })(); // end PseudoDOMGuard IIFE
