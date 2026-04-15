@@ -271,11 +271,14 @@ function createModelingRouter(dependencies) {
       const progress = requestProgress(req);
       const liveJobId = `live-url-probe-${crypto.randomUUID()}`;
       const liveItemId = req.body && req.body.itemId ? String(req.body.itemId) : crypto.randomUUID();
+      const liveProbeTimeoutMs = req.body && req.body.timeoutMs !== undefined ? req.body.timeoutMs : 30000;
+      const liveProbePostLoadDelayMs = req.body && req.body.postLoadDelayMs !== undefined ? req.body.postLoadDelayMs : 0;
+      const liveProbePreScreenshotDelayMs = req.body && req.body.preScreenshotDelayMs !== undefined ? req.body.preScreenshotDelayMs : 0;
       progress && progress({ stage: 'scanning', message: 'Scanning live URL' });
       const scanResult = await dependencies.scanUrl(normalizedUrl, {
-        timeoutMs: req.body && req.body.timeoutMs !== undefined ? req.body.timeoutMs : undefined,
-        postLoadDelayMs: req.body && req.body.postLoadDelayMs !== undefined ? req.body.postLoadDelayMs : undefined,
-        preScreenshotDelayMs: req.body && req.body.preScreenshotDelayMs !== undefined ? req.body.preScreenshotDelayMs : undefined,
+        timeoutMs: liveProbeTimeoutMs,
+        postLoadDelayMs: liveProbePostLoadDelayMs,
+        preScreenshotDelayMs: liveProbePreScreenshotDelayMs,
         candidateMode,
         captureScreenshots: req.body && req.body.captureScreenshots !== undefined ? !!req.body.captureScreenshots : true,
         captureHtmlSnapshots: req.body && req.body.captureHtmlSnapshots !== undefined ? !!req.body.captureHtmlSnapshots : true,
