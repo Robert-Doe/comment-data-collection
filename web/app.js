@@ -2896,50 +2896,59 @@
 
   async function refreshJob(jobId, options = {}) {
     if (!jobId) return;
+    const previousPollingJobId = pollJobId;
+    const previousPollingInterval = pollIntervalMs;
     stopPolling();
     const requestToken = ++refreshJobToken;
     const isStale = () => requestToken !== refreshJobToken;
     const previousJobId = currentJobId;
-    const [{ job, items, pagination }] = await Promise.all([
-      fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
-      fetchJobEvents(jobId),
-    ]);
-    if (isStale()) {
-      return null;
-    }
-    if (currentJobId && currentJobId !== jobId && selectedManualItemId) {
-      selectedManualItemId = '';
-      selectManualItem(null);
-    }
-    currentJob = job;
-    currentJobId = jobId;
-    window.history.replaceState({}, '', `?jobId=${jobId}`);
-    renderSummary(job);
-    renderItems(items, pagination);
-    renderJobManager(job);
-    await refreshSelectedItem().catch((error) => console.error(error));
-    if (isStale()) {
-      return null;
-    }
-    setDownloads(jobId);
-    if (activeWorkspaceTab === 'labeler') {
-      if (previousJobId !== jobId) {
-        ensureJobLabelerLoaded(false).catch((error) => {
-          const message = error && error.message ? error.message : String(error);
-          setJobLabelerMessage(message, true);
-          showToast(message, { tone: 'error' });
-        });
-      } else {
-        renderJobLabelerReview();
+    try {
+      const [{ job, items, pagination }] = await Promise.all([
+        fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
+        fetchJobEvents(jobId),
+      ]);
+      if (isStale()) {
+        return null;
       }
+      if (currentJobId && currentJobId !== jobId && selectedManualItemId) {
+        selectedManualItemId = '';
+        selectManualItem(null);
+      }
+      currentJob = job;
+      currentJobId = jobId;
+      window.history.replaceState({}, '', `?jobId=${jobId}`);
+      renderSummary(job);
+      renderItems(items, pagination);
+      renderJobManager(job);
+      await refreshSelectedItem().catch((error) => console.error(error));
+      if (isStale()) {
+        return null;
+      }
+      setDownloads(jobId);
+      if (activeWorkspaceTab === 'labeler') {
+        if (previousJobId !== jobId) {
+          ensureJobLabelerLoaded(false).catch((error) => {
+            const message = error && error.message ? error.message : String(error);
+            setJobLabelerMessage(message, true);
+            showToast(message, { tone: 'error' });
+          });
+        } else {
+          renderJobLabelerReview();
+        }
+      }
+      if (!options.skipRecentJobsRefresh) {
+        refreshJobs().catch((error) => console.error(error));
+      }
+      if (isStale()) {
+        return null;
+      }
+      startPolling(jobId, pollIntervalForStatus(job.status));
+    } catch (error) {
+      if (requestToken === refreshJobToken && previousPollingJobId) {
+        startPolling(previousPollingJobId, previousPollingInterval || activePollIntervalMs);
+      }
+      throw error;
     }
-    if (!options.skipRecentJobsRefresh) {
-      refreshJobs().catch((error) => console.error(error));
-    }
-    if (isStale()) {
-      return null;
-    }
-    startPolling(jobId, pollIntervalForStatus(job.status));
   }
 
   async function refreshJobs(options = {}) {
