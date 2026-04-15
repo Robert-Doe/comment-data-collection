@@ -88,6 +88,43 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
   }
 }
 
+function createScanDeadline(page, context, timeoutMs, label = 'scan') {
+  const maxMs = Math.max(1000, Number(timeoutMs || 0));
+  let timedOut = false;
+  let rejectDeadline = null;
+  const deadlineError = new Error(`${label} timed out after ${maxMs}ms`);
+  deadlineError.code = 'SCAN_TIMEOUT';
+
+  const deadlinePromise = new Promise((_, reject) => {
+    rejectDeadline = reject;
+  });
+
+  const timer = setTimeout(() => {
+    if (timedOut) return;
+    timedOut = true;
+    page.close().catch(() => {});
+    context.close().catch(() => {});
+    if (rejectDeadline) {
+      rejectDeadline(deadlineError);
+    }
+  }, maxMs);
+
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+
+  return {
+    timedOut: () => timedOut,
+    error: deadlineError,
+    wrap(promise) {
+      return Promise.race([promise, deadlinePromise]);
+    },
+    clear() {
+      clearTimeout(timer);
+    },
+  };
+}
+
 async function dismissConsentPrompts(page) {
   await page.evaluate(() => {
     function deepQuerySelectorAll(selector) {
@@ -285,19 +322,25 @@ async function settlePageForDetection(page, options = {}) {
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
   const scrollBackToTop = options.scrollBackToTop === true;
   const bottomPauseMs = Math.max(0, Number(options.bottomPauseMs ?? Math.max(actionSettleMs, 350)));
+  const deadline = options.deadline || null;
 
-  await waitForDocumentComplete(page, loadWaitMs);
-  await safeWait(page, 'load', loadWaitMs);
-  await safeWait(page, 'networkidle', networkIdleWaitMs);
+  await (deadline ? deadline.wrap(waitForDocumentComplete(page, loadWaitMs)) : waitForDocumentComplete(page, loadWaitMs));
+  if (deadline && deadline.timedOut()) throw deadline.error;
+  await (deadline ? deadline.wrap(safeWait(page, 'load', loadWaitMs)) : safeWait(page, 'load', loadWaitMs));
+  if (deadline && deadline.timedOut()) throw deadline.error;
+  await (deadline ? deadline.wrap(safeWait(page, 'networkidle', networkIdleWaitMs)) : safeWait(page, 'networkidle', networkIdleWaitMs));
 
   for (let pass = 0; pass < loadSettlePasses; pass += 1) {
+    if (deadline && deadline.timedOut()) throw deadline.error;
     await dismissConsentPrompts(page);
+    if (deadline && deadline.timedOut()) throw deadline.error;
     if (actionSettleMs > 0) {
-      await page.waitForTimeout(actionSettleMs);
+      await (deadline ? deadline.wrap(page.waitForTimeout(actionSettleMs)) : page.waitForTimeout(actionSettleMs));
     }
     await expandPotentialUgc(page);
+    if (deadline && deadline.timedOut()) throw deadline.error;
     if (actionSettleMs > 0) {
-      await page.waitForTimeout(actionSettleMs);
+      await (deadline ? deadline.wrap(page.waitForTimeout(actionSettleMs)) : page.waitForTimeout(actionSettleMs));
     }
     const scrollSummary = await autoScroll(page, {
       steps: 6,
@@ -306,15 +349,19 @@ async function settlePageForDetection(page, options = {}) {
       stabilizationPasses: 2,
       returnToTop: scrollBackToTop,
     });
-    await safeWait(page, 'load', Math.min(loadWaitMs, 8000));
-    await safeWait(page, 'networkidle', networkIdleWaitMs);
-    await waitForDocumentComplete(page, Math.min(loadWaitMs, 8000));
+    if (deadline && deadline.timedOut()) throw deadline.error;
+    await (deadline ? deadline.wrap(safeWait(page, 'load', Math.min(loadWaitMs, 8000))) : safeWait(page, 'load', Math.min(loadWaitMs, 8000)));
+    if (deadline && deadline.timedOut()) throw deadline.error;
+    await (deadline ? deadline.wrap(safeWait(page, 'networkidle', networkIdleWaitMs)) : safeWait(page, 'networkidle', networkIdleWaitMs));
+    if (deadline && deadline.timedOut()) throw deadline.error;
+    await (deadline ? deadline.wrap(waitForDocumentComplete(page, Math.min(loadWaitMs, 8000))) : waitForDocumentComplete(page, Math.min(loadWaitMs, 8000)));
     if (actionSettleMs > 0) {
-      await page.waitForTimeout(actionSettleMs);
+      await (deadline ? deadline.wrap(page.waitForTimeout(actionSettleMs)) : page.waitForTimeout(actionSettleMs));
     }
     await expandPotentialUgc(page);
+    if (deadline && deadline.timedOut()) throw deadline.error;
     if (actionSettleMs > 0) {
-      await page.waitForTimeout(actionSettleMs);
+      await (deadline ? deadline.wrap(page.waitForTimeout(actionSettleMs)) : page.waitForTimeout(actionSettleMs));
     }
     if (!scrollSummary.heightChanged) {
       break;
@@ -322,7 +369,7 @@ async function settlePageForDetection(page, options = {}) {
   }
 
   if (postLoadDelayMs > 0) {
-    await page.waitForTimeout(postLoadDelayMs);
+    await (deadline ? deadline.wrap(page.waitForTimeout(postLoadDelayMs)) : page.waitForTimeout(postLoadDelayMs));
   }
 }
 
@@ -330,14 +377,19 @@ async function loadPageWithRetries(page, normalizedUrl, options = {}) {
   const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? 45000));
   const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
   const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+  const deadline = options.deadline || null;
   let lastError = null;
 
   for (let attempt = 1; attempt <= navigationRetries; attempt += 1) {
     try {
-      const response = await page.goto(normalizedUrl, {
+      if (deadline && deadline.timedOut()) throw deadline.error;
+      const response = await (deadline ? deadline.wrap(page.goto(normalizedUrl, {
         waitUntil: 'domcontentloaded',
         timeout: timeoutMs,
-      });
+      })) : page.goto(normalizedUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: timeoutMs,
+      }));
       const status = response ? Number(response.status()) : 0;
       if (status && retryableStatuses.has(status) && attempt < navigationRetries) {
         lastError = new Error(`Navigation returned retryable status ${status}`);
@@ -349,12 +401,16 @@ async function loadPageWithRetries(page, normalizedUrl, options = {}) {
       }
     } catch (error) {
       lastError = error;
+      if (deadline && deadline.timedOut()) {
+        throw error;
+      }
       if (attempt >= navigationRetries) {
         throw error;
       }
     }
 
-    await page.waitForTimeout(Math.min(2500 * attempt, 8000));
+    if (deadline && deadline.timedOut()) throw deadline.error;
+    await (deadline ? deadline.wrap(page.waitForTimeout(Math.min(2500 * attempt, 8000))) : page.waitForTimeout(Math.min(2500 * attempt, 8000)));
   }
 
   throw lastError || new Error(`Unable to load ${normalizedUrl}`);
@@ -1018,6 +1074,7 @@ async function scanUrl(normalizedUrl, options = {}) {
   const candidateSelectionMode = resolveCandidateSelectionMode(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
+  const deadline = createScanDeadline(page, context, timeoutMs, 'Live URL probe');
 
   const result = {
     input_url: normalizedUrl,
@@ -1048,6 +1105,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     candidate_selection_limit: candidateSelectionLimit,
     candidate_review_artifact_limit: candidateReviewArtifactLimit,
     candidate_selection_mode: candidateSelectionMode,
+    timed_out: false,
     candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
     heuristic_best_candidate_key: '',
     heuristic_best_candidate_label: '',
@@ -1055,61 +1113,64 @@ async function scanUrl(normalizedUrl, options = {}) {
   };
 
   try {
-    const navigation = await loadPageWithRetries(page, normalizedUrl, {
+    const navigation = await deadline.wrap(loadPageWithRetries(page, normalizedUrl, {
       timeoutMs,
       navigationRetries,
-    });
+      deadline,
+    }));
     const response = navigation.response;
     result.navigation_attempts = navigation.attemptCount;
 
-    await settlePageForDetection(page, {
+    await deadline.wrap(settlePageForDetection(page, {
       timeoutMs,
       postLoadDelayMs,
       loadSettlePasses,
       actionSettleMs,
-    });
+      deadline,
+    }));
     result.settle_passes_applied = loadSettlePasses;
 
-    const responseText = response ? await response.text().catch(() => '') : '';
+    const responseText = response ? await deadline.wrap(response.text().catch(() => '')) : '';
     const responseHeaders = response ? response.headers() : {};
-    let currentHtml = await page.content().catch(() => '');
+    let currentHtml = await deadline.wrap(page.content().catch(() => ''));
     let rawHtml = currentHtml || responseText;
-    let access = await detectPageAccess(page);
-    let candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+    let access = await deadline.wrap(detectPageAccess(page));
+    let candidates = await deadline.wrap(collectCandidatesFromPage(page, rawHtml, responseHeaders, {
       ...options,
       candidateMode: candidateSelectionMode,
-    });
+    }));
     let bestCandidate = candidates[0] || null;
     let ugcDetected = candidates.some((candidate) => !!candidate.detected);
 
     if (!access.blocked && !ugcDetected) {
       result.negative_retry_applied = true;
-      await settlePageForDetection(page, {
+      await deadline.wrap(settlePageForDetection(page, {
         timeoutMs,
         postLoadDelayMs,
         loadSettlePasses: negativeRetrySettlePasses,
         actionSettleMs,
-      });
+        deadline,
+      }));
       result.settle_passes_applied += negativeRetrySettlePasses;
-      currentHtml = await page.content().catch(() => '');
+      currentHtml = await deadline.wrap(page.content().catch(() => ''));
       rawHtml = currentHtml || responseText;
-      access = await detectPageAccess(page);
-      candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+      access = await deadline.wrap(detectPageAccess(page));
+      candidates = await deadline.wrap(collectCandidatesFromPage(page, rawHtml, responseHeaders, {
         ...options,
         candidateMode: candidateSelectionMode,
-      });
+      }));
       bestCandidate = candidates[0] || null;
       ugcDetected = candidates.some((candidate) => !!candidate.detected);
     }
 
-    await waitForDocumentComplete(page, 5000);
-    await safeWait(page, 'networkidle', 2500);
+    await deadline.wrap(waitForDocumentComplete(page, 5000));
+    await deadline.wrap(safeWait(page, 'networkidle', 2500));
     if (preScreenshotDelayMs > 0) {
-      await page.waitForTimeout(preScreenshotDelayMs);
+      await deadline.wrap(page.waitForTimeout(preScreenshotDelayMs));
     }
 
     try {
-      const screenshot = await capturePageScreenshot(page, normalizedUrl, options);
+      const screenshot = await deadline.wrap(capturePageScreenshot(page, normalizedUrl, options));
       result.screenshot_path = screenshot.screenshot_path;
       result.screenshot_url = screenshot.screenshot_url;
     } catch (error) {
@@ -1117,14 +1178,14 @@ async function scanUrl(normalizedUrl, options = {}) {
     }
 
     result.final_url = page.url();
-    result.title = await page.title().catch(() => access.title || '');
+    result.title = await deadline.wrap(page.title().catch(() => access.title || ''));
     result.blocked_by_interstitial = access.blocked;
     result.blocker_type = access.blockerType;
     result.access_reason = access.reason;
     result.page_text_sample = access.pageTextSample;
     result.frame_count = access.frameCount;
 
-    Object.assign(result, await persistPageHtmlSnapshot(currentHtml || rawHtml, responseText || rawHtml, page.url() || normalizedUrl, options));
+    Object.assign(result, await deadline.wrap(persistPageHtmlSnapshot(currentHtml || rawHtml, responseText || rawHtml, page.url() || normalizedUrl, options)));
     result.candidates = candidates;
     result.best_candidate = bestCandidate;
     result.ugc_detected = ugcDetected;
@@ -1137,8 +1198,12 @@ async function scanUrl(normalizedUrl, options = {}) {
       ? (bestCandidate.heuristic_pseudo_reason || bestCandidate.acceptance_gate_reason || '')
       : '';
   } catch (error) {
+    if (deadline.timedOut()) {
+      result.timed_out = true;
+    }
     result.error = error && error.message ? error.message : String(error);
   } finally {
+    deadline.clear();
     await page.close().catch(() => {});
     await context.close().catch(() => {});
   }
