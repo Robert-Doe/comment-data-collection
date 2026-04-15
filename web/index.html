@@ -44,6 +44,13 @@
             <span>URL Column</span>
             <input id="url-column" name="urlColumn" type="text" placeholder="url">
           </label>
+          <label class="field">
+            <span>Scanner Mode</span>
+            <select id="candidate-mode" name="candidateMode">
+              <option value="default" selected>Default</option>
+              <option value="repetition_first">Research mode, repetition first</option>
+            </select>
+          </label>
           <div class="config-block">
             <div class="config-heading">
               <strong>Load Delay</strong>
@@ -203,6 +210,13 @@
               <label class="field">
                 <span>URL Column</span>
                 <input id="manager-source-column" name="urlColumn" type="text" placeholder="url">
+              </label>
+              <label class="field">
+                <span>Scanner Mode</span>
+                <select id="manager-candidate-mode" name="candidateMode">
+                  <option value="default">Default</option>
+                  <option value="repetition_first">Research mode, repetition first</option>
+                </select>
               </label>
               <label class="field">
                 <span>Scan Delay (ms)</span>

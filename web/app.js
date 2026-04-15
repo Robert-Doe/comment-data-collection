@@ -5,6 +5,7 @@
   const form = document.getElementById('upload-form');
   const fileInput = document.getElementById('csv-file');
   const urlColumnInput = document.getElementById('url-column');
+  const candidateModeInput = document.getElementById('candidate-mode');
   const scanDelayInput = document.getElementById('scan-delay-ms');
   const screenshotDelayInput = document.getElementById('screenshot-delay-ms');
   const formMessage = document.getElementById('form-message');
@@ -54,6 +55,7 @@
   const managerForm = document.getElementById('manager-replace-form');
   const managerJobId = document.getElementById('manager-job-id');
   const managerSourceColumn = document.getElementById('manager-source-column');
+  const managerCandidateModeInput = document.getElementById('manager-candidate-mode');
   const managerScanDelayInput = document.getElementById('manager-scan-delay-ms');
   const managerScreenshotDelayInput = document.getElementById('manager-screenshot-delay-ms');
   const managerReplaceFile = document.getElementById('manager-replace-file');
@@ -237,6 +239,14 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function formatCandidateMode(value) {
+    const mode = String(value || 'default');
+    if (mode === 'repetition_first') {
+      return 'Research mode, repetition first';
+    }
+    return 'Default';
   }
 
   async function copyText(value) {
@@ -542,6 +552,7 @@
       `<div><strong>Failed:</strong> ${escapeHtml(job.failed_count)}</div>`,
       `<div><strong>Detected:</strong> ${escapeHtml(job.detected_count)}</div>`,
       `<div><strong>Total:</strong> ${escapeHtml(job.total_urls)}</div>`,
+      `<div><strong>Scanner Mode:</strong> ${escapeHtml(formatCandidateMode(job.candidate_mode || job.candidateMode))}</div>`,
       `<div><strong>Scan Delay:</strong> ${escapeHtml(job.scan_delay_ms ?? '')} ms</div>`,
       `<div><strong>Screenshot Delay:</strong> ${escapeHtml(job.screenshot_delay_ms ?? '')} ms</div>`,
     ].join('');
@@ -2691,6 +2702,7 @@
       managerSelection.textContent = 'Select a job from Job Status or Recent Jobs to manage it here.';
       managerJobId.value = '';
       managerSourceColumn.value = '';
+      managerCandidateModeInput.value = 'default';
       managerScanDelayInput.value = '';
       managerScreenshotDelayInput.value = '';
       managerReplaceFile.value = '';
@@ -2708,6 +2720,7 @@
       `<div><strong>Job:</strong> ${escapeHtml(job.id)}</div>`,
       `<div><strong>Source:</strong> ${escapeHtml(job.source_filename || 'upload.csv')}</div>`,
       `<div><strong>Column:</strong> ${escapeHtml(job.source_column || '(auto)')}</div>`,
+      `<div><strong>Mode:</strong> ${escapeHtml(formatCandidateMode(job.candidate_mode || job.candidateMode))}</div>`,
       `<div><strong>Status:</strong> ${escapeHtml(job.status || '')}</div>`,
       `<div><strong>Progress:</strong> ${escapeHtml(job.completed_count || 0)}/${escapeHtml(job.total_urls || 0)}</div>`,
       `<div><strong>Pending:</strong> ${escapeHtml(job.pending_count || 0)}</div>`,
@@ -2718,6 +2731,7 @@
     if (managerFormJobId !== job.id) {
       managerJobId.value = job.id || '';
       managerSourceColumn.value = job.source_column || '';
+      managerCandidateModeInput.value = job.candidate_mode || job.candidateMode || 'default';
       managerScanDelayInput.value = job.scan_delay_ms ?? '';
       managerScreenshotDelayInput.value = job.screenshot_delay_ms ?? '';
       managerReplaceFile.value = '';
@@ -3024,6 +3038,9 @@
       if (managerSourceColumn.value.trim()) {
         formData.append('urlColumn', managerSourceColumn.value.trim());
       }
+      if (managerCandidateModeInput && managerCandidateModeInput.value.trim()) {
+        formData.append('candidateMode', managerCandidateModeInput.value.trim());
+      }
       if (managerScanDelayInput.value.trim()) {
         formData.append('scanDelayMs', managerScanDelayInput.value.trim());
       }
@@ -3099,6 +3116,9 @@
         if (urlColumnInput.value.trim()) {
           formData.append('urlColumn', urlColumnInput.value.trim());
         }
+        if (candidateModeInput && candidateModeInput.value.trim()) {
+          formData.append('candidateMode', candidateModeInput.value.trim());
+        }
         if (scanDelayInput && scanDelayInput.value.trim()) {
           formData.append('scanDelayMs', scanDelayInput.value.trim());
         }
@@ -3117,7 +3137,7 @@
         }
 
         setMessage(
-          `Job ${body.jobId} created. Scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
+          `Job ${body.jobId} created. Mode ${formatCandidateMode(body.candidateMode || candidateModeInput.value)}, scan delay ${body.scanDelayMs ?? ''} ms, screenshot delay ${body.screenshotDelayMs ?? ''} ms.`,
           false,
         );
         showToast(`Job ${body.jobId} created.`, { tone: 'success' });

@@ -112,6 +112,7 @@ async function main() {
         normalizedUrl,
         scanDelayMs,
         screenshotDelayMs,
+        candidateMode,
       } = job.data;
 
       try {
@@ -122,6 +123,7 @@ async function main() {
           timeoutMs: config.scanTimeoutMs,
           postLoadDelayMs: scanDelayMs ?? config.postLoadDelayMs,
           preScreenshotDelayMs: screenshotDelayMs ?? config.preScreenshotDelayMs,
+          candidateMode: candidateMode || 'default',
           navigationRetries: config.navigationRetries,
           loadSettlePasses: config.loadSettlePasses,
           negativeRetrySettlePasses: config.negativeRetrySettlePasses,

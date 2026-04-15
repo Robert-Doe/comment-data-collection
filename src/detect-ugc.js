@@ -19,6 +19,7 @@ function parseArgs(argv) {
     postLoadDelayMs: 3000,
     maxCandidates: 50,
     maxResults: 5,
+    candidateMode: 'default',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -32,6 +33,7 @@ function parseArgs(argv) {
     else if (arg === '--post-load-delay') options.postLoadDelayMs = Number(argv[++i]);
     else if (arg === '--max-candidates') options.maxCandidates = Number(argv[++i]);
     else if (arg === '--max-results') options.maxResults = Number(argv[++i]);
+    else if (arg === '--candidate-mode') options.candidateMode = argv[++i];
     else if (arg === '--help' || arg === '-h') options.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -51,6 +53,7 @@ function printUsage() {
     '  --post-load-delay <ms>',
     '  --max-candidates <n>',
     '  --max-results <n>',
+    '  --candidate-mode <default|repetition_first>',
   ].join('\n'));
 }
 
@@ -107,6 +110,7 @@ async function runBatch(records, options) {
       const scanResult = await scanUrl(record.__normalized_url, {
         timeoutMs: options.timeoutMs,
         postLoadDelayMs: options.postLoadDelayMs,
+        candidateMode: options.candidateMode,
         maxCandidates: options.maxCandidates,
         maxResults: options.maxResults,
         captureScreenshots: config.captureScreenshots,

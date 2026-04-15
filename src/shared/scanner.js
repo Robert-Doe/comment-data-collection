@@ -4,12 +4,25 @@ const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { chromium } = require('playwright');
+const { normalizeCandidateSelectionMode } = require('./jobSettings');
 
 let browserPromise;
 let browserInstance = null;
 
 function getFeaturePath() {
   return path.resolve(__dirname, '..', 'commentFeatures.js');
+}
+
+function resolveCandidateSelectionMode(options = {}) {
+  return normalizeCandidateSelectionMode(
+    options.candidateMode !== undefined
+      ? options.candidateMode
+      : (
+        options.candidateSelectionMode !== undefined
+          ? options.candidateSelectionMode
+          : options.selectionMode
+      ),
+  );
 }
 
 function isClosedBrowserError(error) {
@@ -776,17 +789,20 @@ async function detectPageAccess(page) {
 
 async function extractCandidatesFromFrame(frame, rawHtml, responseHeaders, options) {
   try {
+    const candidateMode = resolveCandidateSelectionMode(options);
     const candidates = await frame.evaluate(({ html, headers, detectionOptions }) => {
       if (typeof extractCandidateRegions !== 'function') {
         throw new Error('extractCandidateRegions is not available in the frame context');
       }
       return extractCandidateRegions(html || document.documentElement.outerHTML, headers || {}, detectionOptions);
-    }, {
+    },
+        {
       html: rawHtml,
       headers: responseHeaders,
       detectionOptions: {
         maxCandidates: options.maxCandidates || 50,
         maxResults: options.maxResults || 5,
+        candidateMode,
       },
     });
 
@@ -803,7 +819,19 @@ async function extractCandidatesFromFrame(frame, rawHtml, responseHeaders, optio
   }
 }
 
-function sortCandidates(candidates) {
+function sortCandidates(candidates, options = {}) {
+  const candidateMode = resolveCandidateSelectionMode(options);
+  if (candidateMode === 'repetition_first') {
+    return candidates.sort((left, right) => (
+      (Number(right.repeating_group_count || right.min_k_count || right.unit_count || 0) - Number(left.repeating_group_count || left.min_k_count || left.unit_count || 0))
+        || (Number(right.xpath_star_group_count || right.xpath_star_count || 0) - Number(left.xpath_star_group_count || left.xpath_star_count || 0))
+        || ((right.sibling_homogeneity_score || right.homogeneity || 0) - (left.sibling_homogeneity_score || left.homogeneity || 0))
+        || ((right.score || 0) - (left.score || 0))
+        || ((right.total_text_length || 0) - (left.total_text_length || 0))
+        || (Number(!!right.detected) - Number(!!left.detected))
+    ));
+  }
+
   return candidates.sort((left, right) => (
     Number(!!right.detected) - Number(!!left.detected)
       || (right.score || 0) - (left.score || 0)
@@ -872,11 +900,15 @@ function dedupeCandidates(candidates, maxResults) {
 
 async function collectCandidatesFromPage(page, rawHtml, responseHeaders, options = {}) {
   const maxResults = resolveCandidateLimit(options);
+  const candidateMode = resolveCandidateSelectionMode(options);
   const candidateBuckets = [];
   const frameLookup = new Map();
   frameLookup.set(buildFrameKey(page.mainFrame()), page.mainFrame());
 
-  candidateBuckets.push(...await extractCandidatesFromFrame(page.mainFrame(), rawHtml, responseHeaders, options));
+  candidateBuckets.push(...await extractCandidatesFromFrame(page.mainFrame(), rawHtml, responseHeaders, {
+    ...options,
+    candidateMode,
+  }));
 
   const childFrames = page.frames()
     .filter((frame) => frame !== page.mainFrame())
@@ -885,11 +917,14 @@ async function collectCandidatesFromPage(page, rawHtml, responseHeaders, options
   for (const frame of childFrames) {
     frameLookup.set(buildFrameKey(frame), frame);
     const frameHtml = await frame.content().catch(() => '');
-    const frameCandidates = await extractCandidatesFromFrame(frame, frameHtml, {}, options);
+    const frameCandidates = await extractCandidatesFromFrame(frame, frameHtml, {}, {
+      ...options,
+      candidateMode,
+    });
     candidateBuckets.push(...frameCandidates);
   }
 
-  const selected = dedupeCandidates(sortCandidates(candidateBuckets), maxResults);
+  const selected = dedupeCandidates(sortCandidates(candidateBuckets, { candidateMode }), maxResults);
   return enrichCandidatesWithArtifacts(page, selected, frameLookup, options);
 }
 
@@ -980,6 +1015,7 @@ async function scanUrl(normalizedUrl, options = {}) {
   const actionSettleMs = Math.max(0, Number(options.actionSettleMs ?? 1250));
   const candidateSelectionLimit = resolveCandidateLimit(options);
   const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
+  const candidateSelectionMode = resolveCandidateSelectionMode(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -1011,6 +1047,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     screenshot_delay_ms_applied: preScreenshotDelayMs,
     candidate_selection_limit: candidateSelectionLimit,
     candidate_review_artifact_limit: candidateReviewArtifactLimit,
+    candidate_selection_mode: candidateSelectionMode,
     candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
     heuristic_best_candidate_key: '',
     heuristic_best_candidate_label: '',
@@ -1038,9 +1075,12 @@ async function scanUrl(normalizedUrl, options = {}) {
     let currentHtml = await page.content().catch(() => '');
     let rawHtml = currentHtml || responseText;
     let access = await detectPageAccess(page);
-    let candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
+    let candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+      ...options,
+      candidateMode: candidateSelectionMode,
+    });
     let bestCandidate = candidates[0] || null;
-    let ugcDetected = !!(bestCandidate && bestCandidate.detected);
+    let ugcDetected = candidates.some((candidate) => !!candidate.detected);
 
     if (!access.blocked && !ugcDetected) {
       result.negative_retry_applied = true;
@@ -1054,9 +1094,12 @@ async function scanUrl(normalizedUrl, options = {}) {
       currentHtml = await page.content().catch(() => '');
       rawHtml = currentHtml || responseText;
       access = await detectPageAccess(page);
-      candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, options);
+      candidates = await collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+        ...options,
+        candidateMode: candidateSelectionMode,
+      });
       bestCandidate = candidates[0] || null;
-      ugcDetected = !!(bestCandidate && bestCandidate.detected);
+      ugcDetected = candidates.some((candidate) => !!candidate.detected);
     }
 
     await waitForDocumentComplete(page, 5000);
@@ -1137,6 +1180,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
   const maxResults = Math.max(1, Number(options.maxResults ?? 5));
   const maxCandidates = Math.max(maxResults, Number(options.maxCandidates ?? 50));
   const maxNodes = Math.max(200, Number(options.maxDotNodes ?? 1500));
+  const candidateMode = resolveCandidateSelectionMode(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -1519,6 +1563,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         ? extractCandidateRegions(rawHtml || document.documentElement.outerHTML, headers || {}, {
           maxResults: graphOptions.maxResults,
           maxCandidates: graphOptions.maxCandidates,
+          candidateMode: graphOptions.candidateMode,
         })
         : [];
 
@@ -1704,6 +1749,7 @@ async function buildHtmlSnapshotDot(snapshot, options = {}) {
         maxResults,
         maxCandidates,
         maxNodes,
+        candidateMode,
       },
     });
 
@@ -1738,6 +1784,7 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
   const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
   const candidateSelectionLimit = resolveCandidateLimit(options);
   const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
+  const candidateSelectionMode = resolveCandidateSelectionMode(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
 
@@ -1771,6 +1818,7 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     manual_capture_notes: snapshot.notes || '',
     candidate_selection_limit: candidateSelectionLimit,
     candidate_review_artifact_limit: candidateReviewArtifactLimit,
+    candidate_selection_mode: candidateSelectionMode,
     candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
     heuristic_best_candidate_key: '',
     heuristic_best_candidate_label: '',
@@ -1820,10 +1868,13 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
     result.frame_count = access.frameCount;
 
     const candidateSourceHtml = rawHtml.trim() || html || await page.content().catch(() => '');
-    const candidates = await collectCandidatesFromPage(page, candidateSourceHtml, snapshot.response_headers || {}, options);
+    const candidates = await collectCandidatesFromPage(page, candidateSourceHtml, snapshot.response_headers || {}, {
+      ...options,
+      candidateMode: candidateSelectionMode,
+    });
     result.candidates = candidates;
     result.best_candidate = candidates[0] || null;
-    result.ugc_detected = !!(result.best_candidate && result.best_candidate.detected);
+    result.ugc_detected = candidates.some((candidate) => !!candidate.detected);
     result.candidate_heuristic_summary = summarizeCandidateHeuristics(candidates);
     result.heuristic_best_candidate_key = result.best_candidate ? (result.best_candidate.candidate_key || '') : '';
     result.heuristic_best_candidate_label = result.best_candidate

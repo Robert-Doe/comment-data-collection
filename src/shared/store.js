@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const crypto = require('crypto');
 const { upsertCandidateReview: upsertCandidateReviewArray } = require('./candidateReviews');
 const { buildSearchClause } = require('./adminSearch');
+const { normalizeCandidateSelectionMode } = require('./jobSettings');
 
 let pool;
 
@@ -30,6 +31,7 @@ async function ensureSchema(databaseUrl) {
       source_column TEXT,
       scan_delay_ms INTEGER NOT NULL DEFAULT 6000,
       screenshot_delay_ms INTEGER NOT NULL DEFAULT 1500,
+      candidate_mode TEXT NOT NULL DEFAULT 'default',
       status TEXT NOT NULL DEFAULT 'queued',
       total_urls INTEGER NOT NULL DEFAULT 0,
       pending_count INTEGER NOT NULL DEFAULT 0,
@@ -129,6 +131,9 @@ async function ensureSchema(databaseUrl) {
     ALTER TABLE jobs
     ADD COLUMN IF NOT EXISTS screenshot_delay_ms INTEGER NOT NULL DEFAULT 1500;
 
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS candidate_mode TEXT NOT NULL DEFAULT 'default';
+
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS scan_result JSONB;
 
@@ -226,19 +231,21 @@ async function createJob({
   batchSize = 250,
   scanDelayMs = 6000,
   screenshotDelayMs = 1500,
+  candidateMode = 'default',
 }, databaseUrl) {
   const db = getPool(databaseUrl);
   const client = await db.connect();
   const jobId = crypto.randomUUID();
+  const normalizedCandidateMode = normalizeCandidateSelectionMode(candidateMode);
 
   try {
     await client.query('BEGIN');
 
     await client.query(
       `INSERT INTO jobs (
-        id, source_filename, source_column, scan_delay_ms, screenshot_delay_ms, status, total_urls, pending_count, queued_count
-      ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $6, 0)`,
-      [jobId, sourceFilename || '', sourceColumn || '', scanDelayMs, screenshotDelayMs, records.length],
+        id, source_filename, source_column, scan_delay_ms, screenshot_delay_ms, candidate_mode, status, total_urls, pending_count, queued_count
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $7, 0)`,
+      [jobId, sourceFilename || '', sourceColumn || '', scanDelayMs, screenshotDelayMs, normalizedCandidateMode, records.length],
     );
 
     for (let offset = 0; offset < records.length; offset += batchSize) {
@@ -258,6 +265,7 @@ async function createJob({
       totalUrls: records.length,
       scanDelayMs,
       screenshotDelayMs,
+      candidateMode: normalizedCandidateMode,
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -377,6 +385,9 @@ async function replaceJobRecords(jobId, options = {}, databaseUrl) {
     const nextScreenshotDelayMs = Number.isFinite(Number(options.screenshotDelayMs))
       ? Number(options.screenshotDelayMs)
       : Number(existingJob.screenshot_delay_ms || 1500);
+    const nextCandidateMode = options.candidateMode !== undefined
+      ? normalizeCandidateSelectionMode(options.candidateMode)
+      : normalizeCandidateSelectionMode(existingJob.candidate_mode || existingJob.candidateMode || 'default');
 
     await client.query(
       'DELETE FROM manual_review_targets WHERE job_id = $1',
@@ -408,9 +419,10 @@ async function replaceJobRecords(jobId, options = {}, databaseUrl) {
            source_column = $3,
            scan_delay_ms = $4,
            screenshot_delay_ms = $5,
+           candidate_mode = $6,
            status = 'pending',
-           total_urls = $6,
-           pending_count = $6,
+           total_urls = $7,
+           pending_count = $7,
            queued_count = 0,
            running_count = 0,
            completed_count = 0,
@@ -427,6 +439,7 @@ async function replaceJobRecords(jobId, options = {}, databaseUrl) {
         nextSourceColumn,
         nextScanDelayMs,
         nextScreenshotDelayMs,
+        nextCandidateMode,
         records.length,
       ],
     );
@@ -464,6 +477,7 @@ async function restartJob(jobId, options = {}, databaseUrl) {
     batchSize: options.batchSize,
     scanDelayMs: existingJob.scan_delay_ms,
     screenshotDelayMs: existingJob.screenshot_delay_ms,
+    candidateMode: existingJob.candidate_mode || existingJob.candidateMode || 'default',
   }, databaseUrl);
 }
 

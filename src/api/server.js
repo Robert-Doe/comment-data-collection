@@ -207,6 +207,9 @@ async function buildGraphForItem(item, config) {
     maxDotNodes: 1500,
     rowNumber: item.row_number,
     itemId: item.id,
+    candidateMode: item && item.scan_result
+      ? (item.scan_result.candidate_selection_mode || item.scan_result.candidateMode || 'default')
+      : 'default',
   });
 }
 
@@ -331,9 +334,11 @@ function createApp(config = getConfig()) {
       const jobSettings = normalizeJobScanSettings({
         scanDelayMs: req.body.scanDelayMs,
         screenshotDelayMs: req.body.screenshotDelayMs,
+        candidateMode: req.body.candidateMode,
       }, {
         scanDelayMs: config.postLoadDelayMs,
         screenshotDelayMs: config.preScreenshotDelayMs,
+        candidateMode: 'default',
       });
       progress && progress.update({
         stage: 'creating',
@@ -353,6 +358,7 @@ function createApp(config = getConfig()) {
         batchSize: config.ingestBatchSize,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
       }, config.databaseUrl);
 
       const queue = getSharedQueue(config.redisUrl);
@@ -385,6 +391,7 @@ function createApp(config = getConfig()) {
           source_column: parsed.urlColumn || '',
           scan_delay_ms: job.scanDelayMs,
           screenshot_delay_ms: job.screenshotDelayMs,
+          candidate_mode: job.candidateMode,
         },
       }, config.databaseUrl);
       if (createdEvent) {
@@ -393,6 +400,7 @@ function createApp(config = getConfig()) {
           total_urls: job.totalUrls,
           scan_delay_ms: job.scanDelayMs,
           screenshot_delay_ms: job.screenshotDelayMs,
+          candidate_mode: job.candidateMode,
           source_filename: sourceFilename || '',
           source_column: parsed.urlColumn || '',
         }, {
@@ -417,6 +425,7 @@ function createApp(config = getConfig()) {
         sourceColumn: parsed.urlColumn,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
       });
     } catch (error) {
       next(error);
@@ -537,6 +546,7 @@ function createApp(config = getConfig()) {
           total_urls: updatedJob ? updatedJob.total_urls : job.total_urls,
           scan_delay_ms: updatedJob ? updatedJob.scan_delay_ms : job.scan_delay_ms,
           screenshot_delay_ms: updatedJob ? updatedJob.screenshot_delay_ms : job.screenshot_delay_ms,
+          candidate_mode: updatedJob ? updatedJob.candidate_mode : job.candidate_mode,
         },
       }, config.databaseUrl).catch(() => {});
 
@@ -577,9 +587,11 @@ function createApp(config = getConfig()) {
       const jobSettings = normalizeJobScanSettings({
         scanDelayMs: req.body.scanDelayMs,
         screenshotDelayMs: req.body.screenshotDelayMs,
+        candidateMode: req.body.candidateMode,
       }, {
         scanDelayMs: job.scan_delay_ms,
         screenshotDelayMs: job.screenshot_delay_ms,
+        candidateMode: job.candidate_mode,
       });
 
       if (items.length) {
@@ -594,6 +606,7 @@ function createApp(config = getConfig()) {
         batchSize: config.ingestBatchSize,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
       }, config.databaseUrl);
 
       const queue = getSharedQueue(config.redisUrl);
@@ -616,6 +629,7 @@ function createApp(config = getConfig()) {
           source_column: parsed.urlColumn || '',
           scan_delay_ms: jobSettings.scanDelayMs,
           screenshot_delay_ms: jobSettings.screenshotDelayMs,
+          candidate_mode: jobSettings.candidateMode,
         },
       }, config.databaseUrl).catch(() => {});
 
@@ -626,6 +640,7 @@ function createApp(config = getConfig()) {
         sourceColumn: parsed.urlColumn,
         scanDelayMs: jobSettings.scanDelayMs,
         screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
       });
     } catch (error) {
       next(error);
@@ -869,6 +884,7 @@ function createApp(config = getConfig()) {
           artifactRoot: config.artifactRoot,
           artifactUrlBasePath: config.artifactUrlBasePath,
           publicBaseUrl: config.publicBaseUrl,
+          candidateMode: job.candidate_mode || job.candidateMode || 'default',
         });
 
         if (scanResult.error) {
@@ -1042,6 +1058,7 @@ function createApp(config = getConfig()) {
           captureScreenshots: false,
           maxCandidates: Math.max(config.maxCandidates, 50),
           maxResults: Math.max(config.maxResults, 50),
+          candidateMode: job.candidate_mode || job.candidateMode || 'default',
         });
         const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
         const matched = fallbackCandidates.find((entry) => (

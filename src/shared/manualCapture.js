@@ -136,6 +136,7 @@ async function analyzeManualCapture(capture, options = {}) {
     jobId: capture.jobId,
     itemId: capture.itemId,
     rowNumber: capture.rowNumber,
+    candidateMode: capture.candidateMode || options.candidateMode || 'default',
     artifactVersion: artifacts.artifact_version,
   });
 

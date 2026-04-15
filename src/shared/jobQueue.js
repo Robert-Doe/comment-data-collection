@@ -20,6 +20,7 @@ async function fillQueueForJob(jobId, count, databaseUrl, queue) {
   const jobSettings = extractJobScanSettings(job, {
     scanDelayMs: 6000,
     screenshotDelayMs: 1500,
+    candidateMode: 'default',
   });
   const claimedItems = await claimPendingItems(jobId, limit, databaseUrl);
   if (!claimedItems.length) {
@@ -35,6 +36,7 @@ async function fillQueueForJob(jobId, count, databaseUrl, queue) {
       normalizedUrl: item.normalized_url,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+      candidateMode: jobSettings.candidateMode,
     })));
     await recomputeJob(jobId, databaseUrl);
     return claimedItems;

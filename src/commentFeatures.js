@@ -531,6 +531,25 @@ function ratio(numerator, denominator) {
   return Math.round((numerator / denominator) * 1000) / 1000;
 }
 
+function normalizeCandidateSelectionMode(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'default' || normalized === 'baseline' || normalized === 'current') {
+    return 'default';
+  }
+  if (
+    normalized === 'research'
+    || normalized === 'repetition_first'
+    || normalized === 'repetition-first'
+    || normalized === 'repetition_only'
+    || normalized === 'repetition-only'
+    || normalized === 'structure_first'
+    || normalized === 'structure-first'
+  ) {
+    return 'repetition_first';
+  }
+  return 'default';
+}
+
 function feat_tag_name(root) {
   return { tag_name: root.tagName ? root.tagName.toLowerCase() : '' };
 }
@@ -1958,31 +1977,48 @@ function scoreFeatures(features) {
   };
 }
 
-function looksLikeContainer(el) {
+function looksLikeContainer(el, options = {}) {
   if (!el || el.nodeType !== 1) return false;
   const tag = el.tagName ? el.tagName.toLowerCase() : '';
   const attrSummary = fullAttrText(el);
+  const candidateMode = normalizeCandidateSelectionMode(options.candidateMode || options.candidateSelectionMode || options.selectionMode);
+  const researchMode = candidateMode === 'repetition_first';
+  const allowedTags = researchMode
+    ? ['section', 'article', 'div', 'ul', 'ol', 'main', 'aside', 'table', 'tbody', 'tr', 'li']
+    : ['section', 'article', 'div', 'ul', 'ol', 'main', 'aside'];
   const semantic = hasHighConfidenceUgcKeyword(attrSummary)
     || hasMediumConfidenceUgcKeyword(attrSummary)
     || /\bfeed\b/i.test(attrSummary);
-  if (!semantic && !['section', 'article', 'div', 'ul', 'ol', 'main', 'aside'].includes(tag)) {
+  const stats = getCandidateStructureStats(el);
+  const hasRoleOrMicrodata = el.matches('[role="feed"], [role="comment"], [itemtype*="Comment"], [itemtype*="Review"]');
+  const strongRepeatedStructure = stats.repeated >= 4 && stats.homogeneity >= 0.75;
+  const structuralOverride = researchMode
+    && ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= 0.5 && stats.textLength >= 1);
+
+  if (researchMode && (structuralOverride || hasRoleOrMicrodata)) {
+    return true;
+  }
+
+  if (!semantic && !allowedTags.includes(tag)) {
     return false;
   }
 
-  const childCount = directChildren(el).length;
-  const textLength = textOf(el).length;
-  const repeated = dominantUnitGroup(el)?.elements.length || 0;
-  const homogeneity = childCount > 1 ? ratio(repeated, childCount) : 0;
-  const hasRoleOrMicrodata = el.matches('[role="feed"], [role="comment"], [itemtype*="Comment"], [itemtype*="Review"]');
-  const strongRepeatedStructure = repeated >= 4 && homogeneity >= 0.75;
-
   if (hasRoleOrMicrodata) return true;
-  if (semantic && textLength >= 40) return true;
+  if (semantic && stats.textLength >= (researchMode ? 20 : 40)) return true;
+
+  if (researchMode) {
+    if ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= 0.5 && stats.textLength >= 1) return true;
+    if (stats.xpathRepeated >= 3 && stats.xpathHomogeneity >= 0.45 && stats.textLength >= 1) return true;
+    if (stats.repeated >= 3 && stats.homogeneity >= 0.45 && stats.textLength >= 1) return true;
+    if (stats.childCount >= 4 && stats.homogeneity >= 0.6 && stats.textLength >= 1) return true;
+    return false;
+  }
+
   // Low-text collections such as playlist grids often look like repeated cards rather than long prose.
   // Allow strong repetition to qualify even when there are no comment/review keywords on the container.
-  if (strongRepeatedStructure && textLength >= 20) return true;
-  if (repeated >= 3 && homogeneity >= 0.5 && textLength >= 80) return true;
-  if (childCount >= 4 && homogeneity >= 0.75 && textLength >= 160) return true;
+  if (strongRepeatedStructure && stats.textLength >= 20) return true;
+  if (stats.repeated >= 3 && stats.homogeneity >= 0.5 && stats.textLength >= 80) return true;
+  if (stats.childCount >= 4 && stats.homogeneity >= 0.75 && stats.textLength >= 160) return true;
   return false;
 }
 
@@ -2014,34 +2050,83 @@ function pathIsAncestor(ancestorPath, descendantPath) {
   return descendantPath.startsWith(`${ancestorPath}/`);
 }
 
+function getCandidateStructureStats(el) {
+  const childCount = directChildren(el).length;
+  const unitGroup = dominantUnitGroup(el);
+  const xpathGroup = dominantXPathChildGroup(el);
+  const repeated = unitGroup?.elements.length || 0;
+  const xpathRepeated = xpathGroup?.elements.length || 0;
+  const homogeneity = childCount > 1 ? ratio(Math.max(repeated, xpathRepeated), childCount) : 0;
+  const xpathHomogeneity = childCount > 1 ? ratio(xpathRepeated, childCount) : 0;
+  return {
+    childCount,
+    repeated,
+    xpathRepeated,
+    homogeneity,
+    xpathHomogeneity,
+    textLength: textOf(el).length,
+    unitGroup,
+    xpathGroup,
+  };
+}
+
+function getCandidateScopeSelector(mode) {
+  if (mode === 'repetition_first') {
+    return 'main, section, article, div, ul, ol, aside, table, tbody, tr, li, [role], [itemtype]';
+  }
+  return 'main, section, article, div, ul, ol, aside, [role], [itemtype]';
+}
+
 function discoverCandidateRoots(options = {}) {
   const maxCandidates = Math.max(1, options.maxCandidates || 25);
+  const candidateMode = normalizeCandidateSelectionMode(options.candidateMode || options.candidateSelectionMode || options.selectionMode);
   const scope = document.body || document.documentElement;
-  const nodes = deepQuerySelectorAll(scope, 'main, section, article, div, ul, ol, aside, [role], [itemtype]', true);
+  const nodes = deepQuerySelectorAll(scope, getCandidateScopeSelector(candidateMode), true);
   const candidates = [];
 
   nodes.forEach((node) => {
-    if (!looksLikeContainer(node)) return;
+    if (!looksLikeContainer(node, { ...options, candidateMode })) return;
+    const stats = getCandidateStructureStats(node);
     const score = quickCandidateScore(node);
-    if (score < 3) return;
+    if (candidateMode !== 'repetition_first' && score < 3) return;
     candidates.push({
       element: node,
       score,
-      repeated: dominantChildGroup(node)?.elements.length || 0,
-      textLength: textOf(node).length,
+      repeated: stats.repeated,
+      xpathRepeated: stats.xpathRepeated,
+      homogeneity: stats.homogeneity,
+      xpathHomogeneity: stats.xpathHomogeneity,
+      textLength: stats.textLength,
       xpath: getXPath(node),
     });
   });
 
-  candidates.sort((left, right) => (
-    right.score - left.score
-      || right.repeated - left.repeated
-      || right.textLength - left.textLength
-  ));
+  candidates.sort((left, right) => {
+    if (candidateMode === 'repetition_first') {
+      return (
+        (right.xpathRepeated || 0) - (left.xpathRepeated || 0)
+          || (right.repeated || 0) - (left.repeated || 0)
+          || (right.homogeneity || 0) - (left.homogeneity || 0)
+          || (right.xpathHomogeneity || 0) - (left.xpathHomogeneity || 0)
+          || (right.score || 0) - (left.score || 0)
+          || (right.textLength || 0) - (left.textLength || 0)
+      );
+    }
+
+    return (
+      (right.score || 0) - (left.score || 0)
+        || (right.repeated || 0) - (left.repeated || 0)
+        || (right.textLength || 0) - (left.textLength || 0)
+    );
+  });
 
   const selected = [];
   candidates.forEach((candidate) => {
     if (selected.length >= maxCandidates) return;
+    if (candidateMode === 'repetition_first') {
+      selected.push(candidate);
+      return;
+    }
     const overlaps = selected.some((existing) => pathIsAncestor(existing.xpath, candidate.xpath) || pathIsAncestor(candidate.xpath, existing.xpath));
     if (!overlaps) selected.push(candidate);
   });
@@ -2050,12 +2135,13 @@ function discoverCandidateRoots(options = {}) {
 }
 
 function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {}) {
+  const candidateMode = normalizeCandidateSelectionMode(options.candidateMode || options.candidateSelectionMode || options.selectionMode);
   const maxResults = Math.max(
     1,
     Number.isFinite(Number(options.maxResults)) && Number(options.maxResults) > 0 ? Number(options.maxResults) : 5,
     Number.isFinite(Number(options.maxCandidates)) && Number(options.maxCandidates) > 0 ? Number(options.maxCandidates) : 50,
   );
-  const roots = discoverCandidateRoots(options);
+  const roots = discoverCandidateRoots({ ...options, candidateMode });
   const results = roots.map((root) => {
     const features = extractAllFeatures(root, rawHTML, responseHeaders);
     const summary = collectSampleText(root);
@@ -2064,11 +2150,28 @@ function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {
     return Object.assign({}, features, summary, markup, scoring);
   });
 
-  results.sort((left, right) => (
-    right.score - left.score
-      || right.unit_count - left.unit_count
-      || right.total_text_length - left.total_text_length
-  ));
+  results.sort((left, right) => {
+    if (candidateMode === 'repetition_first') {
+      return (
+        (right.repeating_group_count || right.min_k_count || right.unit_count || 0) - (left.repeating_group_count || left.min_k_count || left.unit_count || 0)
+          || (right.xpath_star_group_count || 0) - (left.xpath_star_group_count || 0)
+          || (right.sibling_homogeneity_score || 0) - (left.sibling_homogeneity_score || 0)
+          || (right.score || 0) - (left.score || 0)
+          || (right.total_text_length || 0) - (left.total_text_length || 0)
+          || Number(!!right.detected) - Number(!!left.detected)
+      );
+    }
+
+    return (
+      right.score - left.score
+        || right.unit_count - left.unit_count
+        || right.total_text_length - left.total_text_length
+    );
+  });
+
+  if (candidateMode === 'repetition_first') {
+    return results.slice(0, maxResults);
+  }
 
   const deduped = [];
   results.forEach((candidate) => {

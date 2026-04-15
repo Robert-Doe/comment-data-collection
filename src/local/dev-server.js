@@ -149,6 +149,9 @@ async function buildGraphForItem(item, config) {
     maxDotNodes: 1500,
     rowNumber: item.row_number,
     itemId: item.id,
+    candidateMode: item && item.scan_result
+      ? (item.scan_result.candidate_selection_mode || item.scan_result.candidateMode || 'default')
+      : 'default',
   });
 }
 
@@ -439,7 +442,7 @@ function createLocalRuntime(options = {}) {
     }
   }
 
-  function createJobFromRecords({ sourceFilename, sourceColumn, records, scanDelayMs, screenshotDelayMs }) {
+  function createJobFromRecords({ sourceFilename, sourceColumn, records, scanDelayMs, screenshotDelayMs, candidateMode }) {
     const jobId = crypto.randomUUID();
     const now = new Date().toISOString();
     const job = {
@@ -448,6 +451,7 @@ function createLocalRuntime(options = {}) {
       source_column: sourceColumn || '',
       scan_delay_ms: scanDelayMs,
       screenshot_delay_ms: screenshotDelayMs,
+      candidate_mode: candidateMode || 'default',
       status: 'pending',
       total_urls: records.length,
       pending_count: records.length,
@@ -497,6 +501,7 @@ function createLocalRuntime(options = {}) {
     job.source_column = options.sourceColumn !== undefined ? String(options.sourceColumn || '') : String(job.source_column || '');
     job.scan_delay_ms = Number.isFinite(Number(options.scanDelayMs)) ? Number(options.scanDelayMs) : job.scan_delay_ms;
     job.screenshot_delay_ms = Number.isFinite(Number(options.screenshotDelayMs)) ? Number(options.screenshotDelayMs) : job.screenshot_delay_ms;
+    job.candidate_mode = options.candidateMode !== undefined ? String(options.candidateMode || 'default') : String(job.candidate_mode || 'default');
     job.status = 'pending';
     job.total_urls = records.length;
     job.pending_count = records.length;
@@ -533,6 +538,7 @@ function createLocalRuntime(options = {}) {
       records,
       scanDelayMs: job.scan_delay_ms,
       screenshotDelayMs: job.screenshot_delay_ms,
+      candidateMode: job.candidate_mode || 'default',
     });
   }
 
@@ -717,6 +723,7 @@ function createLocalRuntime(options = {}) {
         artifactRoot: config.artifactRoot,
         artifactUrlBasePath: config.artifactUrlBasePath,
         publicBaseUrl: config.publicBaseUrl,
+        candidateMode: job.candidate_mode || 'default',
       });
 
       const best = scanResult.best_candidate || {};
@@ -1024,9 +1031,11 @@ function createLocalApp(options = {}) {
     const jobSettings = normalizeJobScanSettings({
       scanDelayMs: req.body.scanDelayMs,
       screenshotDelayMs: req.body.screenshotDelayMs,
+      candidateMode: req.body.candidateMode,
     }, {
       scanDelayMs: runtime.config.postLoadDelayMs,
       screenshotDelayMs: runtime.config.preScreenshotDelayMs,
+      candidateMode: 'default',
     });
     progress && progress.update({
       stage: 'creating',
@@ -1045,6 +1054,7 @@ function createLocalApp(options = {}) {
       records,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+      candidateMode: jobSettings.candidateMode,
     });
 
     res.status(202).json({
@@ -1053,6 +1063,7 @@ function createLocalApp(options = {}) {
       sourceColumn: parsed.urlColumn,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+      candidateMode: jobSettings.candidateMode,
     });
   });
 
@@ -1119,9 +1130,11 @@ function createLocalApp(options = {}) {
     const jobSettings = normalizeJobScanSettings({
       scanDelayMs: req.body.scanDelayMs,
       screenshotDelayMs: req.body.screenshotDelayMs,
+      candidateMode: req.body.candidateMode,
     }, {
       scanDelayMs: job.scan_delay_ms,
       screenshotDelayMs: job.screenshot_delay_ms,
+      candidateMode: job.candidate_mode,
     });
 
     const updated = runtime.replaceJobRecords(req.params.jobId, {
@@ -1130,6 +1143,7 @@ function createLocalApp(options = {}) {
       records,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+      candidateMode: jobSettings.candidateMode,
     });
 
     progress && progress.update({
@@ -1150,6 +1164,7 @@ function createLocalApp(options = {}) {
       sourceColumn: parsed.urlColumn,
       scanDelayMs: jobSettings.scanDelayMs,
       screenshotDelayMs: jobSettings.screenshotDelayMs,
+      candidateMode: jobSettings.candidateMode,
     });
   });
 
@@ -1461,6 +1476,7 @@ function createLocalApp(options = {}) {
           captureScreenshots: false,
           maxCandidates: Math.max(runtime.config.maxCandidates, 50),
           maxResults: Math.max(runtime.config.maxResults, 50),
+          candidateMode: job.candidate_mode || 'default',
         });
         const fallbackCandidates = Array.isArray(fallbackResult.candidates) ? fallbackResult.candidates : [];
         const matched = fallbackCandidates.find((entry) => (
