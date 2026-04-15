@@ -272,6 +272,7 @@ function createModelingRouter(dependencies) {
       const liveJobId = `live-url-probe-${crypto.randomUUID()}`;
       const liveItemId = req.body && req.body.itemId ? String(req.body.itemId) : crypto.randomUUID();
       const body = req.body || {};
+      const priorityProbe = body.priorityProbe !== undefined ? !!body.priorityProbe : false;
       const liveProbeTimeoutMs = body.timeoutMs !== undefined && body.timeoutMs !== ''
         ? body.timeoutMs
         : 300000;
@@ -281,12 +282,13 @@ function createModelingRouter(dependencies) {
       const liveProbePreScreenshotDelayMs = body.preScreenshotDelayMs !== undefined && body.preScreenshotDelayMs !== ''
         ? body.preScreenshotDelayMs
         : 1500;
-      progress && progress({ stage: 'scanning', message: 'Scanning live URL' });
+      progress && progress({ stage: 'scanning', message: priorityProbe ? 'Scanning live URL at priority' : 'Scanning live URL' });
       const scanResult = await dependencies.scanUrl(normalizedUrl, {
-        timeoutMs: liveProbeTimeoutMs,
+        timeoutMs: priorityProbe ? 0 : liveProbeTimeoutMs,
         postLoadDelayMs: liveProbePostLoadDelayMs,
         preScreenshotDelayMs: liveProbePreScreenshotDelayMs,
         candidateMode,
+        priorityProbe,
         captureScreenshots: req.body && req.body.captureScreenshots !== undefined ? !!req.body.captureScreenshots : true,
         captureHtmlSnapshots: req.body && req.body.captureHtmlSnapshots !== undefined ? !!req.body.captureHtmlSnapshots : true,
         artifactRoot: dependencies.artifactRoot,
@@ -313,6 +315,7 @@ function createModelingRouter(dependencies) {
         ok: true,
         url: normalizedUrl,
         candidate_mode: candidateMode || 'default',
+        priority_probe: priorityProbe,
         ...result,
       });
     } catch (error) {

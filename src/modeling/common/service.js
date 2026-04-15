@@ -943,6 +943,7 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
   summary.page_input_url = scanResult && scanResult.input_url ? scanResult.input_url : normalizedUrl;
   summary.page_final_url = finalUrl;
   summary.page_title = scanResult && scanResult.title ? scanResult.title : '';
+  summary.page_priority_probe = !!(scanResult && scanResult.priority_probe);
   summary.page_predicted_positive = !!(topCandidate && topCandidate.probability >= 0.5);
   summary.page_top_probability = topCandidate ? roundNumber(topCandidate.probability) : 0;
   summary.page_verdict = scanTimedOut

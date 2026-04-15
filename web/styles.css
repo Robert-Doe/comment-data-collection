@@ -192,6 +192,21 @@ h1 {
   font-weight: 600;
 }
 
+.checkbox-field {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.checkbox-field input {
+  width: auto;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
 input {
   width: 100%;
   border: 1px solid var(--line);

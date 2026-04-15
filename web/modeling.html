@@ -122,7 +122,7 @@
 
         <section class="panel">
           <div class="panel-header"><h2>Live URL Probe</h2></div>
-          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. The timeout starts at five minutes, and a loading panel stays visible while the browser is still scanning.</p>
+          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. Enable priority scan to remove the hard deadline while the browser keeps collecting candidate features and rendered HTML.</p>
           <form id="live-probe-form" class="model-form live-probe-form">
             <label class="field">
               <span>Model</span>
@@ -139,6 +139,13 @@
               <span>Scan Timeout (ms)</span>
               <input id="live-probe-timeout-ms" type="number" min="1000" step="1000" value="300000">
             </label>
+            <div class="field">
+              <span>Priority Scan</span>
+              <label class="checkbox-field">
+                <input id="live-probe-priority" type="checkbox" checked>
+                <span>Run without a hard timeout and keep the browser tab focused on this probe.</span>
+              </label>
+            </div>
             <label class="field site-group-wide">
               <span>Page URL</span>
               <input id="live-probe-url" type="text" placeholder="https://example.com/post" required>

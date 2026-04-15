@@ -30,6 +30,7 @@
   const liveProbeModelId = document.getElementById('live-probe-model-id');
   const liveProbeCandidateMode = document.getElementById('live-probe-candidate-mode');
   const liveProbeTimeoutMs = document.getElementById('live-probe-timeout-ms');
+  const liveProbePriority = document.getElementById('live-probe-priority');
   const liveProbeUrl = document.getElementById('live-probe-url');
   const liveProbeMessage = document.getElementById('live-probe-message');
   const liveProbeProgress = document.getElementById('live-probe-progress');
@@ -59,6 +60,12 @@
 
   function runtimeModelUrl(modelId) {
     return apiUrl(`/api/modeling/models/${encodeURIComponent(String(modelId || ''))}/runtime.json`);
+  }
+
+  function resolveAssetUrl(url) {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return apiUrl(url);
   }
 
   function escapeHtml(value) {
@@ -147,6 +154,113 @@
     return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
   }
 
+  function buildMarkupPreviewDocument(value) {
+    const content = value
+      ? value
+      : '<div></div>';
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; media-src data: https: http:; style-src 'unsafe-inline'; font-src data: https: http:; connect-src 'none'; frame-src 'none';">
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #111827;
+        font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+      }
+      body {
+        padding: 12px;
+      }
+      .preview-shell {
+        min-height: 100%;
+      }
+      img, video, canvas, svg, iframe {
+        max-width: 100%;
+      }
+      a, button, input, select, textarea, summary, details {
+        pointer-events: none !important;
+      }
+    </style>
+  </head>
+  <body>${content}</body>
+</html>`;
+  }
+
+  function renderCandidateMarkupSection(label, value, meta) {
+    if (!value) return '';
+    const previewDocument = buildMarkupPreviewDocument(value);
+    return `
+      <details class="score-details candidate-markup-details" open>
+        <summary>
+          <span>${escapeHtml(label)}</span>
+          ${meta ? `<span class="candidate-markup-meta">${escapeHtml(meta)}</span>` : ''}
+        </summary>
+        <div class="score-details-body candidate-markup-body">
+          <div class="candidate-markup-preview-shell">
+            <iframe
+              class="candidate-markup-preview"
+              loading="lazy"
+              sandbox="allow-same-origin"
+              referrerpolicy="no-referrer"
+              srcdoc="${escapeHtml(previewDocument)}"
+              title="${escapeHtml(label)} preview"></iframe>
+          </div>
+          <details class="candidate-markup-source-toggle">
+            <summary>HTML Source</summary>
+            <div class="score-details-body">
+              <pre class="candidate-markup mono">${escapeHtml(value)}</pre>
+            </div>
+          </details>
+        </div>
+      </details>
+    `;
+  }
+
+  function renderCandidateMarkupDetails(candidate) {
+    if (!candidate) return '';
+    const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
+    const outerMeta = candidate.candidate_outer_html_length
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
+      : '';
+    const markupSections = [];
+    if (candidate.candidate_outer_html_excerpt) {
+      markupSections.push(renderCandidateMarkupSection('Rendered HTML', candidate.candidate_outer_html_excerpt, outerMeta));
+    }
+
+    const screenshotUrl = resolveAssetUrl(candidate.candidate_screenshot_url || '');
+    const screenshotLink = screenshotUrl
+      ? `<p class="candidate-copy"><strong>Screenshot:</strong> <a href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noreferrer">Open screenshot</a></p>`
+      : '';
+    const content = markupSections.filter(Boolean).join('');
+    const loadingCopy = candidate.candidate_markup_loading
+      ? '<p class="candidate-copy"><strong>Markup:</strong> loading candidate HTML...</p>'
+      : '';
+
+    if (!content && !screenshotLink && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
+      return '';
+    }
+
+    return `
+      <div class="candidate-markup-stack">
+        ${loadingCopy}
+        ${screenshotLink}
+        ${content}
+        ${candidate.candidate_markup_error
+          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+          : ''}
+      </div>
+    `;
+  }
+
   function setProbeProgress(node, title, detail) {
     if (!node) return;
     node.hidden = false;
@@ -157,6 +271,11 @@
         ${detail ? `<p class="probe-progress-copy">${escapeHtml(detail)}</p>` : ''}
       </div>
     `;
+  }
+
+  function syncLiveProbePriorityState() {
+    if (!liveProbeTimeoutMs || !liveProbePriority) return;
+    liveProbeTimeoutMs.disabled = !!liveProbePriority.checked;
   }
 
   function formatMetric(value, decimals = 3) {
@@ -594,6 +713,7 @@
       `<div><strong>Final URL:</strong> ${escapeHtml(summary.page_final_url || (scan && scan.final_url) || '')}</div>`,
       `<div><strong>Title:</strong> ${escapeHtml(summary.page_title || (scan && scan.title) || '')}</div>`,
       `<div><strong>Mode:</strong> ${escapeHtml(summary.page_candidate_mode || result.candidate_mode || '')}</div>`,
+      `<div><strong>Priority:</strong> ${summary.page_priority_probe || (scan && scan.priority_probe) ? 'yes' : 'no'}</div>`,
       `<div><strong>Model:</strong> ${escapeHtml(artifact ? `${artifact.variant_title || artifact.variant_id || ''} - ${artifact.id || ''}` : '')}</div>`,
       `<div><strong>Page Verdict:</strong> ${escapeHtml(summary.page_verdict || '')}</div>`,
       `<div><strong>Top Probability:</strong> ${escapeHtml(formatMetric(summary.page_top_probability))}</div>`,
@@ -621,7 +741,7 @@
           <tr>
             <th>Rank</th>
             <th>Probability</th>
-            <th>Label</th>
+            <th>Prediction</th>
             <th>Repeat</th>
             <th>Homogeneity</th>
             <th>Tag</th>
@@ -631,6 +751,9 @@
         </thead>
         <tbody>
           ${candidates.map((candidate, index) => {
+            const predictedLabel = candidate.predicted_label === 1
+              ? 'positive'
+              : (candidate.predicted_label === 0 ? 'negative' : 'uncertain');
             const topPos = candidate.explanation && Array.isArray(candidate.explanation.top_positive_contributors)
               ? candidate.explanation.top_positive_contributors.slice(0, 3)
               : [];
@@ -647,7 +770,7 @@
               <tr>
                 <td>${escapeHtml(index + 1)}</td>
                 <td>${escapeHtml(formatMetric(candidate.probability))}</td>
-                <td>${escapeHtml(candidate.human_label || (candidate.predicted_label === 1 ? 'positive' : candidate.predicted_label === 0 ? 'negative' : ''))}</td>
+                <td><span class="${candidate.predicted_label === 1 ? 'review-chip' : 'review-chip warn'}">${escapeHtml(candidate.human_label || predictedLabel)}</span></td>
                 <td>${escapeHtml(candidate.repeating_group_count || candidate.min_k_count || candidate.unit_count || 0)}</td>
                 <td>${escapeHtml(formatMetric(candidate.sibling_homogeneity_score || candidate.homogeneity || 0))}</td>
                 <td class="mono">${escapeHtml(candidate.tag_name || candidate._root_tag || candidate.tag || '')}</td>
@@ -657,6 +780,7 @@
                     <summary>Inspect</summary>
                     <div class="score-details-body">
                       <div class="feature-chip-list">${signalBits || '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}</div>
+                      ${renderCandidateMarkupDetails(candidate)}
                     </div>
                   </details>
                 </td>
@@ -774,6 +898,11 @@
       });
   });
 
+  syncLiveProbePriorityState();
+  if (liveProbePriority) {
+    liveProbePriority.addEventListener('change', syncLiveProbePriorityState);
+  }
+
   siteGroupForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const submitButton = siteGroupForm.querySelector('button[type="submit"]');
@@ -809,15 +938,18 @@
     event.preventDefault();
     const submitButton = liveProbeForm.querySelector('button[type="submit"]');
     const timeoutValue = liveProbeTimeoutMs ? Number(liveProbeTimeoutMs.value) : NaN;
-    const timeoutMs = Number.isFinite(timeoutValue) && timeoutValue >= 1000
-      ? timeoutValue
-      : 300000;
+    const priorityProbe = !liveProbePriority || liveProbePriority.checked;
+    const timeoutMs = priorityProbe
+      ? 0
+      : (Number.isFinite(timeoutValue) && timeoutValue >= 1000 ? timeoutValue : 300000);
     runElementAction(submitButton, async () => {
-      setMessage(liveProbeMessage, 'Probing live URL...', false);
+      setMessage(liveProbeMessage, priorityProbe ? 'Probing live URL at priority...' : 'Probing live URL...', false);
       setProbeProgress(
         liveProbeProgress,
-        'Scanning live URL',
-        `This can take up to ${formatDurationLabel(timeoutMs)} on heavy pages. Keep this tab open while the browser collects and scores candidates. Previous results stay visible until the new scan completes.`,
+        priorityProbe ? 'Priority live URL scan' : 'Scanning live URL',
+        priorityProbe
+          ? 'The browser tab stays open until the scan finishes. Candidate features, rendered HTML, and model scoring are collected without a hard timeout.'
+          : `This can take up to ${formatDurationLabel(timeoutMs)} on heavy pages. Keep this tab open while the browser collects and scores candidates. Previous results stay visible until the new scan completes.`,
       );
       const result = await fetchJson('/api/modeling/probe-url', {
         method: 'POST',
@@ -829,6 +961,7 @@
           url: liveProbeUrl.value.trim(),
           candidateMode: liveProbeCandidateMode.value,
           timeoutMs,
+          priorityProbe,
         }),
       });
       const summary = result && result.summary ? result.summary : null;

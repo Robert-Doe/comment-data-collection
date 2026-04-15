@@ -89,7 +89,19 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
 }
 
 function createScanDeadline(page, context, timeoutMs, label = 'scan') {
-  const maxMs = Math.max(1000, Number(timeoutMs || 0));
+  const numericTimeout = Number(timeoutMs || 0);
+  if (!Number.isFinite(numericTimeout) || numericTimeout <= 0) {
+    return {
+      timedOut: () => false,
+      error: null,
+      wrap(promise) {
+        return promise;
+      },
+      clear() {},
+    };
+  }
+
+  const maxMs = Math.max(1000, numericTimeout);
   let timedOut = false;
   let rejectDeadline = null;
   const deadlineError = new Error(`${label} timed out after ${maxMs}ms`);
@@ -315,8 +327,9 @@ async function waitForDocumentComplete(page, timeoutMs) {
 }
 
 async function settlePageForDetection(page, options = {}) {
-  const loadWaitMs = Math.max(1000, Number(options.loadWaitMs || 15000));
-  const networkIdleWaitMs = Math.max(1000, Number(options.networkIdleWaitMs || 8000));
+  const priorityProbe = options.priorityProbe === true;
+  const loadWaitMs = priorityProbe ? 0 : Math.max(1000, Number(options.loadWaitMs || 15000));
+  const networkIdleWaitMs = priorityProbe ? 0 : Math.max(1000, Number(options.networkIdleWaitMs || 8000));
   const actionSettleMs = Math.max(0, Number(options.actionSettleMs || 350));
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs || 0));
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses || 2));
@@ -374,7 +387,8 @@ async function settlePageForDetection(page, options = {}) {
 }
 
 async function loadPageWithRetries(page, normalizedUrl, options = {}) {
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? 45000));
+  const priorityProbe = options.priorityProbe === true;
+  const timeoutMs = priorityProbe ? 0 : Math.max(1000, Number(options.timeoutMs ?? 45000));
   const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
   const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
   const deadline = options.deadline || null;
@@ -1062,7 +1076,8 @@ async function createContext() {
 async function scanUrl(normalizedUrl, options = {}) {
   const context = await createContext();
   const page = await context.newPage();
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? 90000));
+  const priorityProbe = options.priorityProbe === true || Number(options.timeoutMs) <= 0;
+  const timeoutMs = priorityProbe ? 0 : Math.max(1000, Number(options.timeoutMs ?? 90000));
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs ?? 6000));
   const preScreenshotDelayMs = Math.max(0, Number(options.preScreenshotDelayMs ?? 1500));
   const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
@@ -1105,6 +1120,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     candidate_selection_limit: candidateSelectionLimit,
     candidate_review_artifact_limit: candidateReviewArtifactLimit,
     candidate_selection_mode: candidateSelectionMode,
+    priority_probe: priorityProbe,
     timed_out: false,
     candidate_heuristic_summary: createEmptyCandidateHeuristicSummary(),
     heuristic_best_candidate_key: '',
@@ -1117,6 +1133,7 @@ async function scanUrl(normalizedUrl, options = {}) {
       timeoutMs,
       navigationRetries,
       deadline,
+      priorityProbe,
     }));
     const response = navigation.response;
     result.navigation_attempts = navigation.attemptCount;
@@ -1127,6 +1144,7 @@ async function scanUrl(normalizedUrl, options = {}) {
       loadSettlePasses,
       actionSettleMs,
       deadline,
+      priorityProbe,
     }));
     result.settle_passes_applied = loadSettlePasses;
 
@@ -1150,6 +1168,7 @@ async function scanUrl(normalizedUrl, options = {}) {
         loadSettlePasses: negativeRetrySettlePasses,
         actionSettleMs,
         deadline,
+        priorityProbe,
       }));
       result.settle_passes_applied += negativeRetrySettlePasses;
       currentHtml = await deadline.wrap(page.content().catch(() => ''));
