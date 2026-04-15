@@ -97,6 +97,7 @@
   let pollJobId = '';
   let pollIntervalMs = 0;
   let recentJobsPollHandle = null;
+  let refreshJobToken = 0;
   const candidateMarkupCache = new Map();
   const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
@@ -2895,11 +2896,17 @@
 
   async function refreshJob(jobId, options = {}) {
     if (!jobId) return;
+    stopPolling();
+    const requestToken = ++refreshJobToken;
+    const isStale = () => requestToken !== refreshJobToken;
     const previousJobId = currentJobId;
     const [{ job, items, pagination }] = await Promise.all([
       fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
       fetchJobEvents(jobId),
     ]);
+    if (isStale()) {
+      return null;
+    }
     if (currentJobId && currentJobId !== jobId && selectedManualItemId) {
       selectedManualItemId = '';
       selectManualItem(null);
@@ -2911,6 +2918,9 @@
     renderItems(items, pagination);
     renderJobManager(job);
     await refreshSelectedItem().catch((error) => console.error(error));
+    if (isStale()) {
+      return null;
+    }
     setDownloads(jobId);
     if (activeWorkspaceTab === 'labeler') {
       if (previousJobId !== jobId) {
@@ -2925,6 +2935,9 @@
     }
     if (!options.skipRecentJobsRefresh) {
       refreshJobs().catch((error) => console.error(error));
+    }
+    if (isStale()) {
+      return null;
     }
     startPolling(jobId, pollIntervalForStatus(job.status));
   }
