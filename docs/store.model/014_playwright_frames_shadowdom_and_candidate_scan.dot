@@ -1,0 +1,60 @@
+digraph PlaywrightFramesShadowDomScan {
+  graph [
+    rankdir=LR,
+    labelloc="t",
+    fontsize=12,
+    label="Playwright page, frames, open shadow DOM, and candidate scanning",
+    splines=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=10,
+    fillcolor="white"
+  ];
+
+  edge [color="gray55", arrowsize=0.8];
+
+  page [label="Playwright Page\n(tab)", fillcolor="#eef5ff"];
+  main_frame [label="mainFrame()\nTop-level document", fillcolor="#d9ecff"];
+  iframe_reviews [label="child Frame\niframe / embedded document", fillcolor="#d9ecff"];
+
+  page -> main_frame;
+  page -> iframe_reviews;
+
+  subgraph cluster_main_frame_dom {
+    label="main frame DOM";
+    color="gray45";
+    style="rounded";
+
+    main_document [label="documentElement", fillcolor="#ffffff"];
+    shadow_host [label="shadow host element", fillcolor="#fff3cd"];
+    open_shadow_root [label="open ShadowRoot\nvisible as element.shadowRoot", shape=ellipse, fillcolor="#fff8d6"];
+    candidate_root_main [label="candidate root\n(repeated list container)", fillcolor="#d5f5d1"];
+    repeated_units_main [label="repeated units\ncomment / review blocks", shape=ellipse, fillcolor="#eef9ed"];
+
+    main_document -> shadow_host -> open_shadow_root -> candidate_root_main -> repeated_units_main;
+  }
+
+  subgraph cluster_iframe_reviews_dom {
+    label="child frame DOM";
+    color="gray45";
+    style="rounded";
+
+    iframe_document [label="documentElement", fillcolor="#ffffff"];
+    iframe_candidate_root [label="candidate root\nforum / review list", fillcolor="#d5f5d1"];
+    iframe_repeated_units [label="repeated units", shape=ellipse, fillcolor="#eef9ed"];
+
+    iframe_document -> iframe_candidate_root -> iframe_repeated_units;
+  }
+
+  main_frame -> main_document [style="dashed", color="gray65", arrowhead="none"];
+  iframe_reviews -> iframe_document [style="dashed", color="gray65", arrowhead="none"];
+
+  scan_step [label="extractCandidatesFromFrame()\n(frame.evaluate)", fillcolor="#f2f2f2"];
+  page -> scan_step [style="dotted", color="gray60"];
+  scan_step -> main_frame [style="dotted", color="gray60"];
+  scan_step -> iframe_reviews [style="dotted", color="gray60"];
+}

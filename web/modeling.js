@@ -25,6 +25,13 @@
   const siteGroupText = document.getElementById('site-group-text');
   const siteGroupMessage = document.getElementById('site-group-message');
   const siteGroupResults = document.getElementById('site-group-results');
+  const liveProbeForm = document.getElementById('live-probe-form');
+  const liveProbeModelId = document.getElementById('live-probe-model-id');
+  const liveProbeCandidateMode = document.getElementById('live-probe-candidate-mode');
+  const liveProbeUrl = document.getElementById('live-probe-url');
+  const liveProbeMessage = document.getElementById('live-probe-message');
+  const liveProbeSummary = document.getElementById('live-probe-summary');
+  const liveProbeResults = document.getElementById('live-probe-results');
 
   let currentModels = [];
   let currentVariants = [];
@@ -251,7 +258,7 @@
       <option value="${escapeHtml(model.id)}">${escapeHtml(`${model.variant_title || model.variant_id || model.id} • ${formatAlgorithmName(model.algorithm)} • ${String(model.created_at || '').slice(0, 10)}`)}</option>
     `).join('');
 
-    [scoreModelId, siteGroupModelId].forEach((select) => {
+    [scoreModelId, siteGroupModelId, liveProbeModelId].forEach((select) => {
       select.innerHTML = options || '<option value="">No trained models</option>';
       select.disabled = !options;
     });
@@ -485,6 +492,98 @@
     `;
   }
 
+  function renderLiveProbe(result) {
+    const summary = result && result.summary ? result.summary : null;
+    const items = result && Array.isArray(result.items) ? result.items : [];
+    const scan = result && result.scan ? result.scan : null;
+    const artifact = result && result.artifact ? result.artifact : null;
+    const item = items[0] || null;
+    const candidates = item && Array.isArray(item.candidates) ? item.candidates.slice(0, 15) : [];
+
+    if (!summary) {
+      liveProbeSummary.className = 'summary empty';
+      liveProbeSummary.textContent = 'Run a live URL probe to see the page-level verdict.';
+      liveProbeResults.className = 'table-shell empty';
+      liveProbeResults.textContent = 'No probe results loaded.';
+      return;
+    }
+
+    liveProbeSummary.className = 'summary';
+    liveProbeSummary.innerHTML = [
+      `<div><strong>URL:</strong> ${escapeHtml(summary.page_input_url || result.url || '')}</div>`,
+      `<div><strong>Final URL:</strong> ${escapeHtml(summary.page_final_url || (scan && scan.final_url) || '')}</div>`,
+      `<div><strong>Title:</strong> ${escapeHtml(summary.page_title || (scan && scan.title) || '')}</div>`,
+      `<div><strong>Mode:</strong> ${escapeHtml(summary.page_candidate_mode || result.candidate_mode || '')}</div>`,
+      `<div><strong>Model:</strong> ${escapeHtml(artifact ? `${artifact.variant_title || artifact.variant_id || ''} - ${artifact.id || ''}` : '')}</div>`,
+      `<div><strong>Page Verdict:</strong> ${escapeHtml(summary.page_verdict || '')}</div>`,
+      `<div><strong>Top Probability:</strong> ${escapeHtml(formatMetric(summary.page_top_probability))}</div>`,
+      `<div><strong>Candidates:</strong> ${escapeHtml(summary.page_candidate_count)}</div>`,
+      `<div><strong>Scanner Detected UGC:</strong> ${summary.page_detected ? 'yes' : 'no'}</div>`,
+      `<div><strong>Blocked:</strong> ${summary.blocked_by_interstitial ? 'yes' : 'no'}</div>`,
+      `<div><strong>Blocker Type:</strong> ${escapeHtml(summary.blocker_type || '')}</div>`,
+      `<div><strong>Scan Error:</strong> ${escapeHtml(summary.scan_error || '')}</div>`,
+    ].join('');
+
+    if (!candidates.length) {
+      liveProbeResults.className = 'table-shell empty';
+      liveProbeResults.textContent = 'The live scan returned no scored candidates.';
+      return;
+    }
+
+    liveProbeResults.className = 'table-shell';
+    liveProbeResults.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Probability</th>
+            <th>Label</th>
+            <th>Repeat</th>
+            <th>Homogeneity</th>
+            <th>Tag</th>
+            <th>Sample</th>
+            <th>Signals</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${candidates.map((candidate, index) => {
+            const topPos = candidate.explanation && Array.isArray(candidate.explanation.top_positive_contributors)
+              ? candidate.explanation.top_positive_contributors.slice(0, 3)
+              : [];
+            const topNeg = candidate.explanation && Array.isArray(candidate.explanation.top_negative_contributors)
+              ? candidate.explanation.top_negative_contributors.slice(0, 2)
+              : [];
+            const signalBits = topPos.concat(topNeg).map((entry) => `
+              <span class="feature-chip ${entry.contribution >= 0 ? 'good' : 'muted'}">
+                <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
+                <span>${escapeHtml(formatMetric(entry.contribution))}</span>
+              </span>
+            `).join('');
+            return `
+              <tr>
+                <td>${escapeHtml(index + 1)}</td>
+                <td>${escapeHtml(formatMetric(candidate.probability))}</td>
+                <td>${escapeHtml(candidate.human_label || (candidate.predicted_label === 1 ? 'positive' : candidate.predicted_label === 0 ? 'negative' : ''))}</td>
+                <td>${escapeHtml(candidate.repeating_group_count || candidate.min_k_count || candidate.unit_count || 0)}</td>
+                <td>${escapeHtml(formatMetric(candidate.sibling_homogeneity_score || candidate.homogeneity || 0))}</td>
+                <td class="mono">${escapeHtml(candidate.tag_name || candidate._root_tag || candidate.tag || '')}</td>
+                <td>${escapeHtml((candidate.sample_text || '').slice(0, 140))}</td>
+                <td>
+                  <details class="score-details" data-score-detail="probe-${escapeHtml(candidate.candidate_key || candidate.xpath || index)}">
+                    <summary>Inspect</summary>
+                    <div class="score-details-body">
+                      <div class="feature-chip-list">${signalBits || '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}</div>
+                    </div>
+                  </details>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
   async function readSiteGroupText() {
     const typed = siteGroupText.value.trim();
     if (typed) return typed;
@@ -558,6 +657,7 @@
     if (!modelId) return;
     scoreModelId.value = modelId;
     siteGroupModelId.value = modelId;
+    liveProbeModelId.value = modelId;
   });
 
   recentJobsModel.addEventListener('click', (event) => {
@@ -614,8 +714,32 @@
       });
   });
 
+  liveProbeForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    setMessage(liveProbeMessage, 'Probing live URL...', false);
+    fetchJson('/api/modeling/probe-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        modelId: liveProbeModelId.value,
+        url: liveProbeUrl.value.trim(),
+        candidateMode: liveProbeCandidateMode.value,
+      }),
+    })
+      .then((result) => {
+        setMessage(liveProbeMessage, 'Live URL probe completed.', false);
+        renderLiveProbe(result);
+      })
+      .catch((error) => {
+        setMessage(liveProbeMessage, error.message || String(error), true);
+      });
+  });
+
   renderTrainResult(null);
   renderScoredJob(null);
+  renderLiveProbe(null);
   updateDatasetDownloadLink();
   refreshPage().catch((error) => {
     setMessage(trainMessage, error.message || String(error), true);

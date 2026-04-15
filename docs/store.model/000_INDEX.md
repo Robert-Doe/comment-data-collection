@@ -27,6 +27,11 @@ Read in this order:
 9. [009_model_artifacts_and_runtime_json.md](./009_model_artifacts_and_runtime_json.md)
 10. [010_how_the_detector_extension_will_use_the_model.md](./010_how_the_detector_extension_will_use_the_model.md)
 11. [011_candidate_decision_flow_and_modification_map.md](./011_candidate_decision_flow_and_modification_map.md)
+12. [012_review_candidate_detection_and_min_k_criteria.md](./012_review_candidate_detection_and_min_k_criteria.md)
+13. [013_review_candidate_selection_pseudocode_and_repetition_risks.md](./013_review_candidate_selection_pseudocode_and_repetition_risks.md)
+14. [014_playwright_frames_shadowdom_and_candidate_scan.md](./014_playwright_frames_shadowdom_and_candidate_scan.md)
+15. [015_candidate_promotion_and_overlap_detection.md](./015_candidate_promotion_and_overlap_detection.md)
+16. [016_live_url_probe_and_runtime_bundle_handoff.md](./016_live_url_probe_and_runtime_bundle_handoff.md)
 
 ## Core words
 

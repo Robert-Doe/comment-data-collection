@@ -24,7 +24,7 @@ const {
   buildJobReportWorkbook,
 } = require('../shared/output');
 const { analyzeManualCapture } = require('../shared/manualCapture');
-const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot } = require('../shared/scanner');
+const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot, scanUrl } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
@@ -286,6 +286,7 @@ function createApp(config = getConfig()) {
       limit: Math.max(1, Number(options.limit) || Number(job && job.total_urls) || 100),
       offset: Math.max(0, Number(options.offset) || 0),
     }, config.databaseUrl),
+    scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
   }));
 
   app.get('/api/health', async (_req, res) => {

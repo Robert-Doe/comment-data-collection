@@ -842,6 +842,122 @@ async function scoreSiteGroups(items, artifactRoot, artifactId, text, options = 
   };
 }
 
+async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options = {}) {
+  const artifact = await loadModelArtifact(artifactRoot, artifactId);
+  if (!artifact) {
+    throw new Error('Model artifact not found');
+  }
+
+  const candidateRowsSource = Array.isArray(scanResult && scanResult.candidates)
+    ? scanResult.candidates
+    : [];
+  const probeJobId = String(options.jobId || scanResult.job_id || 'live-url-probe');
+  const probeItemId = String(options.itemId || scanResult.item_id || `probe-${Date.now().toString(36)}`);
+  const normalizedUrl = String(scanResult && (scanResult.normalized_url || scanResult.input_url) || options.url || '');
+  const finalUrl = String(scanResult && scanResult.final_url || normalizedUrl || '');
+  const hostname = normalizeHostname(finalUrl || normalizedUrl || '');
+  const analysisSource = String(scanResult && scanResult.analysis_source || 'live_url_probe');
+  const itemStatus = scanResult && scanResult.error ? 'failed' : 'completed';
+  const candidateMode = String(
+    scanResult && (scanResult.candidate_selection_mode || scanResult.candidateMode)
+      || options.candidateMode
+      || 'default',
+  );
+
+  const candidateRows = candidateRowsSource.map((candidate, index) => ({
+    dataset_row_id: `${probeItemId}:${String(candidate.candidate_key || candidate.xpath || candidate.css_path || candidate.candidate_rank || index + 1)}`,
+    job_id: probeJobId,
+    item_id: probeItemId,
+    row_number: index + 1,
+    candidate_key: String(candidate.candidate_key || candidate.xpath || candidate.css_path || ''),
+    candidate_rank: Number(candidate.candidate_rank || index + 1) || index + 1,
+    normalized_url: normalizedUrl,
+    final_url: finalUrl,
+    hostname,
+    frame_url: String(candidate.frame_url || ''),
+    frame_host: normalizeHostname(candidate.frame_url || ''),
+    analysis_source: analysisSource,
+    manual_captured_at: '',
+    item_status: itemStatus,
+    item_ugc_detected: scanResult && scanResult.ugc_detected ? 'true' : 'false',
+    candidate_screenshot_url: String(candidate.candidate_screenshot_url || ''),
+    item_screenshot_url: String(scanResult && scanResult.screenshot_url || ''),
+    item_manual_uploaded_screenshot_url: '',
+    human_label: '',
+    binary_label: null,
+    review_complete_binary: false,
+    item_positive_label_count: 0,
+    item_negative_label_count: 0,
+    sample_text: String(candidate.sample_text || ''),
+    score: Number(candidate.score) || 0,
+    confidence: String(candidate.confidence || candidate.heuristic_pseudo_confidence || ''),
+    ugc_type: String(candidate.ugc_type || candidate.heuristic_pseudo_label || ''),
+    feature_values: candidate,
+    candidate,
+    item: {
+      id: probeItemId,
+      job_id: probeJobId,
+      row_number: 1,
+      normalized_url: normalizedUrl,
+      final_url: finalUrl,
+      hostname,
+      analysis_source: analysisSource,
+      status: itemStatus,
+      ugc_detected: !!(scanResult && scanResult.ugc_detected),
+      scan_result: scanResult || null,
+    },
+  }));
+
+  const scoredRows = candidateRows.length
+    ? scoreRows(candidateRows, artifact, {
+      includeExplanations: options.includeExplanations !== false,
+      threshold: options.threshold,
+      progress: options.progress,
+      progressInterval: options.progressInterval,
+    })
+    : [];
+
+  const scoredItems = candidateRows.length
+    ? groupScoredRowsByItem(scoredRows)
+    : [{
+      item_id: probeItemId,
+      job_id: probeJobId,
+      row_number: 1,
+      hostname,
+      normalized_url: normalizedUrl,
+      final_url: finalUrl,
+      analysis_source: analysisSource,
+      item_status: itemStatus,
+      item_ugc_detected: scanResult && scanResult.ugc_detected,
+      candidates: [],
+      top_candidate: null,
+      manual_review_suggested: false,
+      review_complete_binary: false,
+    }];
+
+  const summary = summarizeScoredItems(scoredItems);
+  const topCandidate = scoredItems[0] ? scoredItems[0].top_candidate : null;
+  summary.page_input_url = scanResult && scanResult.input_url ? scanResult.input_url : normalizedUrl;
+  summary.page_final_url = finalUrl;
+  summary.page_title = scanResult && scanResult.title ? scanResult.title : '';
+  summary.page_predicted_positive = !!(topCandidate && topCandidate.probability >= 0.5);
+  summary.page_top_probability = topCandidate ? roundNumber(topCandidate.probability) : 0;
+  summary.page_verdict = summary.page_predicted_positive ? 'comments_likely_present' : 'comments_unlikely';
+  summary.page_candidate_count = candidateRows.length;
+  summary.page_detected = !!(scanResult && scanResult.ugc_detected);
+  summary.page_candidate_mode = candidateMode;
+  summary.blocked_by_interstitial = !!(scanResult && scanResult.blocked_by_interstitial);
+  summary.blocker_type = String(scanResult && scanResult.blocker_type || '');
+  summary.scan_error = String(scanResult && scanResult.error || '');
+
+  return {
+    artifact: summarizeArtifact(artifact),
+    scan: scanResult || null,
+    summary,
+    items: scoredItems,
+  };
+}
+
 function exportDataset(items, variantId, options = {}) {
   const variant = variantId ? getModelVariant(variantId) : null;
   const progress = typeof options.progress === 'function' ? options.progress : null;
@@ -876,5 +992,6 @@ module.exports = {
   buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
+  scoreLiveUrlProbe,
   exportDataset,
 };

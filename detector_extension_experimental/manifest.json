@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "PseudoDOM Guard",
+  "version": "0.1.0",
+  "description": "Pre-execution DOM interception for XSS prevention via PseudoDOM construction and UGC region localization.",
+
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "debugger",
+    "webRequest"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["injected_wrapper.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

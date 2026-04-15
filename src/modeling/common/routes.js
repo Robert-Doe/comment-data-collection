@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('crypto');
 
 const {
   FEATURE_FAMILIES,
@@ -18,9 +19,11 @@ const {
   buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
+  scoreLiveUrlProbe,
   exportDataset,
 } = require('./service');
 const { parseJobIdList } = require('./utils');
+const { normalizeInputUrl } = require('../../shared/csv');
 const { loadInBatches } = require('../../shared/loadInBatches');
 
 function normalizeJobIds(value) {
@@ -239,6 +242,69 @@ function createModelingRouter(dependencies) {
         progress,
       });
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/probe-url', async (req, res, next) => {
+    try {
+      const modelId = String(req.body && req.body.modelId || '').trim();
+      const rawUrl = String(req.body && req.body.url || '');
+      const candidateMode = String(req.body && req.body.candidateMode || '').trim();
+      if (!modelId || !rawUrl.trim()) {
+        res.status(400).json({ error: 'modelId and url are required' });
+        return;
+      }
+
+      const normalizedUrl = normalizeInputUrl(rawUrl);
+      if (!/^https?:\/\//i.test(normalizedUrl)) {
+        res.status(400).json({ error: 'Enter a valid http or https URL' });
+        return;
+      }
+
+      if (typeof dependencies.scanUrl !== 'function') {
+        res.status(500).json({ error: 'Live URL scanning is not available in this runtime' });
+        return;
+      }
+
+      const progress = requestProgress(req);
+      const liveJobId = `live-url-probe-${crypto.randomUUID()}`;
+      const liveItemId = req.body && req.body.itemId ? String(req.body.itemId) : crypto.randomUUID();
+      progress && progress({ stage: 'scanning', message: 'Scanning live URL' });
+      const scanResult = await dependencies.scanUrl(normalizedUrl, {
+        timeoutMs: req.body && req.body.timeoutMs !== undefined ? req.body.timeoutMs : undefined,
+        postLoadDelayMs: req.body && req.body.postLoadDelayMs !== undefined ? req.body.postLoadDelayMs : undefined,
+        preScreenshotDelayMs: req.body && req.body.preScreenshotDelayMs !== undefined ? req.body.preScreenshotDelayMs : undefined,
+        candidateMode,
+        captureScreenshots: req.body && req.body.captureScreenshots !== undefined ? !!req.body.captureScreenshots : true,
+        captureHtmlSnapshots: req.body && req.body.captureHtmlSnapshots !== undefined ? !!req.body.captureHtmlSnapshots : true,
+        artifactRoot: dependencies.artifactRoot,
+        publicBaseUrl: req.body && req.body.publicBaseUrl ? req.body.publicBaseUrl : undefined,
+        jobId: liveJobId,
+        itemId: liveItemId,
+        rowNumber: req.body && req.body.rowNumber ? req.body.rowNumber : 'live-url',
+      });
+
+      if (scanResult.error) {
+        progress && progress({ stage: 'scanning', message: scanResult.error });
+      }
+
+      const result = await scoreLiveUrlProbe(scanResult, dependencies.artifactRoot, modelId, {
+        candidateMode,
+        jobId: liveJobId,
+        itemId: liveItemId,
+        rowNumber: 'live-url',
+        includeExplanations: req.body && req.body.includeExplanations !== false,
+        threshold: req.body && req.body.threshold,
+      });
+
+      res.json({
+        ok: true,
+        url: normalizedUrl,
+        candidate_mode: candidateMode || 'default',
+        ...result,
+      });
     } catch (error) {
       next(error);
     }

@@ -834,6 +834,7 @@ function createLocalApp(options = {}) {
       Math.max(1, Number(options.limit) || Number(job && job.total_urls) || 100),
       Math.max(0, Number(options.offset) || 0),
     ),
+    scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
   }));
 
   async function loadJobItems(jobId, job, progress) {

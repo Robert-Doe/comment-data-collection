@@ -119,6 +119,32 @@
           <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
         </section>
 
+        <section class="panel">
+          <div class="panel-header"><h2>Live URL Probe</h2></div>
+          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely.</p>
+          <form id="live-probe-form" class="model-form live-probe-form">
+            <label class="field">
+              <span>Model</span>
+              <select id="live-probe-model-id"></select>
+            </label>
+            <label class="field">
+              <span>Scanner Mode</span>
+              <select id="live-probe-candidate-mode">
+                <option value="default" selected>Default</option>
+                <option value="repetition_first">Research mode, repetition first</option>
+              </select>
+            </label>
+            <label class="field site-group-wide">
+              <span>Page URL</span>
+              <input id="live-probe-url" type="text" placeholder="https://example.com/post" required>
+            </label>
+            <button class="primary" type="submit">Probe URL</button>
+          </form>
+          <p id="live-probe-message" class="message"></p>
+          <div id="live-probe-summary" class="summary empty">Run a live URL probe to see page-level prediction and candidate scores.</div>
+          <div id="live-probe-results" class="table-shell empty">No probe results loaded.</div>
+        </section>
+
     </main>
 
     <script src="./modeling.js"></script>
