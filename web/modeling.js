@@ -499,6 +499,8 @@
     const artifact = result && result.artifact ? result.artifact : null;
     const item = items[0] || null;
     const candidates = item && Array.isArray(item.candidates) ? item.candidates.slice(0, 15) : [];
+    const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
+    const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
 
     if (!summary) {
       liveProbeSummary.className = 'summary empty';
@@ -521,12 +523,16 @@
       `<div><strong>Scanner Detected UGC:</strong> ${summary.page_detected ? 'yes' : 'no'}</div>`,
       `<div><strong>Blocked:</strong> ${summary.blocked_by_interstitial ? 'yes' : 'no'}</div>`,
       `<div><strong>Blocker Type:</strong> ${escapeHtml(summary.blocker_type || '')}</div>`,
-      `<div><strong>Scan Error:</strong> ${escapeHtml(summary.scan_error || '')}</div>`,
+      `<div><strong>Scan Error:</strong> ${escapeHtml(scanError || '')}</div>`,
     ].join('');
 
     if (!candidates.length) {
       liveProbeResults.className = 'table-shell empty';
-      liveProbeResults.textContent = 'The live scan returned no scored candidates.';
+      liveProbeResults.textContent = scanTimedOut
+        ? 'The live scan timed out before it could score candidates.'
+        : scanError
+          ? 'The live scan failed before it could score candidates.'
+          : 'The live scan returned no scored candidates.';
       return;
     }
 
@@ -729,7 +735,17 @@
       }),
     })
       .then((result) => {
-        setMessage(liveProbeMessage, 'Live URL probe completed.', false);
+        const summary = result && result.summary ? result.summary : null;
+        const scan = result && result.scan ? result.scan : null;
+        const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
+        const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
+        if (scanTimedOut) {
+          setMessage(liveProbeMessage, `Live URL probe timed out: ${scanError || 'no result'}.`, true);
+        } else if (scanError) {
+          setMessage(liveProbeMessage, `Live URL probe failed: ${scanError}.`, true);
+        } else {
+          setMessage(liveProbeMessage, 'Live URL probe completed.', false);
+        }
         renderLiveProbe(result);
       })
       .catch((error) => {

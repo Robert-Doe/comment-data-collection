@@ -858,6 +858,9 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
   const hostname = normalizeHostname(finalUrl || normalizedUrl || '');
   const analysisSource = String(scanResult && scanResult.analysis_source || 'live_url_probe');
   const itemStatus = scanResult && scanResult.error ? 'failed' : 'completed';
+  const scanError = String(scanResult && scanResult.error || '');
+  const scanTimedOut = !!(scanResult && scanResult.timed_out)
+    || /timed out/i.test(scanError);
   const candidateMode = String(
     scanResult && (scanResult.candidate_selection_mode || scanResult.candidateMode)
       || options.candidateMode
@@ -942,13 +945,17 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
   summary.page_title = scanResult && scanResult.title ? scanResult.title : '';
   summary.page_predicted_positive = !!(topCandidate && topCandidate.probability >= 0.5);
   summary.page_top_probability = topCandidate ? roundNumber(topCandidate.probability) : 0;
-  summary.page_verdict = summary.page_predicted_positive ? 'comments_likely_present' : 'comments_unlikely';
+  summary.page_verdict = scanTimedOut
+    ? 'probe_timed_out'
+    : (scanError
+      ? 'probe_failed'
+      : (summary.page_predicted_positive ? 'comments_likely_present' : 'comments_unlikely'));
   summary.page_candidate_count = candidateRows.length;
   summary.page_detected = !!(scanResult && scanResult.ugc_detected);
   summary.page_candidate_mode = candidateMode;
   summary.blocked_by_interstitial = !!(scanResult && scanResult.blocked_by_interstitial);
   summary.blocker_type = String(scanResult && scanResult.blocker_type || '');
-  summary.scan_error = String(scanResult && scanResult.error || '');
+  summary.scan_error = scanError;
 
   return {
     artifact: summarizeArtifact(artifact),
