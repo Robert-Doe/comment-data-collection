@@ -161,7 +161,7 @@
                 <button id="download-candidate-csv" class="secondary compact" type="button" disabled>Download Candidate CSV</button>
               </div>
             </div>
-            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. For manual uploads you can now compare the browser-uploaded screenshot, the server-rendered snapshot screenshot, and the candidate crops together. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added.</p>
+            <p class="lede manual-lede">After a scan or manual snapshot, review the top candidate subgraphs here. Each screenshot is a list/container candidate, not a single comment-text leaf. For manual uploads you can now compare the browser-uploaded screenshot, the server-rendered snapshot screenshot, and the candidate crops together. Mark the actual comment region, hard negatives, or uncertain cases so the training dataset improves as more sites are added. Keyboard shortcuts: press <code>1</code>, <code>2</code>, or <code>3</code> to label the visible candidate and move to the next one.</p>
             <div id="candidate-review" class="candidate-review empty">Select a row from Job Status to inspect and label candidate regions.</div>
             <p id="candidate-message" class="message"></p>
           </section>
@@ -174,12 +174,19 @@
                 <button id="job-labeler-next" class="secondary compact" type="button" disabled>Next</button>
               </div>
             </div>
-            <p class="lede manual-lede">Review candidates from the entire selected job on one screen. Use the large screenshot, label buttons, and next controls instead of opening each row one by one. Keyboard shortcuts: left/right arrows for navigation, `1` for comment region, `2` for not comment, `3` for uncertain.</p>
+            <p class="lede manual-lede">Review candidates from the entire selected job on one screen. Use the large screenshot, label buttons, and next controls instead of opening each row one by one. Keyboard shortcuts: left/right arrows for navigation, `1` for comment region, `2` for not comment, `3` for uncertain. Use the jump box to move the cursor to a specific candidate position and preload rows ahead without reloading from the beginning.</p>
             <div class="job-labeler-controls">
               <label class="job-labeler-toggle">
                 <input id="job-labeler-auto-advance" type="checkbox" checked>
                 <span>After saving, jump to the next unlabeled candidate when possible.</span>
               </label>
+              <form id="job-labeler-jump-form" class="job-labeler-jump-form">
+                <label class="field job-labeler-jump-field">
+                  <span>Jump to position (1-based)</span>
+                  <input id="job-labeler-jump-position" type="number" min="1" step="1" inputmode="numeric" placeholder="1">
+                </label>
+                <button id="job-labeler-jump-button" class="secondary compact" type="submit">Go</button>
+              </form>
             </div>
             <div id="job-labeler-review" class="candidate-review empty">Select a job, then open Labeler to build a review queue from every row in that job.</div>
             <p id="job-labeler-message" class="message"></p>

@@ -45,6 +45,9 @@
   const jobLabelerPrevButton = document.getElementById('job-labeler-prev');
   const jobLabelerNextButton = document.getElementById('job-labeler-next');
   const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
+  const jobLabelerJumpForm = document.getElementById('job-labeler-jump-form');
+  const jobLabelerJumpPosition = document.getElementById('job-labeler-jump-position');
+  const jobLabelerJumpButton = document.getElementById('job-labeler-jump-button');
   const scoringBreakdown = document.getElementById('scoring-breakdown');
   const viewSvgGraphLink = document.getElementById('view-svg-graph');
   const downloadSvgGraphLink = document.getElementById('download-svg-graph');
@@ -913,6 +916,26 @@
     return state.entries[state.index] || null;
   }
 
+  function currentCandidateReviewSelection() {
+    const item = selectedItem();
+    if (!item || !Array.isArray(item.candidates) || !item.candidates.length) return null;
+
+    const totalPages = Math.max(1, Math.ceil(item.candidates.length / candidatePageSize));
+    const page = Math.max(0, Math.min(currentCandidatePage || 0, totalPages - 1));
+    const candidate = item.candidates
+      .slice(page * candidatePageSize, (page + 1) * candidatePageSize)[0] || null;
+    const candidateKey = String(candidate && candidate.candidate_key || '').trim();
+
+    if (!candidate || !candidateKey) return null;
+    return {
+      item,
+      candidate,
+      candidateKey,
+      page,
+      totalPages,
+    };
+  }
+
   function jobLabelerEntryKey(entry) {
     if (!entry) return '';
     return `${entry.itemId || ''}:${entry.candidateKey || ''}`;
@@ -933,6 +956,21 @@
     const label = String(candidate && candidate.human_label || '').trim();
     if (!label) return 'unreviewed';
     return label;
+  }
+
+  function advanceCandidateReviewAfterSave(item, previousPage) {
+    const activeItem = item || selectedItem();
+    if (!activeItem || !Array.isArray(activeItem.candidates) || !activeItem.candidates.length) {
+      return false;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(activeItem.candidates.length / candidatePageSize));
+    const nextPage = Math.min(Math.max(0, Number(previousPage) || 0) + 1, totalPages - 1);
+    const advanced = nextPage > (Number(previousPage) || 0);
+    currentCandidatePage = nextPage;
+    renderCandidateReview(activeItem);
+    renderScoringBreakdown(activeItem);
+    return advanced;
   }
 
   function patchCandidateInItemMap(itemMap, itemId, candidateKey, updater) {
@@ -1034,6 +1072,12 @@
       || transitioning
       || (!hasMore && atEnd)
       || (loadingMore && atEnd);
+    if (jobLabelerJumpPosition) {
+      jobLabelerJumpPosition.disabled = disabled || transitioning || loadingMore;
+    }
+    if (jobLabelerJumpButton) {
+      jobLabelerJumpButton.disabled = disabled || transitioning || loadingMore;
+    }
   }
 
   function stopJobLabelerTransition() {
@@ -1850,7 +1894,7 @@
         <div><strong>Comment Region:</strong> ${escapeHtml(commentRegion)}</div>
         <div><strong>Not Comment:</strong> ${escapeHtml(notComment)}</div>
         <div><strong>Uncertain:</strong> ${escapeHtml(uncertain)}</div>
-        <div><strong>Current Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>
+        <div><strong>Cursor Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>
       </div>
     `;
   }
@@ -2044,6 +2088,58 @@
       setJobLabelerMessage(message, true);
       showToast(message, { tone: 'error' });
     });
+  }
+
+  async function jumpJobLabelerToPosition(position) {
+    const targetPosition = Math.floor(Number(position));
+    if (!Number.isFinite(targetPosition) || targetPosition < 1) {
+      throw new Error('Enter a candidate position of 1 or greater.');
+    }
+
+    const jobId = currentJobId;
+    if (!jobId) {
+      throw new Error('Select a job first.');
+    }
+
+    await ensureJobLabelerLoaded(false);
+    const state = currentJobLabelerState();
+    if (!state || !state.entries.length) {
+      throw new Error('This job does not have candidates to label yet.');
+    }
+
+    startJobLabelerTransition(`Jumping to position ${targetPosition}...`);
+    try {
+      await ensureJobLabelerEntriesForIndex(jobId, state, targetPosition - 1 + jobLabelerBatchSize);
+      if (currentJobLabelerState() !== state || currentJobId !== jobId) {
+        return;
+      }
+
+      const requestedIndex = targetPosition - 1;
+      const resolvedIndex = Math.min(requestedIndex, state.entries.length - 1);
+      const clamped = resolvedIndex !== requestedIndex;
+      state.index = Math.max(0, resolvedIndex);
+      if (jobLabelerJumpPosition) {
+        jobLabelerJumpPosition.value = String(state.index + 1);
+      }
+      setJobLabelerMessage(
+        clamped
+          ? `Requested position ${targetPosition} is beyond the loaded queue. Showing the last available candidate.`
+          : `Jumped to position ${targetPosition}.`,
+        false,
+      );
+      showToast(
+        clamped
+          ? `Requested position ${targetPosition} is beyond the loaded queue.`
+          : `Jumped to position ${targetPosition}.`,
+        { tone: clamped ? 'info' : 'success' },
+      );
+      stopJobLabelerTransition();
+      renderJobLabelerReview();
+      maybePrefetchJobLabelerEntries(jobId);
+    } catch (error) {
+      stopJobLabelerTransition();
+      throw error;
+    }
   }
 
   function advanceJobLabelerAfterSave(state, previousIndex) {
@@ -3333,6 +3429,33 @@
     }
   }
 
+  function handleCandidateReviewShortcut(label) {
+    const selection = currentCandidateReviewSelection();
+    if (!selection) {
+      setCandidateMessage('Select a row first.', true);
+      showToast('Select a row first.', { tone: 'error' });
+      return;
+    }
+
+    const notesField = document.getElementById(`candidate-notes-${selection.candidateKey}`);
+    const notes = notesField ? notesField.value.trim() : '';
+    const previousPage = selection.page;
+    saveCandidateReview(selection.candidateKey, label, notes, false, {
+      silentSuccess: true,
+      onSaved(savedItem) {
+        const advanced = advanceCandidateReviewAfterSave(savedItem || selection.item, previousPage);
+        const message = advanced
+          ? 'Candidate review saved. Advanced to the next candidate.'
+          : 'Candidate review saved.';
+        setCandidateMessage(message, false);
+        showToast(message, { tone: 'success' });
+      },
+    }).catch((error) => {
+      const message = error && error.message ? error.message : String(error);
+      setCandidateMessage(message, true);
+    });
+  }
+
   form.addEventListener('submit', (event) => {
     handleSubmit(event).catch((error) => console.error(error));
   });
@@ -3579,6 +3702,23 @@
     });
   });
 
+  if (jobLabelerJumpForm) {
+    jobLabelerJumpForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const positionValue = jobLabelerJumpPosition ? jobLabelerJumpPosition.value.trim() : '';
+      runElementAction(jobLabelerJumpButton || jobLabelerJumpForm, async () => {
+        if (!positionValue) {
+          throw new Error('Enter a candidate position first.');
+        }
+        await jumpJobLabelerToPosition(positionValue);
+      }).catch((error) => {
+        const message = error && error.message ? error.message : String(error);
+        setJobLabelerMessage(message, true);
+        showToast(message, { tone: 'error' });
+      });
+    });
+  }
+
   jobLabelerPrevButton.addEventListener('click', () => {
     handleJobLabelerStep(-1);
   });
@@ -3604,11 +3744,24 @@
   });
 
   document.addEventListener('keydown', (event) => {
-    if (activeWorkspaceTab !== 'labeler') return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target;
     const tagName = target && target.tagName ? target.tagName.toLowerCase() : '';
     const isTypingTarget = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+    if (activeWorkspaceTab === 'candidates') {
+      if (isTypingTarget) return;
+      let label = '';
+      if (event.key === '1') label = 'comment_region';
+      if (event.key === '2') label = 'not_comment_region';
+      if (event.key === '3') label = 'uncertain';
+      if (!label) return;
+
+      event.preventDefault();
+      handleCandidateReviewShortcut(label);
+      return;
+    }
+
+    if (activeWorkspaceTab !== 'labeler') return;
     if (isTypingTarget) return;
 
     if (event.key === 'ArrowLeft') {

@@ -25,11 +25,14 @@
   const siteGroupText = document.getElementById('site-group-text');
   const siteGroupMessage = document.getElementById('site-group-message');
   const siteGroupResults = document.getElementById('site-group-results');
+  const siteGroupProgress = document.getElementById('site-group-progress');
   const liveProbeForm = document.getElementById('live-probe-form');
   const liveProbeModelId = document.getElementById('live-probe-model-id');
   const liveProbeCandidateMode = document.getElementById('live-probe-candidate-mode');
+  const liveProbeTimeoutMs = document.getElementById('live-probe-timeout-ms');
   const liveProbeUrl = document.getElementById('live-probe-url');
   const liveProbeMessage = document.getElementById('live-probe-message');
+  const liveProbeProgress = document.getElementById('live-probe-progress');
   const liveProbeSummary = document.getElementById('live-probe-summary');
   const liveProbeResults = document.getElementById('live-probe-results');
 
@@ -79,6 +82,81 @@
   function setMessage(node, text, isError) {
     node.textContent = text || '';
     node.className = isError ? 'message error' : 'message';
+  }
+
+  function setBusyState(element, busy) {
+    if (!element) return;
+
+    if (busy) {
+      element.dataset.busy = 'true';
+      if ('disabled' in element) {
+        element.dataset.wasDisabled = element.disabled ? 'true' : 'false';
+        element.disabled = true;
+      }
+      return;
+    }
+
+    delete element.dataset.busy;
+    if ('disabled' in element) {
+      if (element.dataset.wasDisabled !== 'true') {
+        element.disabled = false;
+      }
+      delete element.dataset.wasDisabled;
+    }
+  }
+
+  function flashActionState(element, state) {
+    if (!element) return;
+    const attribute = state === 'error' ? 'error' : 'success';
+    element.dataset[attribute] = 'true';
+    window.setTimeout(() => {
+      delete element.dataset[attribute];
+    }, 1400);
+  }
+
+  async function runElementAction(element, action) {
+    setBusyState(element, true);
+    try {
+      const result = await action();
+      flashActionState(element, 'success');
+      return result;
+    } catch (error) {
+      flashActionState(element, 'error');
+      throw error;
+    } finally {
+      setBusyState(element, false);
+    }
+  }
+
+  function clearProbeProgress(node) {
+    if (!node) return;
+    node.hidden = true;
+    node.innerHTML = '';
+  }
+
+  function formatDurationLabel(ms) {
+    const totalSeconds = Math.max(1, Math.round(Math.max(0, Number(ms) || 0) / 1000));
+    if (totalSeconds < 60) {
+      return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (!seconds) {
+      return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    }
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
+  }
+
+  function setProbeProgress(node, title, detail) {
+    if (!node) return;
+    node.hidden = false;
+    node.innerHTML = `
+      <div class="probe-spinner" aria-hidden="true"></div>
+      <div>
+        <div class="probe-progress-title">${escapeHtml(title || 'Working...')}</div>
+        ${detail ? `<p class="probe-progress-copy">${escapeHtml(detail)}</p>` : ''}
+      </div>
+    `;
   }
 
   function formatMetric(value, decimals = 3) {
@@ -698,9 +776,16 @@
 
   siteGroupForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    setMessage(siteGroupMessage, 'Running site-group probe...', false);
-    readSiteGroupText()
-      .then((text) => fetchJson('/api/modeling/site-groups', {
+    const submitButton = siteGroupForm.querySelector('button[type="submit"]');
+    runElementAction(submitButton, async () => {
+      setMessage(siteGroupMessage, 'Running site-group probe...', false);
+      setProbeProgress(
+        siteGroupProgress,
+        'Running site-group probe',
+        'This compares stored rows against the selected model and may take a moment on large jobs. Previous results stay visible until the probe finishes.',
+      );
+      const text = await readSiteGroupText();
+      const result = await fetchJson('/api/modeling/site-groups', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -710,47 +795,59 @@
           jobIds: siteGroupJobIds.value.trim(),
           siteText: text,
         }),
-      }))
-      .then((result) => {
-        setMessage(siteGroupMessage, 'Site-group probe completed.', false);
-        renderSiteGroups(result);
-      })
-      .catch((error) => {
-        setMessage(siteGroupMessage, error.message || String(error), true);
       });
+      setMessage(siteGroupMessage, 'Site-group probe completed.', false);
+      renderSiteGroups(result);
+    }).catch((error) => {
+      setMessage(siteGroupMessage, error.message || String(error), true);
+    }).finally(() => {
+      clearProbeProgress(siteGroupProgress);
+    });
   });
 
   liveProbeForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    setMessage(liveProbeMessage, 'Probing live URL...', false);
-    fetchJson('/api/modeling/probe-url', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        modelId: liveProbeModelId.value,
-        url: liveProbeUrl.value.trim(),
-        candidateMode: liveProbeCandidateMode.value,
-      }),
-    })
-      .then((result) => {
-        const summary = result && result.summary ? result.summary : null;
-        const scan = result && result.scan ? result.scan : null;
-        const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
-        const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
-        if (scanTimedOut) {
-          setMessage(liveProbeMessage, `Live URL probe timed out: ${scanError || 'no result'}.`, true);
-        } else if (scanError) {
-          setMessage(liveProbeMessage, `Live URL probe failed: ${scanError}.`, true);
-        } else {
-          setMessage(liveProbeMessage, 'Live URL probe completed.', false);
-        }
-        renderLiveProbe(result);
-      })
-      .catch((error) => {
-        setMessage(liveProbeMessage, error.message || String(error), true);
+    const submitButton = liveProbeForm.querySelector('button[type="submit"]');
+    const timeoutValue = liveProbeTimeoutMs ? Number(liveProbeTimeoutMs.value) : NaN;
+    const timeoutMs = Number.isFinite(timeoutValue) && timeoutValue >= 1000
+      ? timeoutValue
+      : 300000;
+    runElementAction(submitButton, async () => {
+      setMessage(liveProbeMessage, 'Probing live URL...', false);
+      setProbeProgress(
+        liveProbeProgress,
+        'Scanning live URL',
+        `This can take up to ${formatDurationLabel(timeoutMs)} on heavy pages. Keep this tab open while the browser collects and scores candidates. Previous results stay visible until the new scan completes.`,
+      );
+      const result = await fetchJson('/api/modeling/probe-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          modelId: liveProbeModelId.value,
+          url: liveProbeUrl.value.trim(),
+          candidateMode: liveProbeCandidateMode.value,
+          timeoutMs,
+        }),
       });
+      const summary = result && result.summary ? result.summary : null;
+      const scan = result && result.scan ? result.scan : null;
+      const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
+      const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
+      if (scanTimedOut) {
+        setMessage(liveProbeMessage, `Live URL probe timed out: ${scanError || 'no result'}.`, true);
+      } else if (scanError) {
+        setMessage(liveProbeMessage, `Live URL probe failed: ${scanError}.`, true);
+      } else {
+        setMessage(liveProbeMessage, 'Live URL probe completed.', false);
+      }
+      renderLiveProbe(result);
+    }).catch((error) => {
+      setMessage(liveProbeMessage, error.message || String(error), true);
+    }).finally(() => {
+      clearProbeProgress(liveProbeProgress);
+    });
   });
 
   renderTrainResult(null);

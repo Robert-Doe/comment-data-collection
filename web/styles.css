@@ -291,6 +291,42 @@ button:active,
   color: var(--danger);
 }
 
+.probe-progress {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  margin-top: 12px;
+  border: 1px solid rgba(11, 87, 208, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(11, 87, 208, 0.06), rgba(11, 87, 208, 0.02));
+}
+
+.probe-progress[hidden] {
+  display: none;
+}
+
+.probe-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 3px solid rgba(11, 87, 208, 0.16);
+  border-top-color: rgba(11, 87, 208, 0.9);
+  animation: spin 0.72s linear infinite;
+}
+
+.probe-progress-title {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.probe-progress-copy {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .manual-lede {
   max-width: none;
   margin: 0 0 18px;
@@ -673,7 +709,10 @@ button[data-error="true"],
 
 .job-labeler-controls {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-bottom: 14px;
 }
 
@@ -689,6 +728,24 @@ button[data-error="true"],
 
 .job-labeler-toggle input {
   margin-top: 4px;
+}
+
+.job-labeler-jump-form {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1 1 280px;
+  flex-wrap: wrap;
+}
+
+.job-labeler-jump-field {
+  flex: 1 1 220px;
+  min-width: 220px;
+}
+
+.job-labeler-jump-field input {
+  min-width: 0;
 }
 
 .candidate-grid {
@@ -1457,6 +1514,11 @@ img {
 
   .job-labeler-controls {
     justify-content: flex-start;
+  }
+
+  .job-labeler-jump-form {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .manager-danger-zone,

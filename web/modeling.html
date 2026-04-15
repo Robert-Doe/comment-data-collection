@@ -115,13 +115,14 @@
             </label>
             <button class="primary" type="submit">Run Site Probe</button>
           </form>
+          <div id="site-group-progress" class="probe-progress" aria-live="polite" hidden></div>
           <p id="site-group-message" class="message"></p>
           <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
         </section>
 
         <section class="panel">
           <div class="panel-header"><h2>Live URL Probe</h2></div>
-          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely.</p>
+          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. The timeout starts at five minutes, and a loading panel stays visible while the browser is still scanning.</p>
           <form id="live-probe-form" class="model-form live-probe-form">
             <label class="field">
               <span>Model</span>
@@ -134,12 +135,17 @@
                 <option value="repetition_first">Research mode, repetition first</option>
               </select>
             </label>
+            <label class="field">
+              <span>Scan Timeout (ms)</span>
+              <input id="live-probe-timeout-ms" type="number" min="1000" step="1000" value="300000">
+            </label>
             <label class="field site-group-wide">
               <span>Page URL</span>
               <input id="live-probe-url" type="text" placeholder="https://example.com/post" required>
             </label>
             <button class="primary" type="submit">Probe URL</button>
           </form>
+          <div id="live-probe-progress" class="probe-progress" aria-live="polite" hidden></div>
           <p id="live-probe-message" class="message"></p>
           <div id="live-probe-summary" class="summary empty">Run a live URL probe to see page-level prediction and candidate scores.</div>
           <div id="live-probe-results" class="table-shell empty">No probe results loaded.</div>

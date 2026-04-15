@@ -271,9 +271,16 @@ function createModelingRouter(dependencies) {
       const progress = requestProgress(req);
       const liveJobId = `live-url-probe-${crypto.randomUUID()}`;
       const liveItemId = req.body && req.body.itemId ? String(req.body.itemId) : crypto.randomUUID();
-      const liveProbeTimeoutMs = req.body && req.body.timeoutMs !== undefined ? req.body.timeoutMs : 30000;
-      const liveProbePostLoadDelayMs = req.body && req.body.postLoadDelayMs !== undefined ? req.body.postLoadDelayMs : 0;
-      const liveProbePreScreenshotDelayMs = req.body && req.body.preScreenshotDelayMs !== undefined ? req.body.preScreenshotDelayMs : 0;
+      const body = req.body || {};
+      const liveProbeTimeoutMs = body.timeoutMs !== undefined && body.timeoutMs !== ''
+        ? body.timeoutMs
+        : 300000;
+      const liveProbePostLoadDelayMs = body.postLoadDelayMs !== undefined && body.postLoadDelayMs !== ''
+        ? body.postLoadDelayMs
+        : 6000;
+      const liveProbePreScreenshotDelayMs = body.preScreenshotDelayMs !== undefined && body.preScreenshotDelayMs !== ''
+        ? body.preScreenshotDelayMs
+        : 1500;
       progress && progress({ stage: 'scanning', message: 'Scanning live URL' });
       const scanResult = await dependencies.scanUrl(normalizedUrl, {
         timeoutMs: liveProbeTimeoutMs,
