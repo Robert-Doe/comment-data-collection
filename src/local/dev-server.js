@@ -1031,6 +1031,13 @@ function createLocalApp(options = {}) {
 
   app.get('/api/health/detailed', (_req, res) => {
     const snapshot = requestTracker.getSnapshot();
+    const querySnapshot = {
+      activeQueryCount: 0,
+      recentQueryCount: 0,
+      activeQueries: [],
+      recentQueries: [],
+      hotQueries: [],
+    };
     const jobs = runtime.listJobs(10);
     const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed']);
     const activeJobs = jobs.filter((job) => !terminalStatuses.has(String(job.status || '')));
@@ -1078,6 +1085,11 @@ function createLocalApp(options = {}) {
         itemStatusCounts: buildStatusCounts(runtime.state.items, (item) => item.status),
         recentItems: items.slice(0, 20),
         recentEvents: [],
+        activeQueryCount: querySnapshot.activeQueryCount,
+        recentQueryCount: querySnapshot.recentQueryCount,
+        activeQueries: querySnapshot.activeQueries,
+        recentQueries: querySnapshot.recentQueries,
+        queryHotspots: querySnapshot.hotQueries,
       },
       activeJobCount: activeJobs.length,
       activeJobs: activeJobs.map((job) => ({
@@ -1104,6 +1116,17 @@ function createLocalApp(options = {}) {
   app.get('/api/requests', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json(requestTracker.getSnapshot());
+  });
+
+  app.get('/api/queries', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      activeQueryCount: 0,
+      recentQueryCount: 0,
+      activeQueries: [],
+      recentQueries: [],
+      hotQueries: [],
+    });
   });
 
   app.get('/api/admin/search', (req, res) => {
@@ -1170,6 +1193,12 @@ function createLocalApp(options = {}) {
     }
 
     res.json(response);
+  });
+
+  app.post('/api/admin/sql', (_req, res) => {
+    res.status(501).json({
+      error: 'SQL console is only available on the database-backed server',
+    });
   });
 
   app.get('/api/events', (_req, res) => {

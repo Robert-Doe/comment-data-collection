@@ -2,6 +2,10 @@
 
 This branch is the local `master` line prepared for a DigitalOcean deployment.
 
+Current SSH target:
+
+- `root@137.184.113.238`
+
 ### Recommended shape
 
 Use a DigitalOcean Droplet with Docker Compose.
@@ -192,7 +196,7 @@ From this machine you can deploy to the droplet with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy-digitalocean.ps1 `
-  -ServerHost YOUR_DROPLET_IP `
+  -ServerHost 137.184.113.238 `
   -User root `
   -AppDir /opt/comment-data-collection `
   -Branch fix/worker-recovery-parallelism `

@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { runWithMonitorContext, updateMonitorContext } = require('./monitorContext');
 
 function cloneValue(value) {
   if (Array.isArray(value)) {
@@ -39,6 +40,41 @@ function safeUrlQuery(value) {
     return '';
   }
   return raw.slice(queryIndex + 1).split('#')[0] || '';
+}
+
+function inferRequestTarget(path) {
+  const raw = normalizeString(path);
+  if (!raw) {
+    return {
+      jobId: null,
+      itemId: null,
+    };
+  }
+
+  const match = raw.match(/^\/api\/jobs\/([^/]+)(?:\/items\/([^/]+))?/i);
+  if (!match) {
+    return {
+      jobId: null,
+      itemId: null,
+    };
+  }
+
+  return {
+    jobId: decodePathSegment(match[1]),
+    itemId: decodePathSegment(match[2]),
+  };
+}
+
+function decodePathSegment(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(value);
+  } catch (_) {
+    return value;
+  }
 }
 
 function toReadableUrl(value) {
@@ -111,6 +147,8 @@ function snapshotEntry(entry) {
     userAgent: entry.userAgent,
     remoteAddress: entry.remoteAddress,
     initiator: entry.initiator,
+    targetJobId: entry.targetJobId,
+    targetItemId: entry.targetItemId,
     startedAt: entry.startedAt,
     updatedAt: entry.updatedAt,
     finishedAt: entry.finishedAt,
@@ -210,8 +248,35 @@ function createRequestTracker(options = {}) {
       return req
         && req.method !== 'OPTIONS'
         && path.indexOf('/api/') === 0
-        && !/^\/api\/(?:health(?:\/detailed)?|events|requests)(?:\/|$)/.test(path);
+        && !/^\/api\/(?:health(?:\/detailed)?|events|requests|queries)(?:\/|$)/.test(path);
     };
+
+  function syncMonitorContext(entry) {
+    if (!entry || !entry.monitorContext) {
+      return;
+    }
+
+    Object.assign(entry.monitorContext, {
+      requestId: entry.id,
+      method: entry.method,
+      path: entry.path,
+      fullPath: entry.fullPath,
+      query: entry.query,
+      label: entry.label,
+      scope: entry.scope,
+      jobId: entry.jobId,
+      itemId: entry.itemId,
+      targetJobId: entry.targetJobId,
+      targetItemId: entry.targetItemId,
+      stage: entry.stage,
+      status: entry.status,
+      statusCode: entry.statusCode,
+      message: entry.message,
+      progress: entry.progress ? cloneValue(entry.progress) : null,
+    });
+
+    updateMonitorContext(entry.monitorContext);
+  }
 
   function recordHistory(snapshot) {
     if (!snapshot) {
@@ -267,6 +332,7 @@ function createRequestTracker(options = {}) {
 
     entry.updatedAtMs = Date.now();
     entry.updatedAt = new Date(entry.updatedAtMs).toISOString();
+    syncMonitorContext(entry);
     return snapshotEntry(entry);
   }
 
@@ -295,6 +361,7 @@ function createRequestTracker(options = {}) {
       entry.progress.indeterminate = false;
     }
 
+    syncMonitorContext(entry);
     const snapshot = snapshotEntry(entry);
     active.delete(entry.id);
     recordHistory(snapshot);
@@ -306,6 +373,7 @@ function createRequestTracker(options = {}) {
     const originalUrl = normalizeString(req && (req.originalUrl || req.url));
     const path = safeUrlPath(originalUrl);
     const query = safeUrlQuery(originalUrl);
+    const target = inferRequestTarget(path);
     const headers = req && req.headers ? req.headers : {};
     const referer = normalizeString(headers.referer || headers.referrer || '');
     const origin = normalizeString(headers.origin || '');
@@ -319,8 +387,10 @@ function createRequestTracker(options = {}) {
       query: query || '',
       label: null,
       scope: 'request',
-      jobId: null,
-      itemId: null,
+      jobId: target.jobId,
+      itemId: target.itemId,
+      targetJobId: target.jobId,
+      targetItemId: target.itemId,
       stage: null,
       status: 'running',
       statusCode: null,
@@ -340,9 +410,30 @@ function createRequestTracker(options = {}) {
       finishedAt: null,
     };
 
+    entry.monitorContext = {
+      requestId: entry.id,
+      method: entry.method,
+      path: entry.path,
+      fullPath: entry.fullPath,
+      query: entry.query,
+      label: entry.label,
+      scope: entry.scope,
+      jobId: entry.jobId,
+      itemId: entry.itemId,
+      targetJobId: entry.targetJobId,
+      targetItemId: entry.targetItemId,
+      stage: entry.stage,
+      status: entry.status,
+      statusCode: entry.statusCode,
+      message: entry.message,
+      progress: entry.progress ? cloneValue(entry.progress) : null,
+    };
+
     active.set(entry.id, entry);
+    syncMonitorContext(entry);
 
     const controller = {
+      monitorContext: entry.monitorContext,
       update(patch) {
         return updateEntry(entry, patch || {});
       },
@@ -404,8 +495,11 @@ function createRequestTracker(options = {}) {
       return;
     }
 
-    req.requestProgress = startRequest(req, res);
-    next();
+    const requestProgress = startRequest(req, res);
+    runWithMonitorContext(requestProgress.monitorContext, () => {
+      req.requestProgress = requestProgress;
+      next();
+    });
   }
 
   function getSnapshot() {

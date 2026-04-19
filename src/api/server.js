@@ -37,6 +37,7 @@ const {
   upsertCandidateReview: upsertCandidateReviewArray,
 } = require('../shared/candidateReviews');
 const {
+  getPool,
   ensureSchema,
   createJob,
   buildProjectBackup,
@@ -54,6 +55,7 @@ const {
   getJobItem,
   getJobItems,
   getDatabaseSummary,
+  getDatabaseQuerySnapshot,
   appendJobEvent,
   listAllEvents,
   listJobEvents,
@@ -1433,6 +1435,7 @@ function createApp(config = getConfig()) {
     try {
       const { execSync } = require('child_process');
       const requestSnapshot = requestTracker.getSnapshot();
+      const querySnapshot = getDatabaseQuerySnapshot();
       let diskFree = null;
       let diskTotal = null;
       try {
@@ -1497,6 +1500,11 @@ function createApp(config = getConfig()) {
           ...databaseSummary,
           recentItems,
           recentEvents,
+          activeQueryCount: querySnapshot.activeQueryCount,
+          recentQueryCount: querySnapshot.recentQueryCount,
+          activeQueries: querySnapshot.activeQueries,
+          recentQueries: querySnapshot.recentQueries,
+          queryHotspots: querySnapshot.hotQueries,
         },
         activeJobCount: activeJobs.length,
         activeJobs: activeJobs.map((j) => ({
@@ -1526,6 +1534,13 @@ function createApp(config = getConfig()) {
   app.get('/api/requests', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json(requestTracker.getSnapshot());
+  });
+
+  app.get('/api/queries', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const limit = Math.min(100, Math.max(1, Number(_req.query.limit) || 50));
+    const hotLimit = Math.min(25, Math.max(1, Number(_req.query.hotLimit) || 12));
+    res.json(getDatabaseQuerySnapshot({ limit, hotLimit }));
   });
 
   app.get('/api/admin/search', async (req, res, next) => {
@@ -1576,6 +1591,64 @@ function createApp(config = getConfig()) {
       }
 
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/admin/sql', async (req, res, next) => {
+    try {
+      const progress = req.requestProgress;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const sql = String(body.sql != null ? body.sql : body.query || '').trim();
+      const params = Array.isArray(body.params)
+        ? body.params
+        : (Array.isArray(body.values) ? body.values : []);
+      const maxRows = Math.max(1, Math.min(500, Number(body.maxRows) || 250));
+
+      if (!sql) {
+        res.status(400).json({ error: 'SQL is required' });
+        return;
+      }
+
+      const startedAt = Date.now();
+      progress && progress.update({
+        stage: 'sql',
+        message: 'Running SQL query',
+        progress: {
+          current: 0,
+          total: 1,
+          unit: 'query',
+          indeterminate: true,
+        },
+      });
+
+      const db = getPool(config.databaseUrl);
+      const result = await db.query(sql, params);
+      const rows = Array.isArray(result.rows) ? result.rows.slice(0, maxRows) : [];
+
+      progress && progress.update({
+        stage: 'sql',
+        message: 'SQL query complete',
+        progress: {
+          current: 1,
+          total: 1,
+          unit: 'query',
+          indeterminate: false,
+        },
+      });
+
+      res.json({
+        ok: true,
+        sql,
+        params,
+        command: result.command || null,
+        rowCount: Number.isFinite(Number(result.rowCount)) ? Number(result.rowCount) : null,
+        rows,
+        rowsTruncated: Array.isArray(result.rows) ? result.rows.length > rows.length : false,
+        fields: Array.isArray(result.fields) ? result.fields.map((field) => field && field.name).filter(Boolean) : [],
+        durationMs: Date.now() - startedAt,
+      });
     } catch (error) {
       next(error);
     }

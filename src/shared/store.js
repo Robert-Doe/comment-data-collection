@@ -6,8 +6,116 @@ const { upsertCandidateReview: upsertCandidateReviewArray } = require('./candida
 const { buildSearchClause } = require('./adminSearch');
 const { normalizeCandidateSelectionMode } = require('./jobSettings');
 const { cloneValueWithArtifactCopies } = require('./jobArtifacts');
+const { createQueryTracker } = require('./queryTracker');
 
 let pool;
+const databaseQueryTracker = createQueryTracker({
+  historyLimit: 250,
+});
+
+function normalizeQueryText(query) {
+  if (query && typeof query === 'object') {
+    return String(query.text || query.query || query.sql || '');
+  }
+  return String(query || '');
+}
+
+function normalizeQueryValues(query, values) {
+  if (Array.isArray(values)) {
+    return values;
+  }
+
+  if (query && typeof query === 'object' && Array.isArray(query.values)) {
+    return query.values;
+  }
+
+  return [];
+}
+
+function buildQueryMetadata(args, connectionType) {
+  const query = args[0];
+  const values = normalizeQueryValues(query, args[1]);
+
+  return {
+    sql: normalizeQueryText(query),
+    values,
+    connectionType,
+  };
+}
+
+function wrapTrackedQuery(queryMethod, connectionType) {
+  return function trackedQuery(...args) {
+    const handle = databaseQueryTracker.begin(buildQueryMetadata(args, connectionType));
+    const callbackIndex = args.length - 1;
+    const hasCallback = typeof args[callbackIndex] === 'function';
+
+    if (hasCallback) {
+      const callback = args[callbackIndex];
+      args[callbackIndex] = function trackedQueryCallback(err, result) {
+        handle.finish(err, result);
+        return callback.apply(this, arguments);
+      };
+
+      try {
+        return queryMethod.apply(this, args);
+      } catch (error) {
+        handle.finish(error);
+        throw error;
+      }
+    }
+
+    try {
+      const result = queryMethod.apply(this, args);
+      if (result && typeof result.then === 'function') {
+        return result.then((value) => {
+          handle.finish(null, value);
+          return value;
+        }).catch((error) => {
+          handle.finish(error);
+          throw error;
+        });
+      }
+
+      handle.finish(null, result);
+      return result;
+    } catch (error) {
+      handle.finish(error);
+      throw error;
+    }
+  };
+}
+
+function wrapTrackedClient(client) {
+  if (!client || client.__queryTrackerWrapped) {
+    return client;
+  }
+
+  client.__queryTrackerWrapped = true;
+  client.query = wrapTrackedQuery(client.query.bind(client), 'client');
+  return client;
+}
+
+function instrumentPool(targetPool) {
+  if (!targetPool || targetPool.__queryTrackerWrapped) {
+    return targetPool;
+  }
+
+  targetPool.__queryTrackerWrapped = true;
+
+  const originalConnect = targetPool.connect.bind(targetPool);
+  targetPool.connect = function trackedConnect(...args) {
+    if (typeof args[0] === 'function') {
+      const callback = args[0];
+      return originalConnect(function trackedConnectCallback(err, client, release) {
+        callback(err, err || !client ? client : wrapTrackedClient(client), release);
+      });
+    }
+
+    return originalConnect(...args).then((client) => wrapTrackedClient(client));
+  };
+
+  return targetPool;
+}
 
 function getPool(databaseUrl = process.env.DATABASE_URL) {
   if (!databaseUrl) {
@@ -18,9 +126,14 @@ function getPool(databaseUrl = process.env.DATABASE_URL) {
     pool = new Pool({
       connectionString: databaseUrl,
     });
+    instrumentPool(pool);
   }
 
   return pool;
+}
+
+function getDatabaseQuerySnapshot(options = {}) {
+  return databaseQueryTracker.getSnapshot(options);
 }
 
 async function ensureSchema(databaseUrl) {
@@ -1864,6 +1977,7 @@ async function combineJobs(jobIds, options = {}, databaseUrl) {
 
 module.exports = {
   getPool,
+  getDatabaseQuerySnapshot,
   ensureSchema,
   clearJobArtifactPaths,
   createJob,

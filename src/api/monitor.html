@@ -6,21 +6,47 @@
   <title>UGC Scanner — Server Monitor</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --panel: #1a1d27;
-      --panel2: #1e2130;
-      --line: rgba(255,255,255,0.08);
-      --text: #e2e8f0;
-      --muted: #64748b;
-      --accent: #3b82f6;
-      --green: #22c55e;
-      --yellow: #f59e0b;
-      --red: #ef4444;
+      --bg: #f2e4d4;
+      --bg2: #ead2bc;
+      --panel: rgba(252, 245, 236, 0.9);
+      --panel2: rgba(248, 237, 223, 0.94);
+      --line: rgba(126, 92, 62, 0.16);
+      --text: #3b2a20;
+      --muted: #7b6555;
+      --accent: #a76b42;
+      --accent2: #c58a5e;
+      --green: #2f7d57;
+      --yellow: #b8892e;
+      --red: #b85a47;
+      --shadow: 0 24px 70px rgba(109, 79, 47, 0.14);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "IBM Plex Mono","Cascadia Code",monospace; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
-    header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 24px; height: 57px; display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; z-index: 10; }
-    header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+    body {
+      font-family: "Aptos","Segoe UI","Helvetica Neue",sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(204, 156, 107, 0.22), transparent 28%),
+        radial-gradient(circle at top right, rgba(230, 196, 157, 0.28), transparent 26%),
+        linear-gradient(180deg, var(--bg2), var(--bg));
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    header {
+      background: rgba(250, 242, 231, 0.86);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(126, 92, 62, 0.16);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 8px 30px rgba(109, 79, 47, 0.08);
+    }
+    header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
     .hdr-left { display: flex; align-items: center; gap: 16px; }
     .hdr-right { display: flex; align-items: center; gap: 12px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; flex-shrink: 0; }
@@ -28,24 +54,45 @@
     .status-dot.warn { background: var(--yellow); }
     .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
     .hdr-status { display: flex; align-items: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
-    .shell { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 57px); overflow: hidden; }
-    .sidebar { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; scrollbar-gutter: stable; }
-    .main { overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
-    .card { padding: 16px; border-bottom: 1px solid var(--line); }
-    .card:last-child { border-bottom: none; }
+    .shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: calc(100vh - 64px); overflow: hidden; }
+    .sidebar {
+      background: rgba(249, 239, 228, 0.8);
+      backdrop-filter: blur(16px);
+      border-right: 1px solid rgba(126, 92, 62, 0.14);
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    .main {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 16px 16px 22px;
+      gap: 14px;
+    }
+    .card {
+      padding: 18px;
+      border: 1px solid rgba(126, 92, 62, 0.14);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(252, 246, 237, 0.95), rgba(245, 233, 216, 0.94));
+      box-shadow: var(--shadow);
+    }
+    .sidebar .card { margin: 12px; }
+    .main .card { margin: 0; }
+    .card + .card { margin-top: 0; }
     .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
     .hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .hi { background: var(--panel2); border-radius: 6px; padding: 8px 10px; }
+    .hi { background: rgba(255, 250, 245, 0.92); border-radius: 6px; padding: 8px 10px; }
     .hl { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
     .hv { font-size: 16px; font-weight: 700; }
     .hv.ok { color: var(--green); }
     .hv.warn { color: var(--yellow); }
     .hv.error { color: var(--red); }
-    .pbar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+    .pbar { height: 4px; background: rgba(126, 92, 62, 0.12); border-radius: 2px; margin-top: 4px; overflow: hidden; }
     .pfill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s; }
     .pfill.warn { background: var(--yellow); }
     .pfill.error { background: var(--red); }
-    .pfill.indeterminate { width: 100%; background: linear-gradient(90deg, rgba(59,130,246,0.15), rgba(59,130,246,0.95), rgba(59,130,246,0.15)); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+    .pfill.indeterminate { width: 100%; background: linear-gradient(90deg, rgba(167,107,66,0.15), rgba(167,107,66,0.95), rgba(167,107,66,0.15)); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
     @keyframes shimmer { 0% { background-position: 0 0; } 100% { background-position: 200% 0; } }
     .jcard { background: var(--panel2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
     .jid { font-size: 10px; color: var(--muted); word-break: break-all; }
@@ -54,18 +101,44 @@
     .sv.g { color: var(--green); }
     .sv.y { color: var(--yellow); }
     .sv.r { color: var(--red); }
-    .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
-    .btn:hover { background: var(--accent); border-color: var(--accent); }
-    .cbtn { width: 100%; text-align: left; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
-    .cbtn.danger:hover { border-color: var(--red); background: rgba(239,68,68,0.1); }
+    .btn {
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(255, 248, 240, 0.92);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn:hover {
+      background: linear-gradient(135deg, rgba(167, 107, 66, 0.96), rgba(202, 142, 91, 0.92));
+      border-color: transparent;
+      box-shadow: 0 14px 30px rgba(167, 107, 66, 0.22);
+      transform: translateY(-1px);
+    }
+    .cbtn {
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(255, 248, 240, 0.92);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .cbtn.danger:hover { border-color: var(--red); background: rgba(184, 90, 71, 0.12); }
     .log-bar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: sticky; top: 0; z-index: 5; }
     .log-bar-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-right: 4px; }
     .ev-count { font-size: 11px; color: var(--muted); margin-left: auto; padding-right: 4px; }
     .feed { flex: 1; min-height: 0; overflow-y: auto; }
     .erow { display: flex; align-items: flex-start; gap: 10px; padding: 7px 16px; border-bottom: 1px solid rgba(255,255,255,0.025); font-size: 12px; }
-    .erow:hover { background: rgba(255,255,255,0.03); }
+    .erow:hover { background: rgba(167,107,66,0.05); }
     .erow.new-ev { animation: flash 1.2s ease; }
-    @keyframes flash { 0%,100% { background: transparent; } 40% { background: rgba(59,130,246,0.18); } }
+    @keyframes flash { 0%,100% { background: transparent; } 40% { background: rgba(167,107,66,0.18); } }
     .ets { color: var(--muted); white-space: nowrap; font-size: 11px; min-width: 108px; }
     .edot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
     .edot.info { background: var(--accent); }
@@ -84,17 +157,34 @@
     .toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 16px; font-size: 13px; z-index: 100; max-width: 320px; }
     .toast.err { border-color: var(--red); }
     .note { font-size: 11px; color: var(--muted); line-height: 1.6; }
-    .mbox { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; font-size: 11px; line-height: 1.7; color: #93c5fd; }
-    .chip { display: inline-flex; padding: 2px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); color: var(--muted); }
-    .chip.on { background: var(--accent); border-color: var(--accent); color: white; }
+    .mbox {
+      background: rgba(202, 142, 91, 0.1);
+      border: 1px solid rgba(167, 107, 66, 0.18);
+      border-radius: 16px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.7;
+      color: #6d4f3b;
+    }
+    .chip { display: inline-flex; padding: 2px 10px; border-radius: 999px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); color: var(--muted); background: rgba(255, 248, 240, 0.9); }
+    .chip.on { background: linear-gradient(135deg, rgba(167, 107, 66, 0.95), rgba(197, 138, 94, 0.95)); border-color: transparent; color: #fffaf4; }
     .chip:not(.on):hover { border-color: var(--accent); color: var(--accent); }
     .search-form { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) 180px auto auto; gap: 8px; align-items: center; }
-    .search-form input, .search-form select { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font: inherit; padding: 9px 10px; }
+    .search-form input, .search-form select, .search-form textarea {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(255, 248, 240, 0.95);
+      color: var(--text);
+      font: inherit;
+      padding: 10px 12px;
+    }
     .search-form input::placeholder { color: var(--muted); }
     .search-form select { cursor: pointer; }
     .search-form .btn { white-space: nowrap; }
-    .overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-    .overview-card { background: var(--panel2); border-radius: 8px; padding: 10px; border: 1px solid rgba(255,255,255,0.03); min-height: 100px; }
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .overview-card { background: rgba(255, 248, 240, 0.86); border-radius: 18px; padding: 12px; border: 1px solid rgba(126, 92, 62, 0.12); min-height: 118px; }
     .overview-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
     .overview-value { font-size: 18px; font-weight: 700; color: var(--text); }
     .overview-sub { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.5; word-break: break-word; }
@@ -102,55 +192,89 @@
     .overview-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: var(--muted); }
     .overview-row strong { color: var(--text); }
     .overview-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .overview-chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.16); min-width: 120px; }
+    .overview-chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: rgba(167, 107, 66, 0.08); border: 1px solid rgba(167, 107, 66, 0.16); min-width: 120px; }
     .overview-chip em { font-style: normal; font-size: 10px; color: var(--muted); }
     .overview-chip strong { font-size: 11px; color: var(--text); word-break: break-word; }
     .result-list { display: flex; flex-direction: column; gap: 8px; }
     .result-group { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: start; }
     .result-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); padding-top: 8px; }
-    .result-card { background: var(--panel2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); padding: 10px; }
+    .result-card { background: rgba(255, 248, 240, 0.9); border-radius: 8px; border: 1px solid rgba(126, 92, 62, 0.1); padding: 10px; }
     .result-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .result-title { font-size: 12px; font-weight: 700; color: var(--text); word-break: break-word; }
     .result-sub { margin-top: 4px; font-size: 11px; color: var(--muted); word-break: break-word; line-height: 1.5; }
     .result-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
     .result-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-    .mini { padding: 5px 10px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .mini { padding: 5px 10px; font-size: 11px; border-radius: 999px; border: 1px solid rgba(126, 92, 62, 0.16); background: rgba(255, 248, 240, 0.82); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
     .mini:hover { border-color: var(--accent); color: var(--accent); }
-    .mini.on { border-color: var(--accent); color: white; background: rgba(59,130,246,0.14); }
-    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-    .detail-card { background: var(--panel2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); padding: 10px; }
+    .mini.on { border-color: var(--accent); color: white; background: rgba(167, 107, 66, 0.14); }
+    .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .detail-card { background: rgba(255, 248, 240, 0.9); border-radius: 18px; border: 1px solid rgba(126, 92, 62, 0.12); padding: 12px; }
     .detail-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
-    .detail-table th, .detail-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    .detail-table th, .detail-table td { padding: 6px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.09); vertical-align: top; }
     .detail-table th { text-align: left; color: var(--muted); font-weight: 600; white-space: nowrap; }
     .detail-table td { color: var(--text); word-break: break-word; }
-    .detail-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .detail-table tr:hover td { background: rgba(167, 107, 66, 0.06); }
     .detail-table .muted { color: var(--muted); }
-    .detail-pre { background: #0c111b; color: #d7e3ff; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px; font-size: 11px; overflow: auto; max-height: 280px; margin-top: 10px; }
-    .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.06); font-size: 10px; color: var(--muted); }
+    .detail-pre { background: rgba(255, 252, 247, 0.96); color: #4a3427; border: 1px solid rgba(126, 92, 62, 0.12); border-radius: 16px; padding: 10px; font-size: 11px; overflow: auto; max-height: 280px; margin-top: 10px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(255, 250, 244, 0.85); font-size: 10px; color: var(--muted); }
     .status-pill.good { color: var(--green); background: rgba(34,197,94,0.08); }
     .status-pill.warn { color: var(--yellow); background: rgba(245,158,11,0.08); }
     .status-pill.bad { color: var(--red); background: rgba(239,68,68,0.08); }
     .compact-list { display: flex; flex-direction: column; gap: 6px; }
-    .compact-item { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); }
+    .compact-item { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 250, 244, 0.8); }
     .compact-item .label { color: var(--text); word-break: break-word; }
     .compact-item .value { color: var(--muted); white-space: nowrap; }
     .rlist { display: flex; flex-direction: column; gap: 8px; }
-    .rcard { background: var(--panel2); border-radius: 6px; padding: 10px; }
+    .rcard { background: rgba(255, 248, 240, 0.9); border-radius: 14px; padding: 10px; border: 1px solid rgba(126, 92, 62, 0.1); cursor: pointer; }
+    .rcard.on { border-color: var(--accent); box-shadow: 0 16px 40px rgba(167, 107, 66, 0.14); }
     .rtop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
     .rtitle { font-size: 11px; font-weight: 700; color: var(--text); word-break: break-word; }
     .rmeta { font-size: 10px; color: var(--muted); white-space: nowrap; }
     .rmsg { margin-top: 6px; font-size: 11px; color: var(--text); word-break: break-word; }
     .rsub { margin-top: 4px; font-size: 10px; color: var(--muted); word-break: break-word; }
     .hot-list { display: flex; flex-direction: column; gap: 6px; }
-    .hot-item { background: var(--panel2); border-radius: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.03); cursor: pointer; }
-    .hot-item:hover { border-color: var(--accent); }
+    .hot-item { background: rgba(255, 248, 240, 0.9); border-radius: 14px; padding: 8px 10px; border: 1px solid rgba(126, 92, 62, 0.1); cursor: pointer; }
+    .hot-item:hover { border-color: var(--accent); transform: translateY(-1px); }
     .hot-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
     .hot-title { font-size: 11px; color: var(--text); word-break: break-word; }
     .hot-count { font-size: 10px; color: var(--muted); white-space: nowrap; }
     .hot-sub { font-size: 10px; color: var(--muted); margin-top: 4px; word-break: break-word; }
     a.back { color: var(--accent); text-decoration: none; font-size: 12px; }
-    @media (max-width: 1080px) { .overview-grid, .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .search-form { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid var(--line); } .overview-grid, .detail-grid, .search-form { grid-template-columns: 1fr; } .result-group { grid-template-columns: 1fr; } .result-group-title { padding-top: 0; } }
+    .metric-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .metric-card { background: rgba(255, 248, 240, 0.9); border-radius: 16px; border: 1px solid rgba(126, 92, 62, 0.12); padding: 10px; }
+    .metric-card .metric-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
+    .metric-card .metric-value { margin-top: 4px; font-size: 22px; font-weight: 700; color: var(--text); }
+    .metric-card .metric-sub { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .stack-list { display: flex; flex-direction: column; gap: 8px; }
+    .stack-item { background: rgba(255, 250, 244, 0.88); border-radius: 14px; padding: 8px 10px; border: 1px solid rgba(126, 92, 62, 0.1); }
+    .stack-item.on { border-color: var(--accent); box-shadow: 0 14px 34px rgba(167, 107, 66, 0.12); }
+    .stack-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .stack-label { font-size: 11px; color: var(--text); word-break: break-word; }
+    .stack-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .stack-track { margin-top: 6px; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); overflow: hidden; }
+    .stack-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(167, 107, 66, 0.95), rgba(197, 138, 94, 0.95)); }
+    .sql-form { display: grid; gap: 8px; }
+    .sql-form textarea { min-height: 140px; resize: vertical; font-family: "Cascadia Code","IBM Plex Mono",monospace; line-height: 1.5; }
+    .sql-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .sql-anatomy { margin-top: 10px; }
+    .sql-result { margin-top: 10px; }
+    .query-feed { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .query-card { background: rgba(255, 248, 240, 0.9); border-radius: 16px; padding: 10px 12px; border: 1px solid rgba(126, 92, 62, 0.1); cursor: pointer; }
+    .query-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .query-card.on { border-color: var(--accent); box-shadow: 0 16px 40px rgba(167, 107, 66, 0.16); }
+    .query-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .query-title { font-size: 12px; font-weight: 700; color: var(--text); word-break: break-word; }
+    .query-sub { margin-top: 4px; font-size: 11px; color: var(--muted); word-break: break-word; line-height: 1.5; }
+    .query-meta { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .query-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .query-tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: rgba(167, 107, 66, 0.1); border: 1px solid rgba(167, 107, 66, 0.16); font-size: 10px; color: #7c4f2d; }
+    .query-tag.warn { background: rgba(184, 137, 46, 0.1); border-color: rgba(184, 137, 46, 0.16); color: #8a6a23; }
+    .query-tag.bad { background: rgba(184, 90, 71, 0.08); border-color: rgba(184, 90, 71, 0.16); color: #a14d3b; }
+    .query-empty, .request-empty { padding: 18px; text-align: center; color: var(--muted); border: 1px dashed rgba(126, 92, 62, 0.22); border-radius: 16px; background: rgba(255, 250, 244, 0.82); }
+    .request-detail { display: flex; flex-direction: column; gap: 10px; }
+    .request-detail .detail-pre { margin-top: 0; }
+    @media (max-width: 1080px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid rgba(148, 163, 184, 0.12); } .search-form { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 720px) { .shell { grid-template-columns: 1fr; height: auto; } .sidebar { border-right: none; border-bottom: 1px solid rgba(148,163,184,0.12); } .overview-grid, .detail-grid, .search-form, .metric-strip { grid-template-columns: 1fr; } .result-group { grid-template-columns: 1fr; } .result-group-title { padding-top: 0; } .main { padding: 12px; } }
   </style>
 </head>
 <body>
@@ -253,13 +377,48 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Database Queries</div>
+      <div id="query-summary" class="metric-strip">
+        <div class="metric-card"><div class="metric-label">Active</div><div class="metric-value">--</div><div class="metric-sub">waiting for live SQL</div></div>
+        <div class="metric-card"><div class="metric-label">Recent</div><div class="metric-value">--</div><div class="metric-sub">latest statements</div></div>
+        <div class="metric-card"><div class="metric-label">Hot Shape</div><div class="metric-value">--</div><div class="metric-sub">most repeated query</div></div>
+      </div>
+      <div id="query-feed" style="margin-top:10px"><div class="query-empty">Loading live queries...</div></div>
+      <div class="detail-card" style="margin-top:10px">
+        <div class="overview-label">Query Inspector</div>
+        <div id="query-inspector"><div class="request-empty">Click a query to inspect it.</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">SQL Console</div>
+      <form id="sql-form" class="sql-form">
+        <textarea id="sql-input" placeholder="Type a single SQL statement here. Example: SELECT id, status, total_urls FROM jobs ORDER BY updated_at DESC LIMIT 20;"></textarea>
+        <div class="sql-toolbar">
+          <input id="sql-params" type="text" placeholder="Optional JSON params array, e.g. []" autocomplete="off">
+          <input id="sql-max-rows" type="number" min="1" max="500" value="250" style="width:120px">
+          <button class="btn" type="submit">Run SQL</button>
+          <button class="btn" type="button" id="sql-clear">Clear</button>
+        </div>
+      </form>
+      <div class="note" style="margin-top:8px">The console runs directly against the database. Use it to inspect live tables, run EXPLAIN, or trace a broken job path without leaving the monitor.</div>
+      <div class="sql-anatomy" id="sql-anatomy"><div class="query-empty">Type SQL to preview the statement shape.</div></div>
+      <div class="sql-result" id="sql-result"><div class="query-empty">No SQL has been run yet.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Request Inspector</div>
+      <div id="request-inspector"><div class="request-empty">Click a request in the sidebar to inspect the request lifecycle and related queries.</div></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Job Inspector</div>
       <form id="job-form" class="search-form">
         <input id="job-id-input" type="text" placeholder="Paste a job ID to inspect" autocomplete="off">
         <button class="btn" type="submit">Load Job</button>
         <button class="btn" type="button" id="job-copy-id">Copy ID</button>
       </form>
-      <div class="note" style="margin-top:8px">Shows row-level status, recent events, and the current item window for the selected job.</div>
+      <div class="note" style="margin-top:8px">Shows row-level status, recent events, URL hosts, and the current item window for the selected job.</div>
       <div id="job-inspector" style="margin-top:10px"><div class="note">Load a job to inspect its rows and events.</div></div>
     </div>
 
@@ -283,8 +442,12 @@ var API = window.location.origin;
 var evs = [], lv = 'all', lastTs = null, MAX = 500;
 var liveRefreshEnabled = true;
 var latestDashboard = null;
+var latestRequestSnapshot = null;
+var latestQuerySnapshot = null;
 var selectedInspectorJobId = '';
 var selectedInspectorItemId = '';
+var selectedRequestId = '';
+var selectedQueryId = '';
 var currentSearch = { query: '', jobId: '', scope: 'all', itemId: '' };
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -330,6 +493,8 @@ function fmtRequestMeta(req) {
   if (req.method || req.path) pieces.push((req.method || '') + ' ' + (req.path || ''));
   if (req.stage) pieces.push(req.stage);
   if (req.status) pieces.push(req.status);
+  if (req.targetJobId || req.jobId) pieces.push('job ' + (req.targetJobId || req.jobId));
+  if (req.targetItemId || req.itemId) pieces.push('item ' + (req.targetItemId || req.itemId));
   pieces.push(fmtDuration(req.durationMs));
   if (req.initiator) pieces.push('from ' + req.initiator);
   return pieces.filter(Boolean).join(' | ');
@@ -367,13 +532,483 @@ function renderRequests(list, emptyText, isRecent) {
     if (isRecent && req && req.statusCode != null) {
       status = (status ? status + ' | ' : '') + 'HTTP ' + req.statusCode;
     }
-    return '<div class="rcard">'
+    return '<div class="rcard'+(selectedRequestId && String(selectedRequestId) === String(req && req.id) ? ' on' : '')+'" onclick=\'inspectRequest('+jsQuote(req && req.id ? req.id : '')+')\'>'
       +'<div class="rtop"><div><div class="rtitle">'+esc(fmtRequestTitle(req))+'</div><div class="rsub">'+esc(fmtRequestMeta(req))+'</div></div><div class="rmeta">'+esc(status)+'</div></div>'
       +'<div class="pbar" style="margin-top:8px"><div class="'+fillClass+'"'+fillStyle+'></div></div>'
       +(message ? '<div class="rmsg">'+esc(message)+'</div>' : '')
       +(sub ? '<div class="rsub">'+esc(sub)+'</div>' : '')
       +'</div>';
   }).join('')+'</div>';
+}
+function shorten(text, maxLength) {
+  var value = String(text == null ? '' : text);
+  var limit = Math.max(16, Number(maxLength) || 120);
+  if (value.length <= limit) {
+    return value;
+  }
+  return value.slice(0, limit - 1) + '…';
+}
+function extractHostname(value) {
+  try {
+    return new URL(String(value || '')).hostname || '';
+  } catch (_) {
+    return '';
+  }
+}
+function normalizeQueryList(snapshot) {
+  var active = Array.isArray(snapshot && snapshot.activeQueries) ? snapshot.activeQueries : [];
+  var recent = Array.isArray(snapshot && snapshot.recentQueries) ? snapshot.recentQueries : [];
+  return active.concat(recent);
+}
+function findRequestById(requestId) {
+  var id = String(requestId || '').trim();
+  if (!id || !latestRequestSnapshot) {
+    return null;
+  }
+
+  var list = []
+    .concat(Array.isArray(latestRequestSnapshot.activeRequests) ? latestRequestSnapshot.activeRequests : [])
+    .concat(Array.isArray(latestRequestSnapshot.recentRequests) ? latestRequestSnapshot.recentRequests : []);
+
+  for (var index = 0; index < list.length; index += 1) {
+    if (String(list[index] && list[index].id || '') === id) {
+      return list[index];
+    }
+  }
+
+  return null;
+}
+function findQueryById(queryId) {
+  var id = String(queryId || '').trim();
+  if (!id || !latestQuerySnapshot) {
+    return null;
+  }
+
+  var list = normalizeQueryList(latestQuerySnapshot);
+  for (var index = 0; index < list.length; index += 1) {
+    if (String(list[index] && list[index].id || '') === id) {
+      return list[index];
+    }
+  }
+
+  return null;
+}
+function renderMetricStrip(metrics) {
+  return '<div class="metric-strip">'+metrics.map(function(metric) {
+    return '<div class="metric-card">'
+      +'<div class="metric-label">'+esc(metric.label || '')+'</div>'
+      +'<div class="metric-value">'+esc(metric.value == null ? '--' : metric.value)+'</div>'
+      +(metric.sub ? '<div class="metric-sub">'+esc(metric.sub)+'</div>' : '')
+      +'</div>';
+  }).join('')+'</div>';
+}
+function renderStackList(items, emptyText) {
+  var list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    return '<div class="query-empty">'+esc(emptyText || 'No data yet.')+'</div>';
+  }
+
+  var maxValue = 1;
+  list.forEach(function(item) {
+    maxValue = Math.max(maxValue, Number(item && item.value) || 0);
+  });
+
+  return '<div class="stack-list">'+list.map(function(item) {
+    var value = Number(item && item.value) || 0;
+    var pct = maxValue ? Math.max(4, Math.round((value / maxValue) * 100)) : 4;
+    return '<div class="stack-item'+(item && item.on ? ' on' : '')+'">'
+      +'<div class="stack-row"><span class="stack-label">'+esc(item && item.label ? item.label : '--')+'</span><span class="stack-meta">'+esc(item && item.meta ? item.meta : value)+'</span></div>'
+      +'<div class="stack-track"><div class="stack-fill" style="width:'+pct+'%"></div></div>'
+      +(item && item.sub ? '<div class="stack-meta" style="margin-top:4px">'+esc(item.sub)+'</div>' : '')
+      +'</div>';
+  }).join('')+'</div>';
+}
+function requestDisplayLabel(req) {
+  if (!req) return '--';
+  return req.label || ((req.method || '') + ' ' + (req.path || req.fullPath || '')).trim() || '--';
+}
+function queryDisplayLabel(query) {
+  if (!query) return '--';
+  var analysis = query.analysis || {};
+  return (analysis.statementType || 'SQL') + ' ' + shorten(query.sqlPreview || query.sql || '', 80);
+}
+function queryTablesLabel(query) {
+  var tables = query && query.analysis && Array.isArray(query.analysis.tables) ? query.analysis.tables : [];
+  return tables.length ? tables.join(', ') : 'n/a';
+}
+function renderQueryCard(query) {
+  if (!query) {
+    return '';
+  }
+
+  var analysis = query.analysis || {};
+  var request = query.request || {};
+  var statusClassName = query.status === 'error' ? 'bad' : (analysis.isWrite ? 'warn' : '');
+  return '<div class="query-card'+(selectedQueryId && String(selectedQueryId) === String(query.id) ? ' on' : '')+'" onclick=\'inspectQuery('+jsQuote(query.id)+')\'>'
+    +'<div class="query-top">'
+      +'<div>'
+        +'<div class="query-title">'+esc(queryDisplayLabel(query))+'</div>'
+        +'<div class="query-sub">'+esc(request.method || '--')+' '+esc(request.path || request.fullPath || '--')+'</div>'
+      +'</div>'
+      +'<div class="query-meta">'+esc(fmtDuration(query.durationMs || 0))+'</div>'
+    +'</div>'
+    +'<div class="query-tags">'
+      +'<span class="query-tag'+(statusClassName ? ' '+statusClassName : '')+'">'+esc(analysis.statementType || 'SQL')+'</span>'
+      +(analysis.tables && analysis.tables.length ? '<span class="query-tag">'+esc(analysis.tables.join(', '))+'</span>' : '')
+      +'<span class="query-tag">'+esc((analysis.parameterCount || 0)+' params')+'</span>'
+      +(query.connectionType ? '<span class="query-tag">'+esc(query.connectionType)+'</span>' : '')
+    +'</div>'
+    +'<div class="query-sub">'+esc(analysis.signature || query.sqlPreview || query.sql || '')+'</div>'
+  +'</div>';
+}
+function renderQueryFeed(snapshot) {
+  var queries = normalizeQueryList(snapshot);
+  if (!queries.length) {
+    return '<div class="query-empty">No live SQL activity yet.</div>';
+  }
+
+  return '<div class="query-feed">'+queries.slice(0, 20).map(renderQueryCard).join('')+'</div>';
+}
+function renderRequestInspector(requestId) {
+  var requestedId = String(requestId || '').trim();
+  var request = findRequestById(requestedId);
+  if (!request && !requestedId) {
+    request = latestRequestSnapshot && Array.isArray(latestRequestSnapshot.activeRequests) && latestRequestSnapshot.activeRequests[0] || null;
+  }
+  if (!request) {
+    return requestedId
+      ? '<div class="request-empty">Selected request '+esc(shorten(requestedId, 24))+' is no longer in the live snapshot.</div>'
+      : '<div class="request-empty">Click a request in the sidebar to inspect the request lifecycle, target job, and related query activity.</div>';
+  }
+
+  var relatedQueries = normalizeQueryList(latestQuerySnapshot).filter(function(query) {
+    return query && query.request && String(query.request.id || '') === String(request.id || '');
+  });
+  var targetJob = request.targetJobId || request.jobId || '';
+  var targetItem = request.targetItemId || request.itemId || '';
+  var actionButtons = [
+    targetJob ? '<button class="mini" type="button" onclick=\'inspectJob('+jsQuote(targetJob)+')\'>Open job</button>' : '',
+    request.path ? '<button class="mini" type="button" onclick=\'applySearchPath('+jsQuote(request.path)+')\'>Search path</button>' : '',
+  ].filter(Boolean).join('');
+
+  return '<div class="request-detail">'
+    +renderMetricStrip([
+      { label: 'Status', value: request.status || '--', sub: request.message || request.stage || '' },
+      { label: 'Duration', value: fmtDuration(request.durationMs || 0), sub: ((request.method || '--') + ' ' + (request.path || '')).trim() },
+      { label: 'Target', value: targetJob || '--', sub: targetItem ? ('item ' + targetItem) : (request.scope || 'request') },
+      { label: 'Progress', value: request.progress && request.progress.total != null ? (request.progress.current + '/' + request.progress.total) : '--', sub: request.progress && request.progress.message ? request.progress.message : '' },
+    ])
+    +'<div class="detail-card" style="padding: 12px; margin-top: 10px">'
+      +'<div class="overview-label">Request</div>'
+      +'<div class="overview-value" style="font-size: 14px">'+esc(requestDisplayLabel(request))+'</div>'
+      +'<div class="overview-sub">'+esc(request.fullPath || request.path || '')+'</div>'
+      +'<div class="overview-sub">ID '+esc(request.id ? shorten(request.id, 24) : '--')+' | '+esc(request.statusCode != null ? ('HTTP ' + request.statusCode) : 'pending')+' | '+esc(request.initiator || request.referer || '--')+'</div>'
+      +'<div class="result-actions">'+actionButtons+'</div>'
+    +'</div>'
+    +'<pre class="detail-pre">'+esc(safeJson(request))+'</pre>'
+    +'<div class="detail-card" style="padding: 12px">'
+      +'<div class="overview-label">Related Queries</div>'
+      +renderStackList(relatedQueries.slice(0, 6).map(function(query) {
+        return {
+          label: queryDisplayLabel(query),
+          value: query.durationMs || 0,
+          meta: (query.analysis && query.analysis.statementType ? query.analysis.statementType : 'SQL') + ' | ' + fmtDuration(query.durationMs || 0),
+          sub: query.analysis && query.analysis.tables && query.analysis.tables.length ? query.analysis.tables.join(', ') : (query.request && query.request.path ? query.request.path : ''),
+          on: selectedQueryId && String(selectedQueryId) === String(query.id),
+        };
+      }), 'No query activity has been linked to this request yet.')
+    +'</div>'
+  +'</div>';
+}
+function renderQueryInspector(queryId) {
+  var requestedId = String(queryId || '').trim();
+  var query = findQueryById(requestedId);
+  if (!query && !requestedId) {
+    query = latestQuerySnapshot && Array.isArray(latestQuerySnapshot.activeQueries) && latestQuerySnapshot.activeQueries[0] || null;
+  }
+  if (!query) {
+    return requestedId
+      ? '<div class="request-empty">Selected query '+esc(shorten(requestedId, 24))+' is no longer in the live snapshot.</div>'
+      : '<div class="request-empty">Click a query to inspect its SQL, parameters, and request context.</div>';
+  }
+
+  var analysis = query.analysis || {};
+  var request = query.request || {};
+  var result = query.result || {};
+  var tags = [
+    '<span class="query-tag">'+esc(analysis.statementType || 'SQL')+'</span>',
+    analysis.isWrite ? '<span class="query-tag warn">write</span>' : '<span class="query-tag">read</span>',
+    analysis.tables && analysis.tables.length ? '<span class="query-tag">'+esc(analysis.tables.join(', '))+'</span>' : '',
+    analysis.parameterCount != null ? '<span class="query-tag">'+esc(analysis.parameterCount + ' params')+'</span>' : '',
+  ].filter(Boolean).join('');
+
+  var actionButtons = [
+    request.jobId ? '<button class="mini" type="button" onclick=\'inspectJob('+jsQuote(request.jobId)+')\'>Open job</button>' : '',
+    query.sql ? '<button class="mini" type="button" onclick=\'loadSqlDraft('+jsQuote(query.sql)+')\'>Load into SQL console</button>' : '',
+    request.id ? '<button class="mini" type="button" onclick=\'inspectRequest('+jsQuote(request.id)+')\'>Open request</button>' : '',
+  ].filter(Boolean).join('');
+
+  return '<div class="request-detail">'
+    +renderMetricStrip([
+      { label: 'Duration', value: fmtDuration(query.durationMs || 0), sub: query.status || '--' },
+      { label: 'Rows', value: result.rowCount != null ? result.rowCount : '--', sub: result.command || 'result' },
+      { label: 'Connection', value: query.connectionType || '--', sub: request.method ? request.method + ' ' + (request.path || '') : '' },
+      { label: 'Params', value: analysis.parameterCount != null ? analysis.parameterCount : '--', sub: analysis.tables && analysis.tables.length ? analysis.tables.join(', ') : 'SQL shape' },
+    ])
+    +'<div class="detail-card" style="padding: 12px; margin-top: 10px">'
+      +'<div class="overview-label">Query</div>'
+      +'<div class="overview-value" style="font-size: 14px">'+esc(queryDisplayLabel(query))+'</div>'
+      +'<div class="overview-sub">ID '+esc(query.id ? shorten(query.id, 24) : '--')+' | '+esc(request.path || request.fullPath || 'no request context')+'</div>'
+      +'<div class="query-tags">'+tags+'</div>'
+      +'<div class="result-actions">'+actionButtons+'</div>'
+    +'</div>'
+    +'<div class="detail-card" style="padding: 12px">'
+      +'<div class="overview-label">SQL</div>'
+      +'<pre class="detail-pre">'+esc(query.sql || '')+'</pre>'
+    +'</div>'
+    +'<div class="detail-card" style="padding: 12px">'
+      +'<div class="overview-label">Anatomy</div>'
+      +'<div class="compact-list">'
+        +'<div class="compact-item"><span class="label">Statement</span><span class="value">'+esc(analysis.statementType || '--')+'</span></div>'
+        +'<div class="compact-item"><span class="label">Tables</span><span class="value">'+esc(queryTablesLabel(query))+'</span></div>'
+        +'<div class="compact-item"><span class="label">Signature</span><span class="value">'+esc(analysis.signature || '--')+'</span></div>'
+        +'<div class="compact-item"><span class="label">Parameters</span><span class="value">'+esc(analysis.parameterPreview ? safeJson(analysis.parameterPreview) : '[]')+'</span></div>'
+      +'</div>'
+    +'</div>'
+  +'</div>';
+}
+function analyzeSqlDraft() {
+  var sqlInput = document.getElementById('sql-input');
+  var paramsInput = document.getElementById('sql-params');
+  var sql = sqlInput ? sqlInput.value : '';
+  var paramsText = paramsInput ? paramsInput.value.trim() : '';
+  var analysis = {
+    statementType: 'UNKNOWN',
+    tables: [],
+    parameterCount: 0,
+    parameterPreview: [],
+    isWrite: false,
+    signature: '',
+  };
+
+  var text = String(sql || '').trim();
+  if (text) {
+    var firstWord = text.replace(/\s+/g, ' ').trim().split(' ')[0].toUpperCase();
+    analysis.statementType = firstWord || 'UNKNOWN';
+    analysis.isWrite = /^(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|VACUUM|REINDEX|GRANT|REVOKE|COMMENT|MERGE|DO|CALL)\b/i.test(text);
+    var tableMatches = [];
+    var patterns = [
+      /\bfrom\s+([a-zA-Z0-9_."`[\]-]+)/gi,
+      /\bjoin\s+([a-zA-Z0-9_."`[\]-]+)/gi,
+      /\binto\s+([a-zA-Z0-9_."`[\]-]+)/gi,
+      /\bupdate\s+([a-zA-Z0-9_."`[\]-]+)/gi,
+      /\bdelete\s+from\s+([a-zA-Z0-9_."`[\]-]+)/gi,
+    ];
+    patterns.forEach(function(pattern) {
+      var match;
+      while ((match = pattern.exec(text))) {
+        if (match[1]) {
+          tableMatches.push(String(match[1]).replace(/[)"'`;,\]]+$/, ''));
+        }
+      }
+    });
+    analysis.tables = Array.from(new Set(tableMatches.filter(Boolean)));
+    analysis.signature = shorten(text.replace(/\s+/g, ' '), 220);
+  }
+
+  if (paramsText) {
+    try {
+      var parsed = JSON.parse(paramsText);
+      if (Array.isArray(parsed)) {
+        analysis.parameterCount = parsed.length;
+        analysis.parameterPreview = parsed.slice(0, 6);
+      } else if (parsed && typeof parsed === 'object') {
+        analysis.parameterCount = Object.keys(parsed).length;
+        analysis.parameterPreview = Object.keys(parsed).slice(0, 6).map(function(key) {
+          return { key: key, value: parsed[key] };
+        });
+      }
+    } catch (_) {
+      analysis.parameterPreview = ['Invalid JSON parameters'];
+    }
+  }
+
+  return analysis;
+}
+function renderSqlAnatomy() {
+  var analysis = analyzeSqlDraft();
+  var paramPreview = analysis.parameterPreview && analysis.parameterPreview.length
+    ? safeJson(analysis.parameterPreview)
+    : '[]';
+
+  return renderMetricStrip([
+    { label: 'Statement', value: analysis.statementType || '--', sub: analysis.signature || 'Awaiting SQL input' },
+    { label: 'Tables', value: analysis.tables.length ? analysis.tables.join(', ') : '--', sub: analysis.isWrite ? 'write query' : 'read query' },
+    { label: 'Params', value: analysis.parameterCount, sub: paramPreview },
+    { label: 'Risk', value: analysis.isWrite ? 'Write' : 'Read', sub: analysis.isWrite ? 'Use carefully' : 'Safe to inspect' },
+  ]);
+}
+function updateSqlAnatomy() {
+  var anatomy = document.getElementById('sql-anatomy');
+  if (anatomy) {
+    anatomy.innerHTML = renderSqlAnatomy();
+  }
+}
+function renderSqlResult(payload) {
+  if (!payload) {
+    return '<div class="query-empty">No SQL has been run yet.</div>';
+  }
+
+  if (payload.error) {
+    return '<div class="query-empty" style="border-color: var(--red); color: #fecaca">'+esc(payload.error)+'</div>';
+  }
+
+  var rows = Array.isArray(payload.rows) ? payload.rows : [];
+  var fields = Array.isArray(payload.fields) && payload.fields.length
+    ? payload.fields
+    : (rows.length ? Object.keys(rows[0]) : []);
+  var header = renderMetricStrip([
+    { label: 'Command', value: payload.command || '--', sub: payload.sql ? shorten(payload.sql.replace(/\s+/g, ' '), 120) : '' },
+    { label: 'Rows', value: payload.rowCount != null ? payload.rowCount : rows.length, sub: payload.rowsTruncated ? 'truncated to protect the UI' : 'full response shown' },
+    { label: 'Duration', value: fmtDuration(payload.durationMs || 0), sub: payload.params ? 'params ' + safeJson(payload.params) : 'no params' },
+    { label: 'Columns', value: fields.length, sub: fields.join(', ') || 'none' },
+  ]);
+
+  if (!rows.length) {
+    return header + '<div class="query-empty" style="margin-top:10px">No rows returned.</div>';
+  }
+
+  var limitedRows = rows.slice(0, 25);
+  var table = '<table class="detail-table"><thead><tr>'
+    + fields.map(function(field) { return '<th>'+esc(field)+'</th>'; }).join('')
+    + '</tr></thead><tbody>'
+    + limitedRows.map(function(row) {
+      return '<tr>'+fields.map(function(field) {
+        return '<td>'+esc(fmtMaybe(row && row[field]))+'</td>';
+      }).join('')+'</tr>';
+    }).join('')
+    + '</tbody></table>';
+
+  var footer = rows.length > limitedRows.length ? '<div class="note" style="margin-top:8px">Showing '+limitedRows.length+' of '+rows.length+' row(s).</div>' : '';
+  return header + '<div class="detail-card sql-result-table" style="margin-top:10px; overflow:auto">'+table+'</div>' + footer;
+}
+function refreshInspectors() {
+  var requestPanel = document.getElementById('request-inspector');
+  if (requestPanel) {
+    requestPanel.innerHTML = renderRequestInspector(selectedRequestId);
+  }
+  var queryPanel = document.getElementById('query-inspector');
+  if (queryPanel) {
+    queryPanel.innerHTML = renderQueryInspector(selectedQueryId);
+  }
+  var feed = document.getElementById('query-feed');
+  if (feed) {
+    feed.innerHTML = renderQueryFeed(latestQuerySnapshot);
+  }
+  var anatomy = document.getElementById('sql-anatomy');
+  if (anatomy) {
+    anatomy.innerHTML = renderSqlAnatomy();
+  }
+}
+function runSqlQuery(event) {
+  if (event) {
+    event.preventDefault();
+  }
+
+  var sqlInput = document.getElementById('sql-input');
+  var paramsInput = document.getElementById('sql-params');
+  var maxRowsInput = document.getElementById('sql-max-rows');
+  var resultPanel = document.getElementById('sql-result');
+  var sql = sqlInput ? sqlInput.value.trim() : '';
+  var paramsText = paramsInput ? paramsInput.value.trim() : '';
+  var maxRows = Math.max(1, Math.min(500, Number(maxRowsInput && maxRowsInput.value) || 250));
+  var params = [];
+
+  if (!sql) {
+    if (resultPanel) {
+      resultPanel.innerHTML = '<div class="query-empty">Type SQL before running it.</div>';
+    }
+    return Promise.resolve();
+  }
+
+  if (paramsText) {
+    try {
+      params = JSON.parse(paramsText);
+      if (!Array.isArray(params)) {
+        params = [params];
+      }
+    } catch (error) {
+      if (resultPanel) {
+        resultPanel.innerHTML = '<div class="query-empty" style="border-color: var(--red); color: #fecaca">Invalid JSON params: '+esc(error.message || String(error))+'</div>';
+      }
+      return Promise.resolve();
+    }
+  }
+
+  if (resultPanel) {
+    resultPanel.innerHTML = '<div class="query-empty">Running SQL...</div>';
+  }
+
+  return fetch(API+'/api/admin/sql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sql: sql,
+      params: params,
+      maxRows: maxRows,
+    }),
+  }).then(function(r){ return r.json().then(function(body){ return { ok: r.ok, body: body }; }); }).then(function(response){
+    var body = response.body || {};
+    if (!response.ok || body.error) {
+      if (resultPanel) {
+        resultPanel.innerHTML = '<div class="query-empty" style="border-color: var(--red); color: #fecaca">'+esc(body.error || 'SQL query failed')+'</div>';
+      }
+      showToast(body.error || 'SQL query failed', true);
+      return null;
+    }
+
+    if (resultPanel) {
+      resultPanel.innerHTML = renderSqlResult(body);
+    }
+    refreshInspectors();
+    showToast('SQL executed: '+(body.command || 'query'));
+    return body;
+  }).catch(function(error){
+    if (resultPanel) {
+      resultPanel.innerHTML = '<div class="query-empty" style="border-color: var(--red); color: #fecaca">'+esc(error && error.message ? error.message : String(error))+'</div>';
+    }
+    showToast('SQL query failed', true);
+    return null;
+  });
+}
+function inspectRequest(requestId) {
+  selectedRequestId = String(requestId || '').trim();
+  refreshInspectors();
+  return Promise.resolve();
+}
+function inspectQuery(queryId) {
+  selectedQueryId = String(queryId || '').trim();
+  refreshInspectors();
+  return Promise.resolve();
+}
+function applySearchPath(path) {
+  var queryInput = document.getElementById('search-query');
+  var scopeInput = document.getElementById('search-scope');
+  if (queryInput) {
+    queryInput.value = path || '';
+  }
+  if (scopeInput) {
+    scopeInput.value = 'all';
+  }
+  return runSearch();
+}
+function loadSqlDraft(sql) {
+  var sqlInput = document.getElementById('sql-input');
+  if (sqlInput) {
+    sqlInput.value = sql || '';
+  }
+  updateSqlAnatomy();
+  return Promise.resolve();
 }
 function jsQuote(value) {
   return JSON.stringify(String(value == null ? '' : value));
@@ -396,6 +1031,7 @@ function renderOverview(data) {
   var jobs = Array.isArray(data && data.recentJobs) ? data.recentJobs.slice(0, 5) : [];
   var hot = Array.isArray(data && data.requestHotspots) ? data.requestHotspots.slice(0, 5) : [];
   var activeRequests = Array.isArray(data && data.activeRequests) ? data.activeRequests : [];
+  var queryHotspots = Array.isArray(db && db.queryHotspots) ? db.queryHotspots.slice(0, 5) : (latestQuerySnapshot && Array.isArray(latestQuerySnapshot.hotQueries) ? latestQuerySnapshot.hotQueries.slice(0, 5) : []);
   var queueCounts = queue.counts || {};
   var memory = system.memoryUsage || {};
   var activeJobCount = Number(data && data.activeJobCount) || 0;
@@ -443,14 +1079,31 @@ function renderOverview(data) {
     '</div>',
   ].join(''));
 
+  var queriesCard = overviewCard('Live Queries', [
+    '<div class="overview-value">'+esc((db.activeQueryCount || 0)+' active')+'</div>',
+    '<div class="overview-sub">'+esc((db.recentQueryCount || 0)+' recent SQL statements recorded')+'</div>',
+    '<div class="hot-list" style="margin-top:10px">',
+      queryHotspots.length ? queryHotspots.map(function(query) {
+        var sample = query.sample || {};
+        var action = sample.id ? 'inspectQuery('+jsQuote(sample.id)+')' : '';
+        var summary = query.signature || sample.sqlPreview || sample.sql || '';
+        return '<div class="hot-item"'+(action ? ' onclick=\''+action+'\'' : '')+'>'
+          +'<div class="hot-top"><div class="hot-title">'+esc((query.statementType || 'SQL')+' | '+summary)+'</div><div class="hot-count">'+esc(query.count)+'x | '+esc(fmtDuration(query.averageDurationMs || query.maxDurationMs || 0))+'</div></div>'
+          +'<div class="hot-sub">'+esc((query.tables && query.tables.length ? query.tables.join(', ') : (sample.request && sample.request.path ? sample.request.path : '')))+' </div>'
+          +'<div class="hot-sub">'+esc(query.lastError || query.lastStatus || '--')+'</div>'
+        +'</div>';
+      }).join('') : '<div class="note">No query hotspots yet.</div>',
+    '</div>',
+  ].join(''));
+
   var requestsCard = overviewCard('Hot Requests', [
     '<div class="overview-value">'+esc((data && data.activeRequestCount) || 0)+' active</div>',
     '<div class="overview-sub">'+esc((data && data.recentRequestCount) || 0)+' recent long requests recorded</div>',
     '<div class="hot-list" style="margin-top:10px">',
       hot.length ? hot.map(function(req) {
         var requestTitle = (req.method || 'GET') + ' ' + (req.path || req.fullPath || '');
-        var sampleJobId = req.sample && req.sample.jobId ? req.sample.jobId : '';
-        var action = sampleJobId ? 'inspectJob('+jsQuote(sampleJobId)+')' : 'focusRequest('+jsQuote(req.path || '' )+','+jsQuote(req.fullPath || '')+')';
+        var sampleId = req.sample && req.sample.id ? req.sample.id : '';
+        var action = sampleId ? 'inspectRequest('+jsQuote(sampleId)+')' : 'focusRequest('+jsQuote(req.path || '' )+','+jsQuote(req.fullPath || '')+')';
         return '<div class="hot-item" onclick=\''+action+'\'>'+
           '<div class="hot-top"><div class="hot-title">'+esc(requestTitle)+'</div><div class="hot-count">'+esc(req.count)+'x | '+esc(fmtDuration(req.averageDurationMs || req.maxDurationMs || 0))+'</div></div>'+
           '<div class="hot-sub">'+esc(req.lastFullPath || req.path || '')+'</div>'+
@@ -466,7 +1119,7 @@ function renderOverview(data) {
     '<div class="overview-sub">The main feed below shows every event as it lands. Pause live refresh if you want to inspect a static state.</div>',
   ].join(''));
 
-  return '<div class="overview-grid">'+processCard+queueCard+databaseCard+requestsCard+activityCard+'</div>';
+  return '<div class="overview-grid">'+processCard+queueCard+databaseCard+queriesCard+requestsCard+activityCard+'</div>';
 }
 function renderSearchResults(data) {
   var jobs = Array.isArray(data && data.jobs) ? data.jobs : [];
@@ -531,6 +1184,18 @@ function renderJobInspector(data) {
     ['Running', job.running_count || 0],
     ['Failed', job.failed_count || 0],
   ];
+  var statusBuckets = {};
+  var hostBuckets = {};
+  var sourceBuckets = {};
+
+  items.forEach(function(item) {
+    var statusKey = item.status || 'unknown';
+    var hostKey = extractHostname(item.final_url || item.normalized_url || item.input_url) || 'unknown';
+    var sourceKey = item.analysis_source || 'unknown';
+    statusBuckets[statusKey] = (statusBuckets[statusKey] || 0) + 1;
+    hostBuckets[hostKey] = (hostBuckets[hostKey] || 0) + 1;
+    sourceBuckets[sourceKey] = (sourceBuckets[sourceKey] || 0) + 1;
+  });
 
   var summary = '<div class="detail-grid">'
     +'<div class="detail-card"><div class="overview-label">Job ID</div><div class="overview-value" style="font-size:14px">'+esc(job.id)+'</div><div class="overview-sub">'+esc(job.source_filename || '--')+'</div></div>'
@@ -545,6 +1210,10 @@ function renderJobInspector(data) {
       +'<div class="overview-value" style="font-size:14px">Row '+esc(selectedItem.row_number || '?')+' | '+esc(selectedItem.status || '--')+'</div>'
       +'<div class="overview-sub">'+esc(selectedItem.title || selectedItem.input_url || selectedItem.normalized_url || selectedItem.id)+'</div>'
       +'<div class="overview-sub">'+esc(selectedItem.final_url || selectedItem.normalized_url || selectedItem.input_url || '')+'</div>'
+      +'<div class="result-actions">'
+        +'<a class="mini" href="'+esc(API+'/api/jobs/'+job.id+'/items/'+selectedItem.id+'/graph.svg')+'" target="_blank" rel="noreferrer">Open graph</a>'
+        +'<a class="mini" href="'+esc(API+'/api/jobs/'+job.id+'/items/'+selectedItem.id+'/graph.dot')+'" target="_blank" rel="noreferrer">Open dot</a>'
+      +'</div>'
       +'<pre class="detail-pre">'+esc(safeJson(selectedItem))+'</pre>'
     +'</div>'
   ) : '';
@@ -574,8 +1243,41 @@ function renderJobInspector(data) {
     +'<span class="mini">'+esc((counts[0][1] || 0)+' done')+'</span>'
     +'</div>';
 
+  var statusTrace = Object.keys(statusBuckets).sort(function(left, right) {
+    return statusBuckets[right] - statusBuckets[left];
+  }).map(function(statusKey) {
+    return {
+      label: statusKey,
+      value: statusBuckets[statusKey],
+      meta: statusBuckets[statusKey] + ' items',
+    };
+  });
+  var hostTrace = Object.keys(hostBuckets).sort(function(left, right) {
+    return hostBuckets[right] - hostBuckets[left];
+  }).slice(0, 8).map(function(hostKey) {
+    return {
+      label: hostKey,
+      value: hostBuckets[hostKey],
+      meta: hostBuckets[hostKey] + ' URLs',
+    };
+  });
+  var sourceTrace = Object.keys(sourceBuckets).sort(function(left, right) {
+    return sourceBuckets[right] - sourceBuckets[left];
+  }).map(function(sourceKey) {
+    return {
+      label: sourceKey,
+      value: sourceBuckets[sourceKey],
+      meta: sourceBuckets[sourceKey] + ' rows',
+    };
+  });
+
   return summary
     +controls
+    +'<div class="detail-grid" style="margin-top:10px">'
+      +'<div class="detail-card"><div class="overview-label">Status Spread</div>'+renderStackList(statusTrace, 'No item statuses yet.')+'</div>'
+      +'<div class="detail-card"><div class="overview-label">URL Hosts</div>'+renderStackList(hostTrace, 'No hosts found.')+'</div>'
+      +'<div class="detail-card"><div class="overview-label">Analysis Source</div>'+renderStackList(sourceTrace, 'No source breakdown yet.')+'</div>'
+    +'</div>'
     +selectedItemCard
     +'<div class="detail-card" style="margin-top:10px">'
       +'<div class="overview-label">Rows</div>'
@@ -638,6 +1340,20 @@ function showToast(msg, isErr) {
 function loadHealth() {
   return fetch(API+'/api/health/detailed').then(function(r){ return r.json(); }).then(function(d){
     latestDashboard = d;
+    latestRequestSnapshot = {
+      activeRequestCount: d && d.activeRequestCount || 0,
+      recentRequestCount: d && d.recentRequestCount || 0,
+      activeRequests: Array.isArray(d && d.activeRequests) ? d.activeRequests : [],
+      recentRequests: Array.isArray(d && d.recentRequests) ? d.recentRequests : [],
+      hotRequests: Array.isArray(d && d.requestHotspots) ? d.requestHotspots : [],
+    };
+    latestQuerySnapshot = {
+      activeQueryCount: d && d.database && d.database.activeQueryCount || 0,
+      recentQueryCount: d && d.database && d.database.recentQueryCount || 0,
+      activeQueries: Array.isArray(d && d.database && d.database.activeQueries) ? d.database.activeQueries : [],
+      recentQueries: Array.isArray(d && d.database && d.database.recentQueries) ? d.database.recentQueries : [],
+      hotQueries: Array.isArray(d && d.database && d.database.queryHotspots) ? d.database.queryHotspots : [],
+    };
     var re=document.getElementById('h-redis');
     var redisState = d.redis === null || d.redis === undefined ? null : !!d.redis;
     re.textContent=redisState===null?'--':(redisState?'OK':'DOWN');
@@ -676,15 +1392,12 @@ function loadHealth() {
           +'<span style="color:var(--muted)">'+pj+'%</span><span></span></div></div>';
       }).join('');
     }
-    var activeRequests=document.getElementById('ractive');
-    var recentRequests=document.getElementById('rrecent');
-    activeRequests.innerHTML = renderRequests(d.activeRequests, 'No active requests.', false);
-    recentRequests.innerHTML = renderRequests(d.recentRequests, 'No recent requests.', true);
     var overview=document.getElementById('overview-grid');
     if (overview) {
       overview.innerHTML = renderOverview(d);
     }
     updateLiveToggle();
+    refreshInspectors();
     if (selectedInspectorJobId) {
       var inspector = document.getElementById('job-inspector');
       if (inspector && inspector.dataset && inspector.dataset.loadedJobId === selectedInspectorJobId) {
@@ -692,6 +1405,62 @@ function loadHealth() {
         inspectJob(selectedInspectorJobId, selectedInspectorItemId, true).catch(function(error){ console.error(error); });
       }
     }
+  }).catch(function(){});
+}
+
+function loadRequests(isRefresh) {
+  if (!liveRefreshEnabled && !isRefresh) {
+    return Promise.resolve();
+  }
+
+  return fetch(API+'/api/requests', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(d){
+    latestRequestSnapshot = d || {
+      activeRequestCount: 0,
+      recentRequestCount: 0,
+      activeRequests: [],
+      recentRequests: [],
+      hotRequests: [],
+    };
+    var activeRequests=document.getElementById('ractive');
+    var recentRequests=document.getElementById('rrecent');
+    if (activeRequests) {
+      activeRequests.innerHTML = renderRequests(latestRequestSnapshot.activeRequests, 'No active requests.', false);
+    }
+    if (recentRequests) {
+      recentRequests.innerHTML = renderRequests(latestRequestSnapshot.recentRequests, 'No recent requests.', true);
+    }
+    refreshInspectors();
+    setStatus(liveRefreshEnabled ? 'ok' : 'warn', liveRefreshEnabled ? 'Live' : 'Paused');
+    var lts = document.getElementById('lts');
+    if (lts) {
+      lts.textContent = 'Updated '+new Date().toLocaleTimeString();
+    }
+  }).catch(function(){ setStatus('error','Disconnected'); });
+}
+
+function loadQueries(isRefresh) {
+  if (!liveRefreshEnabled && !isRefresh) {
+    return Promise.resolve();
+  }
+
+  return fetch(API+'/api/queries?limit=20&hotLimit=8', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(d){
+    latestQuerySnapshot = d || {
+      activeQueryCount: 0,
+      recentQueryCount: 0,
+      activeQueries: [],
+      recentQueries: [],
+      hotQueries: [],
+    };
+    var summary=document.getElementById('query-summary');
+    if (summary) {
+      var hot = Array.isArray(latestQuerySnapshot.hotQueries) ? latestQuerySnapshot.hotQueries : [];
+      summary.innerHTML = renderMetricStrip([
+        { label: 'Active', value: latestQuerySnapshot.activeQueryCount || 0, sub: 'live SQL statements' },
+        { label: 'Recent', value: latestQuerySnapshot.recentQueryCount || 0, sub: 'completed statements' },
+        { label: 'Top Shape', value: hot.length ? (hot[0].statementType || 'SQL') : '--', sub: hot.length ? (hot[0].signature || hot[0].sample && hot[0].sample.sqlPreview || '') : 'no hotspots yet' },
+      ]);
+    }
+    refreshInspectors();
   }).catch(function(){});
 }
 
@@ -852,6 +1621,8 @@ function loadEvents(isRefresh) {
 function doRefresh() {
   updateLiveToggle();
   loadHealth();
+  loadRequests(true);
+  loadQueries(true);
   loadEvents(true);
   loadModelStats();
   if (selectedInspectorJobId) {
@@ -886,6 +1657,14 @@ function purgeArtifacts() {
       setTimeout(doRefresh, 1000);
     })
     .catch(function(){ showToast('Purge failed',true); btn.disabled=false; });
+}
+
+function tickLiveSignals() {
+  if (!liveRefreshEnabled) {
+    return;
+  }
+  loadRequests();
+  loadQueries();
 }
 
 function tickLiveRefresh() {
@@ -936,6 +1715,7 @@ document.addEventListener('visibilitychange', function() {
 });
 
 doRefresh();
+setInterval(tickLiveSignals, 2000);
 setInterval(tickLiveRefresh, 5000);
 </script>
 </body>
