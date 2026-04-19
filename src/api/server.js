@@ -305,6 +305,7 @@ function createApp(config = getConfig()) {
   app.use(config.artifactUrlBasePath, express.static(config.artifactRoot));
   app.use('/api/modeling', createModelingRouter({
     artifactRoot: config.modelArtifactRoot,
+    scanArtifactRoot: config.artifactRoot,
     listModelArtifacts: () => listModelArtifacts(config.modelArtifactRoot),
     listItemsForModeling: (options) => listItemsForModeling(options, config.databaseUrl),
     getJob: (jobId) => getJob(jobId, config.databaseUrl),

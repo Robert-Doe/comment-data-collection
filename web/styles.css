@@ -28,7 +28,7 @@ body {
 }
 
 .app-shell {
-  width: min(1240px, calc(100% - 40px));
+  width: min(1400px, calc(100% - 40px));
   margin: 0 auto;
   padding: 32px 0 56px;
 }
@@ -95,7 +95,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 28px;
   box-shadow: var(--shadow);
-  padding: 24px;
+  padding: 18px;
   margin-bottom: 22px;
   backdrop-filter: blur(10px);
 }
@@ -686,7 +686,7 @@ button[data-error="true"],
 .feature-doc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -709,7 +709,7 @@ button[data-error="true"],
 .feature-doc-card {
   display: grid;
   gap: 12px;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.9);
@@ -888,10 +888,15 @@ button[data-error="true"],
 }
 
 .imbalance-comparison-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  align-items: start;
 }
 
-.comparison-summary-card,
+.imbalance-comparison-grid .comparison-summary-card,
+.imbalance-comparison-grid .comparison-confusion-card {
+  grid-column: auto;
+}
+
 .comparison-chart-card {
   grid-column: 1 / -1;
 }
@@ -925,7 +930,6 @@ button[data-error="true"],
   margin: 0;
 }
 
-.comparison-confusion-card,
 .score-job-confusion-card {
   grid-column: 1 / -1;
 }
@@ -1111,7 +1115,7 @@ button[data-error="true"],
 }
 
 .comparison-data-table {
-  min-width: 1320px;
+  min-width: 1060px;
   table-layout: auto;
 }
 
@@ -2246,8 +2250,8 @@ img {
 }
 
 .radar-chart-svg {
-  width: 260px;
-  height: 260px;
+  width: 300px;
+  height: 300px;
   flex-shrink: 0;
 }
 
@@ -2353,8 +2357,8 @@ img {
 }
 
 .knn-diagram-svg {
-  width: 200px;
-  height: 160px;
+  width: 260px;
+  height: 200px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(248, 247, 239, 0.6);

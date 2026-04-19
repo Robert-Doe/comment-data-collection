@@ -360,7 +360,7 @@ function createModelingRouter(dependencies) {
         maxCandidateReviewArtifacts: req.body && req.body.maxCandidateReviewArtifacts !== undefined
           ? Math.max(0, Number(req.body.maxCandidateReviewArtifacts) || 0)
           : 15,
-        artifactRoot: dependencies.artifactRoot,
+        artifactRoot: dependencies.scanArtifactRoot || dependencies.artifactRoot,
         publicBaseUrl: req.body && req.body.publicBaseUrl ? req.body.publicBaseUrl : undefined,
         jobId: liveJobId,
         itemId: liveItemId,
