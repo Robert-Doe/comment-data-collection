@@ -118,6 +118,34 @@ function buildBrowserContextOptions(options = {}) {
   return contextOptions;
 }
 
+function runWithTimeout(operation, timeoutMs, label) {
+  const resolvedTimeoutMs = Math.max(0, Number(timeoutMs || 0));
+  const promise = typeof operation === 'function'
+    ? Promise.resolve().then(operation)
+    : Promise.resolve(operation);
+
+  if (!resolvedTimeoutMs) {
+    return promise;
+  }
+
+  let timer = null;
+  const timeoutError = new Error(`${label} timed out after ${resolvedTimeoutMs}ms`);
+  timeoutError.code = 'OPERATION_TIMEOUT';
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(timeoutError), resolvedTimeoutMs);
+    if (timer && typeof timer.unref === 'function') {
+      timer.unref();
+    }
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
+}
+
 function emitProgress(progress, patch) {
   if (typeof progress !== 'function') {
     return;
@@ -1205,6 +1233,7 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     heuristic_best_candidate_key: '',
     heuristic_best_candidate_label: '',
     heuristic_best_candidate_reason: '',
+    scan_warning: '',
     scan_mode: compatibilityMode ? 'compatibility' : 'default',
     resource_blocking_enabled: !compatibilityMode && options.blockStaticAssets !== false,
     navigation_wait_until: compatibilityMode ? 'commit' : 'domcontentloaded',
@@ -1213,6 +1242,33 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     compatibility_retry_reason: '',
     primary_error: '',
     primary_scan_mode: '',
+  };
+  const postNavigationOperationTimeoutMs = deadline ? 0 : Math.max(30000, Number(options.postNavigationOperationTimeoutMs || 90000));
+  const appendScanWarning = (message) => {
+    const text = String(message || '').trim();
+    if (!text) return;
+    result.scan_warning = result.scan_warning ? `${result.scan_warning}; ${text}` : text;
+  };
+  const fallbackAccess = () => ({
+    blocked: false,
+    blockerType: '',
+    reason: '',
+    frameCount: page.frames().length,
+    frameUrls: page.frames().map((frame) => frame.url()),
+    pageTextSample: '',
+    pageTextLength: 0,
+    title: '',
+  });
+  const runPostNavigationStep = async (label, operation, fallbackValue) => {
+    try {
+      return await runWithTimeout(operation, postNavigationOperationTimeoutMs, label);
+    } catch (error) {
+      if (error && (error.code === 'OPERATION_TIMEOUT' || /timed out after/i.test(error.message || ''))) {
+        appendScanWarning(error.message || label);
+        return fallbackValue;
+      }
+      throw error;
+    }
   };
 
   try {
@@ -1237,17 +1293,22 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
       priorityProbe,
     }));
     result.settle_passes_applied = loadSettlePasses;
-    updateProgress(2, 'Page settled and candidate signals collected');
+    updateProgress(2, 'Extracting response body and DOM snapshot');
 
-    const responseText = response ? await deadline.wrap(response.text().catch(() => '')) : '';
+    const responseText = response
+      ? await runPostNavigationStep('response.text()', () => response.text().catch(() => ''), '')
+      : '';
     const responseHeaders = response ? response.headers() : {};
-    let currentHtml = await deadline.wrap(page.content().catch(() => ''));
+    updateProgress(2, 'Extracting DOM snapshot');
+    let currentHtml = await runPostNavigationStep('page.content()', () => page.content().catch(() => ''), '');
     let rawHtml = currentHtml || responseText;
-    let access = await deadline.wrap(detectPageAccess(page));
-    let candidates = await deadline.wrap(collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+    updateProgress(2, 'Analyzing page access signals');
+    let access = await runPostNavigationStep('detectPageAccess()', () => detectPageAccess(page), fallbackAccess());
+    updateProgress(2, 'Collecting candidate signals');
+    let candidates = await runPostNavigationStep('collectCandidatesFromPage()', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
       ...options,
       candidateMode: candidateSelectionMode,
-    }));
+    }), []);
     let bestCandidate = candidates[0] || null;
     let ugcDetected = candidates.some((candidate) => !!candidate.detected);
     updateProgress(3, `Collected ${candidates.length} candidate(s)`);
@@ -1263,13 +1324,16 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
         priorityProbe,
       }));
       result.settle_passes_applied += negativeRetrySettlePasses;
-      currentHtml = await deadline.wrap(page.content().catch(() => ''));
+      updateProgress(2, 'Re-extracting DOM snapshot after retry settle');
+      currentHtml = await runPostNavigationStep('page.content() after retry', () => page.content().catch(() => ''), '');
       rawHtml = currentHtml || responseText;
-      access = await deadline.wrap(detectPageAccess(page));
-      candidates = await deadline.wrap(collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+      updateProgress(2, 'Re-analyzing page access after retry settle');
+      access = await runPostNavigationStep('detectPageAccess() after retry', () => detectPageAccess(page), fallbackAccess());
+      updateProgress(2, 'Re-collecting candidate signals after retry settle');
+      candidates = await runPostNavigationStep('collectCandidatesFromPage() after retry', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
         ...options,
         candidateMode: candidateSelectionMode,
-      }));
+      }), []);
       bestCandidate = candidates[0] || null;
       ugcDetected = candidates.some((candidate) => !!candidate.detected);
       updateProgress(3, `Collected ${candidates.length} candidate(s) after a retry settle`);
