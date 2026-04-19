@@ -8,6 +8,7 @@ const { normalizeCandidateSelectionMode } = require('./jobSettings');
 
 let browserPromise;
 let browserInstance = null;
+const DEFAULT_COMPATIBILITY_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 function getFeaturePath() {
   return path.resolve(__dirname, '..', 'commentFeatures.js');
@@ -28,6 +29,11 @@ function resolveCandidateSelectionMode(options = {}) {
 function isClosedBrowserError(error) {
   const message = error && error.message ? error.message : String(error || '');
   return /Target page, context or browser has been closed|browser\.newContext:|Browser has been closed|Connection closed|disconnected/i.test(message);
+}
+
+function isCompatibilityRetryableNavigationError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  return /net::ERR_HTTP2_PROTOCOL_ERROR|ERR_HTTP2_PROTOCOL_ERROR|net::ERR_CONNECTION_RESET|ERR_CONNECTION_RESET|net::ERR_CONNECTION_CLOSED|ERR_CONNECTION_CLOSED|net::ERR_TIMED_OUT|ERR_TIMED_OUT|net::ERR_ABORTED|ERR_ABORTED/i.test(message);
 }
 
 async function launchBrowser() {
@@ -92,6 +98,24 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
   } catch (_) {
     return;
   }
+}
+
+function buildBrowserContextOptions(options = {}) {
+  const contextOptions = {
+    ignoreHTTPSErrors: true,
+  };
+
+  if (options.userAgent) contextOptions.userAgent = options.userAgent;
+  if (options.viewport) contextOptions.viewport = options.viewport;
+  if (options.locale) contextOptions.locale = options.locale;
+  if (options.timezoneId) contextOptions.timezoneId = options.timezoneId;
+  if (options.deviceScaleFactor) contextOptions.deviceScaleFactor = options.deviceScaleFactor;
+  if (options.hasTouch !== undefined) contextOptions.hasTouch = options.hasTouch;
+  if (options.isMobile !== undefined) contextOptions.isMobile = options.isMobile;
+  if (options.extraHTTPHeaders) contextOptions.extraHTTPHeaders = options.extraHTTPHeaders;
+  if (options.storageState) contextOptions.storageState = options.storageState;
+
+  return contextOptions;
 }
 
 function emitProgress(progress, patch) {
@@ -408,6 +432,7 @@ async function loadPageWithRetries(page, normalizedUrl, options = {}) {
   const priorityProbe = options.priorityProbe === true;
   const timeoutMs = priorityProbe ? 0 : Math.max(1000, Number(options.timeoutMs ?? 45000));
   const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
+  const navigationWaitUntil = String(options.navigationWaitUntil || 'domcontentloaded');
   const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
   const deadline = options.deadline || null;
   let lastError = null;
@@ -416,10 +441,10 @@ async function loadPageWithRetries(page, normalizedUrl, options = {}) {
     try {
       if (deadline && deadline.timedOut()) throw deadline.error;
       const response = await (deadline ? deadline.wrap(page.goto(normalizedUrl, {
-        waitUntil: 'domcontentloaded',
+        waitUntil: navigationWaitUntil,
         timeout: timeoutMs,
       })) : page.goto(normalizedUrl, {
-        waitUntil: 'domcontentloaded',
+        waitUntil: navigationWaitUntil,
         timeout: timeoutMs,
       }));
       const status = response ? Number(response.status()) : 0;
@@ -1058,25 +1083,25 @@ function deriveManualCaptureState(result, source = 'automated') {
   };
 }
 
-async function createContext() {
+async function createContext(options = {}) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const browser = await getBrowser();
-      const context = await browser.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await browser.newContext(buildBrowserContextOptions(options));
 
       await context.addInitScript({ path: getFeaturePath() });
-      await context.route('**/*', (route) => {
-        const type = route.request().resourceType();
-        if (type === 'image' || type === 'media' || type === 'font') {
-          route.abort().catch(() => {});
-          return;
-        }
-        route.continue().catch(() => {});
-      });
+      if (options.blockStaticAssets !== false) {
+        await context.route('**/*', (route) => {
+          const type = route.request().resourceType();
+          if (type === 'image' || type === 'media' || type === 'font') {
+            route.abort('blockedbyclient').catch(() => {});
+            return;
+          }
+          route.continue().catch(() => {});
+        });
+      }
 
       return context;
     } catch (error) {
@@ -1091,8 +1116,24 @@ async function createContext() {
   throw lastError || new Error('Failed to create a browser context');
 }
 
-async function scanUrl(normalizedUrl, options = {}) {
-  const context = await createContext();
+async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
+  const compatibilityMode = scanProfile.compatibilityMode === true;
+  const context = await createContext({
+    ...options,
+    blockStaticAssets: compatibilityMode ? false : options.blockStaticAssets,
+    userAgent: compatibilityMode
+      ? (scanProfile.userAgent || options.userAgent || DEFAULT_COMPATIBILITY_USER_AGENT)
+      : options.userAgent,
+    viewport: compatibilityMode
+      ? (scanProfile.viewport || options.viewport || { width: 1440, height: 900 })
+      : options.viewport,
+    locale: compatibilityMode
+      ? (scanProfile.locale || options.locale || 'en-US')
+      : options.locale,
+    timezoneId: compatibilityMode
+      ? (scanProfile.timezoneId || options.timezoneId || 'America/Phoenix')
+      : options.timezoneId,
+  });
   const page = await context.newPage();
   const priorityProbe = options.priorityProbe === true || Number(options.timeoutMs) <= 0;
   const timeoutMs = priorityProbe ? 0 : Math.max(1000, Number(options.timeoutMs ?? 90000));
@@ -1164,6 +1205,14 @@ async function scanUrl(normalizedUrl, options = {}) {
     heuristic_best_candidate_key: '',
     heuristic_best_candidate_label: '',
     heuristic_best_candidate_reason: '',
+    scan_mode: compatibilityMode ? 'compatibility' : 'default',
+    resource_blocking_enabled: !compatibilityMode && options.blockStaticAssets !== false,
+    navigation_wait_until: compatibilityMode ? 'commit' : 'domcontentloaded',
+    compatibility_retry_attempted: false,
+    compatibility_retry_applied: false,
+    compatibility_retry_reason: '',
+    primary_error: '',
+    primary_scan_mode: '',
   };
 
   try {
@@ -1173,6 +1222,7 @@ async function scanUrl(normalizedUrl, options = {}) {
       navigationRetries,
       deadline,
       priorityProbe,
+      navigationWaitUntil: compatibilityMode ? 'commit' : 'domcontentloaded',
     }));
     const response = navigation.response;
     result.navigation_attempts = navigation.attemptCount;
@@ -1275,6 +1325,36 @@ async function scanUrl(normalizedUrl, options = {}) {
   }
 
   return result;
+}
+
+async function scanUrl(normalizedUrl, options = {}) {
+  const primary = await scanUrlOnce(normalizedUrl, options, {
+    compatibilityMode: false,
+  });
+
+  if (!primary.error || !isCompatibilityRetryableNavigationError(primary.error)) {
+    return primary;
+  }
+
+  emitProgress(typeof options.progress === 'function' ? options.progress : null, {
+    stage: 'scanning',
+    message: 'Retrying with compatibility browser settings after a navigation error',
+  });
+
+  const fallback = await scanUrlOnce(normalizedUrl, options, {
+    compatibilityMode: true,
+    compatibilityReason: primary.error,
+  });
+
+  fallback.compatibility_retry_attempted = true;
+  fallback.compatibility_retry_reason = primary.error;
+  fallback.primary_error = primary.error;
+  fallback.primary_scan_mode = primary.scan_mode;
+  if (!fallback.error) {
+    fallback.compatibility_retry_applied = true;
+  }
+
+  return fallback;
 }
 
 function injectBaseHref(html, normalizedUrl) {
