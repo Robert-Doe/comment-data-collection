@@ -944,6 +944,8 @@ async function extractCandidatesFromFrame(frame, rawHtml, responseHeaders, optio
         maxCandidates: options.maxCandidates || 50,
         maxResults: options.maxResults || 5,
         candidateMode,
+        timeBudgetMs: options.timeBudgetMs || 0,
+        maxTraversalNodes: options.maxTraversalNodes || 0,
       },
     });
 
@@ -1243,7 +1245,15 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     primary_error: '',
     primary_scan_mode: '',
   };
-  const postNavigationOperationTimeoutMs = deadline ? 0 : Math.max(30000, Number(options.postNavigationOperationTimeoutMs || 90000));
+  const postNavigationOperationTimeoutMs = priorityProbe
+    ? Math.max(5000, Number(options.priorityPostNavigationOperationTimeoutMs || 15000))
+    : Math.max(10000, Number(options.postNavigationOperationTimeoutMs || 90000));
+  const candidateExtractionTimeBudgetMs = priorityProbe
+    ? Math.max(3000, Number(options.priorityCandidateExtractionTimeBudgetMs || 8000))
+    : Math.max(5000, Number(options.candidateExtractionTimeBudgetMs || 30000));
+  const candidateTraversalNodeBudget = priorityProbe
+    ? Math.max(1000, Number(options.priorityCandidateTraversalNodeBudget || 6000))
+    : Math.max(2000, Number(options.candidateTraversalNodeBudget || 20000));
   const appendScanWarning = (message) => {
     const text = String(message || '').trim();
     if (!text) return;
@@ -1308,6 +1318,8 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     let candidates = await runPostNavigationStep('collectCandidatesFromPage()', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
       ...options,
       candidateMode: candidateSelectionMode,
+      timeBudgetMs: candidateExtractionTimeBudgetMs,
+      maxTraversalNodes: candidateTraversalNodeBudget,
     }), []);
     let bestCandidate = candidates[0] || null;
     let ugcDetected = candidates.some((candidate) => !!candidate.detected);
@@ -1333,6 +1345,8 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
       candidates = await runPostNavigationStep('collectCandidatesFromPage() after retry', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
         ...options,
         candidateMode: candidateSelectionMode,
+        timeBudgetMs: candidateExtractionTimeBudgetMs,
+        maxTraversalNodes: candidateTraversalNodeBudget,
       }), []);
       bestCandidate = candidates[0] || null;
       ugcDetected = candidates.some((candidate) => !!candidate.detected);

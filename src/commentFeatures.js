@@ -147,28 +147,44 @@ function directChildren(root) {
   return children;
 }
 
-function allDescendants(root) {
+function allDescendants(root, options = {}) {
   if (!root) return [];
-  if (descendantCache.has(root)) return descendantCache.get(root);
+
+  const maxNodes = Math.max(0, Number(options.maxNodes || 0));
+  const timeBudgetMs = Math.max(0, Number(options.timeBudgetMs || 0));
+  const useCache = maxNodes <= 0 && timeBudgetMs <= 0;
+  if (useCache && descendantCache.has(root)) return descendantCache.get(root);
 
   const descendants = [];
   const stack = [];
+  const start = timeBudgetMs > 0 ? Date.now() : 0;
+  const shouldStop = () => (
+    (maxNodes > 0 && descendants.length >= maxNodes)
+    || (timeBudgetMs > 0 && (Date.now() - start) >= timeBudgetMs)
+  );
+
   directChildren(root)
     .slice()
     .reverse()
     .forEach((child) => stack.push(child));
 
   while (stack.length) {
+    if (shouldStop()) break;
     const node = stack.pop();
     if (!node || node.nodeType !== 1) continue;
     descendants.push(node);
+    if (shouldStop()) break;
     directChildren(node)
       .slice()
       .reverse()
-      .forEach((child) => stack.push(child));
+      .forEach((child) => {
+        if (!shouldStop()) stack.push(child);
+      });
   }
 
-  descendantCache.set(root, descendants);
+  if (useCache) {
+    descendantCache.set(root, descendants);
+  }
   return descendants;
 }
 
@@ -408,12 +424,12 @@ function matchesSelector(el, selector) {
   }
 }
 
-function deepQuerySelectorAll(root, selector, includeRoot = false) {
+function deepQuerySelectorAll(root, selector, includeRoot = false, options = {}) {
   if (!root || !selector) return [];
   const matches = [];
   const candidates = includeRoot
-    ? [root].concat(allDescendants(root))
-    : allDescendants(root);
+    ? [root].concat(allDescendants(root, options))
+    : allDescendants(root, options);
   candidates.forEach((candidate) => {
     if (matchesSelector(candidate, selector)) {
       matches.push(candidate);
@@ -2080,8 +2096,12 @@ function getCandidateScopeSelector(mode) {
 function discoverCandidateRoots(options = {}) {
   const maxCandidates = Math.max(1, options.maxCandidates || 25);
   const candidateMode = normalizeCandidateSelectionMode(options.candidateMode || options.candidateSelectionMode || options.selectionMode);
+  const traversalOptions = {
+    maxNodes: Math.max(0, Number(options.maxTraversalNodes || 0)),
+    timeBudgetMs: Math.max(0, Number(options.timeBudgetMs || 0)),
+  };
   const scope = document.body || document.documentElement;
-  const nodes = deepQuerySelectorAll(scope, getCandidateScopeSelector(candidateMode), true);
+  const nodes = deepQuerySelectorAll(scope, getCandidateScopeSelector(candidateMode), true, traversalOptions);
   const candidates = [];
 
   nodes.forEach((node) => {
@@ -2136,19 +2156,27 @@ function discoverCandidateRoots(options = {}) {
 
 function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {}) {
   const candidateMode = normalizeCandidateSelectionMode(options.candidateMode || options.candidateSelectionMode || options.selectionMode);
+  const timeBudgetMs = Math.max(0, Number(options.timeBudgetMs || 0));
+  const maxTraversalNodes = Math.max(0, Number(options.maxTraversalNodes || 0));
   const maxResults = Math.max(
     1,
     Number.isFinite(Number(options.maxResults)) && Number(options.maxResults) > 0 ? Number(options.maxResults) : 5,
     Number.isFinite(Number(options.maxCandidates)) && Number(options.maxCandidates) > 0 ? Number(options.maxCandidates) : 50,
   );
-  const roots = discoverCandidateRoots({ ...options, candidateMode });
-  const results = roots.map((root) => {
-    const features = extractAllFeatures(root, rawHTML, responseHeaders);
-    const summary = collectSampleText(root);
-    const markup = collectCandidateMarkup(root);
-    const scoring = scoreFeatures(features);
-    return Object.assign({}, features, summary, markup, scoring);
+  const roots = discoverCandidateRoots({
+    ...options,
+    candidateMode,
+    timeBudgetMs,
+    maxTraversalNodes,
   });
+  const results = [];
+  for (const root of roots) {
+    const features = extractAllFeatures(root, rawHTML, responseHeaders);
+    results.push(Object.assign({}, features, collectSampleText(root), collectCandidateMarkup(root), scoreFeatures(features)));
+  }
+  if (results.length === 0) {
+    return [];
+  }
 
   results.sort((left, right) => {
     if (candidateMode === 'repetition_first') {
@@ -2174,11 +2202,11 @@ function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {
   }
 
   const deduped = [];
-  results.forEach((candidate) => {
-    if (deduped.length >= maxResults) return;
+  for (const candidate of results) {
+    if (deduped.length >= maxResults) break;
     const overlaps = deduped.some((existing) => pathIsAncestor(existing.xpath, candidate.xpath) || pathIsAncestor(candidate.xpath, existing.xpath));
     if (!overlaps) deduped.push(candidate);
-  });
+  }
 
   return (deduped.length ? deduped : results.slice(0, maxResults)).slice(0, maxResults);
 }
