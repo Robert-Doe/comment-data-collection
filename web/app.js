@@ -3057,6 +3057,7 @@
       currentJob = job;
       currentJobId = jobId;
       window.history.replaceState({}, '', `?jobId=${jobId}`);
+      try { localStorage.setItem('ugc_selected_job_id', jobId); } catch (_) {}
       renderSummary(job);
       renderItems(items, pagination);
       renderJobManager(job);

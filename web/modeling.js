@@ -54,6 +54,7 @@
   const overviewPollIntervalMs = 5000;
   const initialOverviewScope = new URLSearchParams(window.location.search).get('jobIds')
     || new URLSearchParams(window.location.search).get('jobId')
+    || (function () { try { return localStorage.getItem('ugc_selected_job_id') || ''; } catch (_) { return ''; } }())
     || '';
 
   if (overviewJobIds && initialOverviewScope) {
@@ -1127,6 +1128,14 @@
     });
   }
 
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== 'ugc_selected_job_id' || !overviewJobIds) return;
+    const incoming = event.newValue || '';
+    if (incoming === overviewJobIds.value) return;
+    overviewJobIds.value = incoming;
+    refreshOverview().catch(() => {});
+  });
   trainJobIds.addEventListener('input', updateDatasetDownloadLink);
 
   if (trainAlgorithm) {
