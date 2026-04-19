@@ -1992,6 +1992,7 @@
     const item = items[0] || null;
     const allCandidates = item && Array.isArray(item.candidates) ? item.candidates : [];
     const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
+    const scanWarning = scan ? String(scan.scan_warning || '') : '';
     const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
 
     if (!summary) {
@@ -2004,7 +2005,7 @@
     }
 
     liveProbeSummary.className = 'summary';
-    liveProbeSummary.innerHTML = [
+    const summaryRows = [
       `<div><strong>URL:</strong> ${escapeHtml(summary.page_input_url || result.url || '')}</div>`,
       `<div><strong>Final URL:</strong> ${escapeHtml(summary.page_final_url || (scan && scan.final_url) || '')}</div>`,
       `<div><strong>Title:</strong> ${escapeHtml(summary.page_title || (scan && scan.title) || '')}</div>`,
@@ -2018,16 +2019,22 @@
       `<div><strong>Blocked:</strong> ${summary.blocked_by_interstitial ? 'yes' : 'no'}</div>`,
       `<div><strong>Blocker Type:</strong> ${escapeHtml(summary.blocker_type || '')}</div>`,
       `<div><strong>Scan Error:</strong> ${escapeHtml(scanError || '')}</div>`,
-    ].join('');
+    ];
+    if (scanWarning) {
+      summaryRows.push(`<div><strong>Scan Warning:</strong> ${escapeHtml(scanWarning)}</div>`);
+    }
+    liveProbeSummary.innerHTML = summaryRows.join('');
 
     if (!allCandidates.length) {
       currentLiveProbePage = 0;
       liveProbeResults.className = 'table-shell empty';
       liveProbeResults.textContent = scanTimedOut
-        ? 'The live scan timed out before it could score candidates.'
+        ? `The live scan timed out before it could score candidates.${scanWarning ? ` ${scanWarning}` : ''}`
         : scanError
-          ? 'The live scan failed before it could score candidates.'
-          : 'The live scan returned no scored candidates.';
+          ? `The live scan failed before it could score candidates.${scanWarning ? ` ${scanWarning}` : ''}`
+          : scanWarning
+            ? `The live scan returned no scored candidates. ${scanWarning}`
+            : 'The live scan returned no scored candidates.';
       return;
     }
 

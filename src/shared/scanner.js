@@ -1254,6 +1254,10 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
   const candidateTraversalNodeBudget = priorityProbe
     ? Math.max(1000, Number(options.priorityCandidateTraversalNodeBudget || 6000))
     : Math.max(2000, Number(options.candidateTraversalNodeBudget || 20000));
+  const postNavigationNoticeDelayMs = Math.min(
+    10000,
+    Math.max(4000, Math.floor(postNavigationOperationTimeoutMs / 6)),
+  );
   const appendScanWarning = (message) => {
     const text = String(message || '').trim();
     if (!text) return;
@@ -1269,7 +1273,23 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     pageTextLength: 0,
     title: '',
   });
-  const runPostNavigationStep = async (label, operation, fallbackValue) => {
+  const runPostNavigationStep = async (label, operation, fallbackValue, stepOptions = {}) => {
+    const noticeMessage = String(stepOptions.noticeMessage || '').trim();
+    const noticeAfterMs = Math.max(0, Number(stepOptions.noticeAfterMs || postNavigationNoticeDelayMs));
+    let noticeTimer = null;
+
+    if (progress && noticeMessage && noticeAfterMs > 0) {
+      noticeTimer = setTimeout(() => {
+        emitProgress(progress, {
+          stage: 'scanning',
+          message: `${noticeMessage} is taking longer than usual`,
+        });
+      }, noticeAfterMs);
+      if (noticeTimer && typeof noticeTimer.unref === 'function') {
+        noticeTimer.unref();
+      }
+    }
+
     try {
       return await runWithTimeout(operation, postNavigationOperationTimeoutMs, label);
     } catch (error) {
@@ -1278,6 +1298,10 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
         return fallbackValue;
       }
       throw error;
+    } finally {
+      if (noticeTimer) {
+        clearTimeout(noticeTimer);
+      }
     }
   };
 
@@ -1306,21 +1330,41 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
     updateProgress(2, 'Extracting response body and DOM snapshot');
 
     const responseText = response
-      ? await runPostNavigationStep('response.text()', () => response.text().catch(() => ''), '')
+      ? await runPostNavigationStep(
+        'response.text()',
+        () => response.text().catch(() => ''),
+        '',
+        { noticeMessage: 'Reading response body' },
+      )
       : '';
     const responseHeaders = response ? response.headers() : {};
     updateProgress(2, 'Extracting DOM snapshot');
-    let currentHtml = await runPostNavigationStep('page.content()', () => page.content().catch(() => ''), '');
+    let currentHtml = await runPostNavigationStep(
+      'page.content()',
+      () => page.content().catch(() => ''),
+      '',
+      { noticeMessage: 'Extracting DOM snapshot' },
+    );
     let rawHtml = currentHtml || responseText;
     updateProgress(2, 'Analyzing page access signals');
-    let access = await runPostNavigationStep('detectPageAccess()', () => detectPageAccess(page), fallbackAccess());
+    let access = await runPostNavigationStep(
+      'detectPageAccess()',
+      () => detectPageAccess(page),
+      fallbackAccess(),
+      { noticeMessage: 'Analyzing page access signals' },
+    );
     updateProgress(2, 'Collecting candidate signals');
-    let candidates = await runPostNavigationStep('collectCandidatesFromPage()', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
-      ...options,
-      candidateMode: candidateSelectionMode,
-      timeBudgetMs: candidateExtractionTimeBudgetMs,
-      maxTraversalNodes: candidateTraversalNodeBudget,
-    }), []);
+    let candidates = await runPostNavigationStep(
+      'collectCandidatesFromPage()',
+      () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+        ...options,
+        candidateMode: candidateSelectionMode,
+        timeBudgetMs: candidateExtractionTimeBudgetMs,
+        maxTraversalNodes: candidateTraversalNodeBudget,
+      }),
+      [],
+      { noticeMessage: 'Collecting candidate signals' },
+    );
     let bestCandidate = candidates[0] || null;
     let ugcDetected = candidates.some((candidate) => !!candidate.detected);
     updateProgress(3, `Collected ${candidates.length} candidate(s)`);
@@ -1337,17 +1381,32 @@ async function scanUrlOnce(normalizedUrl, options = {}, scanProfile = {}) {
       }));
       result.settle_passes_applied += negativeRetrySettlePasses;
       updateProgress(2, 'Re-extracting DOM snapshot after retry settle');
-      currentHtml = await runPostNavigationStep('page.content() after retry', () => page.content().catch(() => ''), '');
+      currentHtml = await runPostNavigationStep(
+        'page.content() after retry',
+        () => page.content().catch(() => ''),
+        '',
+        { noticeMessage: 'Re-extracting DOM snapshot after retry settle' },
+      );
       rawHtml = currentHtml || responseText;
       updateProgress(2, 'Re-analyzing page access after retry settle');
-      access = await runPostNavigationStep('detectPageAccess() after retry', () => detectPageAccess(page), fallbackAccess());
+      access = await runPostNavigationStep(
+        'detectPageAccess() after retry',
+        () => detectPageAccess(page),
+        fallbackAccess(),
+        { noticeMessage: 'Re-analyzing page access after retry settle' },
+      );
       updateProgress(2, 'Re-collecting candidate signals after retry settle');
-      candidates = await runPostNavigationStep('collectCandidatesFromPage() after retry', () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
-        ...options,
-        candidateMode: candidateSelectionMode,
-        timeBudgetMs: candidateExtractionTimeBudgetMs,
-        maxTraversalNodes: candidateTraversalNodeBudget,
-      }), []);
+      candidates = await runPostNavigationStep(
+        'collectCandidatesFromPage() after retry',
+        () => collectCandidatesFromPage(page, rawHtml, responseHeaders, {
+          ...options,
+          candidateMode: candidateSelectionMode,
+          timeBudgetMs: candidateExtractionTimeBudgetMs,
+          maxTraversalNodes: candidateTraversalNodeBudget,
+        }),
+        [],
+        { noticeMessage: 'Re-collecting candidate signals after retry settle' },
+      );
       bestCandidate = candidates[0] || null;
       ugcDetected = candidates.some((candidate) => !!candidate.detected);
       updateProgress(3, `Collected ${candidates.length} candidate(s) after a retry settle`);
