@@ -896,6 +896,10 @@ button[data-error="true"],
   grid-column: 1 / -1;
 }
 
+.comparison-table-card {
+  grid-column: 1 / -1;
+}
+
 .comparison-metric-panels {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1100,6 +1104,26 @@ button[data-error="true"],
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
+}
+
+.comparison-table-shell {
+  margin-top: 4px;
+}
+
+.comparison-data-table {
+  min-width: 1320px;
+  table-layout: auto;
+}
+
+.comparison-data-table strong {
+  display: block;
+  color: var(--text);
+}
+
+.comparison-data-table .table-muted {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .model-card.is-focused {

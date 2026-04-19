@@ -645,6 +645,15 @@
     return `${(numeric * 100).toFixed(precision)}%`;
   }
 
+  function formatPercentagePoints(value, decimals = 1) {
+    if (value === null || value === undefined || value === '') return '';
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    const precision = Number.isFinite(decimals) ? Math.max(0, Math.min(3, Math.floor(decimals))) : 1;
+    const sign = numeric > 0 ? '+' : '';
+    return `${sign}${(numeric * 100).toFixed(precision)} pp`;
+  }
+
   function renderConfusionMatrixCard(confusion, options = {}) {
     const truePositive = Math.max(0, Number(confusion && confusion.true_positive) || 0);
     const trueNegative = Math.max(0, Number(confusion && confusion.true_negative) || 0);
@@ -855,6 +864,9 @@
         originalMinorityShare: getMinorityShare(originalCounts),
         preparedMinorityShare: getMinorityShare(preparedCounts),
         syntheticRows: Math.max(0, Number(imbalance.synthetic_row_count) || 0),
+        nearestNeighbors: Number.isFinite(Number(imbalance.nearest_neighbors))
+          ? Number(imbalance.nearest_neighbors)
+          : null,
       };
     });
 
@@ -916,6 +928,90 @@
       `;
     };
 
+    const renderComparisonTable = () => {
+      const describeCounts = (counts) => {
+        const positive = Math.max(0, Number(counts && counts.positive) || 0);
+        const negative = Math.max(0, Number(counts && counts.negative) || 0);
+        const minority = Math.min(positive, negative);
+        const majority = Math.max(positive, negative);
+        const total = positive + negative;
+        return {
+          positive,
+          negative,
+          ratio: minority > 0 ? `${formatMetric(majority / minority, 2)}:1` : 'n/a',
+          minorityShare: total > 0 ? minority / total : null,
+        };
+      };
+
+      return `
+          <article class="model-card comparison-table-card">
+          <p class="eyebrow subtle">Comparison Table</p>
+          <h3>Strategy-by-strategy breakdown</h3>
+          <p class="candidate-copy">
+            This table is designed for review meetings: <code>K</code> shows the nearest-neighbor count used by the SMOTE-like path, and the count/share columns show exactly how the class balance changed in memory.
+          </p>
+          <div class="table-shell comparison-table-shell">
+            <table class="comparison-data-table">
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>K</th>
+                  <th>Original counts</th>
+                  <th>Prepared counts</th>
+                  <th>Minority share</th>
+                  <th>Shift</th>
+                  <th>Synthetic rows</th>
+                  <th>Precision</th>
+                  <th>Recall</th>
+                  <th>F1</th>
+                  <th>PR AUC</th>
+                  <th>ROC AUC</th>
+                  <th>Top-1</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${comparisonRows.map((entry) => {
+                  const isFocus = entry.run.strategy_id === focusStrategy;
+                  const original = describeCounts(entry.originalCounts);
+                  const prepared = describeCounts(entry.preparedCounts);
+                  const minorityShift = prepared.minorityShare !== null && original.minorityShare !== null
+                    ? prepared.minorityShare - original.minorityShare
+                    : null;
+                  return `
+                    <tr class="${isFocus ? 'is-current' : ''}">
+                      <td>
+                        <strong>${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</strong>
+                        <div class="table-muted">${escapeHtml(entry.imbalance.balancing_mode || entry.imbalance.id || 'baseline')}</div>
+                      </td>
+                      <td>${escapeHtml(entry.nearestNeighbors !== null && entry.nearestNeighbors !== undefined ? entry.nearestNeighbors : 'n/a')}</td>
+                      <td>
+                        <strong>${escapeHtml(original.positive)} / ${escapeHtml(original.negative)}</strong>
+                        <div class="table-muted">ratio ${escapeHtml(original.ratio)}</div>
+                      </td>
+                      <td>
+                        <strong>${escapeHtml(prepared.positive)} / ${escapeHtml(prepared.negative)}</strong>
+                        <div class="table-muted">ratio ${escapeHtml(prepared.ratio)}</div>
+                      </td>
+                      <td>${escapeHtml(entry.originalMinorityShare !== null && entry.originalMinorityShare !== undefined ? `${formatPercentage(entry.originalMinorityShare)}` : 'n/a')} -> ${escapeHtml(entry.preparedMinorityShare !== null && entry.preparedMinorityShare !== undefined ? `${formatPercentage(entry.preparedMinorityShare)}` : 'n/a')}</td>
+                      <td>${escapeHtml(formatPercentagePoints(minorityShift) || 'n/a')}</td>
+                      <td>${escapeHtml(entry.syntheticRows)}</td>
+                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.precision) : '')}</td>
+                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.recall) : '')}</td>
+                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.f1) : '')}</td>
+                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.pr_auc) : '')}</td>
+                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.roc_auc) : '')}</td>
+                      <td>${escapeHtml(entry.rankingMetrics ? formatMetric(entry.rankingMetrics.top_1_accuracy) : '')}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <p class="candidate-copy">Use the row highlight to track the currently selected focus strategy. Stored labels are unchanged; the balancing happens only inside the training run.</p>
+        </article>
+      `;
+    };
+
     imbalanceResults.className = 'model-card-grid imbalance-comparison-grid';
     imbalanceResults.innerHTML = `
       <article class="model-card comparison-summary-card">
@@ -957,6 +1053,11 @@
             tone: 'good',
             formatter: (value) => formatPercentage(value),
           })}
+          ${renderComparisonPanel('Nearest Neighbors (K)', 'SMOTE-like synthesis uses this many minority neighbors per synthetic row. It is a generation setting, not a score.', (entry) => entry.nearestNeighbors, {
+            scale: 'max',
+            tone: 'muted',
+            formatter: (value) => String(Math.round(value)),
+          })}
           ${renderComparisonPanel('Synthetic rows', 'Rows created in memory by oversampling or SMOTE-like synthesis.', (entry) => entry.syntheticRows, {
             scale: 'max',
             tone: 'muted',
@@ -964,6 +1065,7 @@
           })}
         </div>
       </article>
+      ${renderComparisonTable()}
       ${runs.map((run) => {
         const summary = run.summary || {};
         const counts = summary.training_counts || {};
