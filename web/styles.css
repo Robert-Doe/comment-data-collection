@@ -896,6 +896,31 @@ button[data-error="true"],
   grid-column: 1 / -1;
 }
 
+.comparison-metric-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.comparison-metric-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(49, 41, 28, 0.10);
+  border-radius: 18px;
+  background: rgba(248, 247, 239, 0.82);
+}
+
+.comparison-metric-panel h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.comparison-metric-panel .candidate-copy {
+  margin: 0;
+}
+
 .comparison-confusion-card,
 .score-job-confusion-card {
   grid-column: 1 / -1;

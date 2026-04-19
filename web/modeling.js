@@ -629,6 +629,22 @@
     `;
   }
 
+  function getMinorityShare(counts) {
+    const positive = Math.max(0, Number(counts && counts.positive) || 0);
+    const negative = Math.max(0, Number(counts && counts.negative) || 0);
+    const total = positive + negative;
+    if (!total) return null;
+    return Math.min(positive, negative) / total;
+  }
+
+  function formatPercentage(value, decimals = 1) {
+    if (value === null || value === undefined || value === '') return '';
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    const precision = Number.isFinite(decimals) ? Math.max(0, Math.min(3, Math.floor(decimals))) : 1;
+    return `${(numeric * 100).toFixed(precision)}%`;
+  }
+
   function renderConfusionMatrixCard(confusion, options = {}) {
     const truePositive = Math.max(0, Number(confusion && confusion.true_positive) || 0);
     const trueNegative = Math.max(0, Number(confusion && confusion.true_negative) || 0);
@@ -810,10 +826,41 @@
     }
 
     const focusStrategy = String(result.focus_strategy || '').trim();
-    const focusRun = runs.find((run) => run.strategy_id === focusStrategy) || runs[0] || null;
-    const focusEvaluation = focusRun && focusRun.summary && focusRun.summary.evaluation
-      ? (focusRun.summary.evaluation.test || focusRun.summary.evaluation.train || null)
-      : null;
+    const comparisonRows = runs.map((run) => {
+      const summary = run.summary || {};
+      const counts = summary.training_counts || {};
+      const imbalance = summary.imbalance_strategy || {};
+      const evaluation = summary.evaluation && (summary.evaluation.test || summary.evaluation.train)
+        ? (summary.evaluation.test || summary.evaluation.train)
+        : null;
+      const candidateMetrics = evaluation && evaluation.candidate_metrics
+        ? evaluation.candidate_metrics
+        : null;
+      const rankingMetrics = evaluation && evaluation.ranking_metrics
+        ? evaluation.ranking_metrics
+        : null;
+      const originalCounts = imbalance.original_label_counts || counts.train_label_counts || {};
+      const preparedCounts = imbalance.prepared_label_counts || counts.effective_train_label_counts || originalCounts;
+
+      return {
+        run,
+        summary,
+        counts,
+        imbalance,
+        evaluation,
+        candidateMetrics,
+        rankingMetrics,
+        originalCounts,
+        preparedCounts,
+        originalMinorityShare: getMinorityShare(originalCounts),
+        preparedMinorityShare: getMinorityShare(preparedCounts),
+        syntheticRows: Math.max(0, Number(imbalance.synthetic_row_count) || 0),
+      };
+    });
+
+    const focusRow = comparisonRows.find((entry) => entry.run.strategy_id === focusStrategy) || comparisonRows[0] || null;
+    const focusRun = focusRow ? focusRow.run : null;
+    const focusEvaluation = focusRow ? focusRow.evaluation : null;
     const focusConfusion = focusEvaluation && focusEvaluation.candidate_metrics
       ? focusEvaluation.candidate_metrics.confusion
       : null;
@@ -822,8 +869,52 @@
       leaderboard.precision ? `<div><strong>Precision:</strong> ${escapeHtml(leaderboard.precision.strategy.title || leaderboard.precision.strategy_id)} (${escapeHtml(formatMetric(leaderboard.precision.value))})</div>` : '',
       leaderboard.recall ? `<div><strong>Recall:</strong> ${escapeHtml(leaderboard.recall.strategy.title || leaderboard.recall.strategy_id)} (${escapeHtml(formatMetric(leaderboard.recall.value))})</div>` : '',
       leaderboard.f1 ? `<div><strong>F1:</strong> ${escapeHtml(leaderboard.f1.strategy.title || leaderboard.f1.strategy_id)} (${escapeHtml(formatMetric(leaderboard.f1.value))})</div>` : '',
+      leaderboard.pr_auc ? `<div><strong>PR AUC:</strong> ${escapeHtml(leaderboard.pr_auc.strategy.title || leaderboard.pr_auc.strategy_id)} (${escapeHtml(formatMetric(leaderboard.pr_auc.value))})</div>` : '',
+      leaderboard.roc_auc ? `<div><strong>ROC AUC:</strong> ${escapeHtml(leaderboard.roc_auc.strategy.title || leaderboard.roc_auc.strategy_id)} (${escapeHtml(formatMetric(leaderboard.roc_auc.value))})</div>` : '',
       leaderboard.top_1_accuracy ? `<div><strong>Top-1:</strong> ${escapeHtml(leaderboard.top_1_accuracy.strategy.title || leaderboard.top_1_accuracy.strategy_id)} (${escapeHtml(formatMetric(leaderboard.top_1_accuracy.value))})</div>` : '',
     ].filter(Boolean);
+
+    const renderComparisonPanel = (title, subtitle, valueGetter, options = {}) => {
+      const numericValues = comparisonRows
+        .map((entry) => Number(valueGetter(entry)))
+        .filter((value) => Number.isFinite(value));
+      const maxValue = options.scale === 'max'
+        ? (numericValues.length ? Math.max(...numericValues) : 0)
+        : 1;
+
+      return `
+        <section class="comparison-metric-panel">
+          <div>
+            <h4>${escapeHtml(title)}</h4>
+            ${subtitle ? `<p class="candidate-copy">${escapeHtml(subtitle)}</p>` : ''}
+          </div>
+          <div class="comparison-chart">
+            ${comparisonRows.map((entry) => {
+              const numeric = Number(valueGetter(entry));
+              const hasValue = Number.isFinite(numeric);
+              const width = hasValue
+                ? (options.scale === 'max'
+                  ? (maxValue > 0 ? Math.max(0, Math.min(100, (numeric / maxValue) * 100)) : 0)
+                  : Math.max(0, Math.min(100, numeric * 100)))
+                : 0;
+              const tone = entry.run.strategy_id === focusStrategy
+                ? 'good'
+                : (options.tone || 'plain');
+              const display = hasValue
+                ? (options.formatter ? options.formatter(numeric, entry) : formatMetric(numeric))
+                : '';
+              return `
+                <div class="comparison-chart-row">
+                  <div class="comparison-chart-label">${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</div>
+                  <div class="comparison-chart-track"><span class="comparison-chart-fill ${escapeHtml(tone)}" style="width:${width}%"></span></div>
+                  <div class="comparison-chart-value">${escapeHtml(display)}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    };
 
     imbalanceResults.className = 'model-card-grid imbalance-comparison-grid';
     imbalanceResults.innerHTML = `
@@ -833,6 +924,7 @@
         <div class="summary tight-summary">
           ${leaderboardRows.join('')}
           <div><strong>Focus:</strong> ${escapeHtml((getImbalanceStrategyMeta(focusStrategy) || {}).title || focusStrategy || 'Baseline')}</div>
+          <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(focusRow && focusRow.imbalance && focusRow.imbalance.nearest_neighbors !== null && focusRow.imbalance.nearest_neighbors !== undefined ? focusRow.imbalance.nearest_neighbors : 'n/a')}</div>
         </div>
         <p class="candidate-copy">Each run uses the same labeled dataset and the same model family. Only the in-memory balancing strategy changes.</p>
       </article>
@@ -842,23 +934,34 @@
         emptyText: 'The selected strategy does not have a binary confusion matrix yet.',
         cardClass: 'comparison-confusion-card',
       })}
-      <article class="model-card comparison-chart-card">
-        <p class="eyebrow subtle">F1 Graph</p>
-        <h3>Strategy Score Bars</h3>
-        <div class="comparison-chart">
-          ${runs.map((run) => {
-            const metrics = run.summary && run.summary.evaluation ? (run.summary.evaluation.test || run.summary.evaluation.train || null) : null;
-            const candidateMetrics = metrics && metrics.candidate_metrics ? metrics.candidate_metrics : null;
-            const f1 = candidateMetrics ? Number(candidateMetrics.f1) : NaN;
-            const tone = run.strategy_id === focusStrategy ? 'good' : 'plain';
-            return `
-              <div class="comparison-chart-row">
-                <div class="comparison-chart-label">${escapeHtml(run.strategy.title || run.strategy_id)}</div>
-                <div class="comparison-chart-track"><span class="comparison-chart-fill ${tone}" style="width:${Number.isFinite(f1) ? Math.max(0, Math.min(100, f1 * 100)) : 0}%"></span></div>
-                <div class="comparison-chart-value">${escapeHtml(Number.isFinite(f1) ? formatMetric(f1) : '')}</div>
-              </div>
-            `;
-          }).join('')}
+      <article class="model-card comparison-chart-card comparison-metrics-card">
+        <p class="eyebrow subtle">Decision Metrics</p>
+        <h3>How each strategy changes model quality</h3>
+        <div class="comparison-metric-panels">
+          ${renderComparisonPanel('F1', 'Best single score when precision and recall both matter.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.f1 : null, { tone: 'good' })}
+          ${renderComparisonPanel('Precision', 'How many predicted positives are correct.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.precision : null, { tone: 'plain' })}
+          ${renderComparisonPanel('Recall', 'How many true positives the model finds.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.recall : null, { tone: 'good' })}
+          ${renderComparisonPanel('PR AUC', 'Most useful summary when the positive class is rare.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.pr_auc : null, { tone: 'muted' })}
+          ${renderComparisonPanel('Top-1', 'Whether the highest-ranked candidate is actually the positive one.', (entry) => entry.rankingMetrics ? entry.rankingMetrics.top_1_accuracy : null, { tone: 'muted' })}
+        </div>
+      </article>
+      <article class="model-card comparison-chart-card comparison-balance-card">
+        <p class="eyebrow subtle">Balancing Effect</p>
+        <h3>How the prepared training set changes</h3>
+        <div class="comparison-metric-panels">
+          ${renderComparisonPanel('Original minority share', 'Share of the smaller class before resampling. Higher is closer to balanced.', (entry) => entry.originalMinorityShare, {
+            tone: 'plain',
+            formatter: (value) => formatPercentage(value),
+          })}
+          ${renderComparisonPanel('Prepared minority share', 'Share of the smaller class after resampling. Target is near 50%.', (entry) => entry.preparedMinorityShare, {
+            tone: 'good',
+            formatter: (value) => formatPercentage(value),
+          })}
+          ${renderComparisonPanel('Synthetic rows', 'Rows created in memory by oversampling or SMOTE-like synthesis.', (entry) => entry.syntheticRows, {
+            scale: 'max',
+            tone: 'muted',
+            formatter: (value) => String(Math.round(value)),
+          })}
         </div>
       </article>
       ${runs.map((run) => {
@@ -888,11 +991,14 @@
               <div><strong>Original:</strong> ${escapeHtml(originalCounts.positive || 0)} / ${escapeHtml(originalCounts.negative || 0)}</div>
               <div><strong>Prepared:</strong> ${escapeHtml(preparedCounts.positive || 0)} / ${escapeHtml(preparedCounts.negative || 0)}</div>
               <div><strong>Rows:</strong> ${escapeHtml(imbalance.original_row_count || counts.train_rows || 0)} -> ${escapeHtml(imbalance.prepared_row_count || counts.effective_train_rows || counts.train_rows || 0)}</div>
+              <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(imbalance.nearest_neighbors !== null && imbalance.nearest_neighbors !== undefined ? imbalance.nearest_neighbors : 'n/a')}</div>
               <div><strong>Fallback:</strong> ${escapeHtml(imbalance.fallback || 'none')}</div>
               <div><strong>Class Weighting:</strong> ${imbalance.class_weighting || imbalance.class_weighting_effective ? 'yes' : 'no'}</div>
               <div><strong>F1:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.f1) : '')}</div>
               <div><strong>Recall:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.recall) : '')}</div>
               <div><strong>Precision:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.precision) : '')}</div>
+              <div><strong>PR AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.pr_auc) : '')}</div>
+              <div><strong>ROC AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.roc_auc) : '')}</div>
               <div><strong>Top-1:</strong> ${escapeHtml(rankingMetrics ? formatMetric(rankingMetrics.top_1_accuracy) : '')}</div>
             </div>
             <div class="metric-stack">
@@ -1070,6 +1176,12 @@
     const preparedCounts = imbalance && imbalance.prepared_label_counts
       ? imbalance.prepared_label_counts
       : trainingCounts.effective_train_label_counts || originalCounts;
+    const candidateMetrics = evaluation && evaluation.candidate_metrics
+      ? evaluation.candidate_metrics
+      : null;
+    const rankingMetrics = evaluation && evaluation.ranking_metrics
+      ? evaluation.ranking_metrics
+      : null;
     const evaluationConfusion = evaluation && evaluation.candidate_metrics
       ? evaluation.candidate_metrics.confusion
       : null;
@@ -1113,10 +1225,13 @@
           <div><strong>Train Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.train_rows : '')}</div>
           <div><strong>Effective Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.effective_train_rows : '')}</div>
           <div><strong>Test Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.test_rows : '')}</div>
-          <div><strong>Precision:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.precision) : '')}</div>
-          <div><strong>Recall:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.recall) : '')}</div>
-          <div><strong>F1:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.f1) : '')}</div>
-          <div><strong>Top-1 Accuracy:</strong> ${escapeHtml(evaluation && evaluation.ranking_metrics ? formatMetric(evaluation.ranking_metrics.top_1_accuracy) : '')}</div>
+          <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(imbalance && imbalance.nearest_neighbors !== null && imbalance.nearest_neighbors !== undefined ? imbalance.nearest_neighbors : 'n/a')}</div>
+          <div><strong>Precision:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.precision) : '')}</div>
+          <div><strong>Recall:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.recall) : '')}</div>
+          <div><strong>F1:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.f1) : '')}</div>
+          <div><strong>PR AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.pr_auc) : '')}</div>
+          <div><strong>ROC AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.roc_auc) : '')}</div>
+          <div><strong>Top-1 Accuracy:</strong> ${escapeHtml(rankingMetrics ? formatMetric(rankingMetrics.top_1_accuracy) : '')}</div>
         </div>
       </article>
       <article class="model-card">
@@ -1145,8 +1260,11 @@
           <div><strong>Original Rows:</strong> ${escapeHtml(imbalance ? imbalance.original_row_count : trainingCounts.train_rows || '')}</div>
           <div><strong>Prepared Rows:</strong> ${escapeHtml(imbalance ? imbalance.prepared_row_count : trainingCounts.effective_train_rows || '')}</div>
           <div><strong>Synthetic Rows:</strong> ${escapeHtml(imbalance ? imbalance.synthetic_row_count : 0)}</div>
+          <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(imbalance && imbalance.nearest_neighbors !== null && imbalance.nearest_neighbors !== undefined ? imbalance.nearest_neighbors : 'n/a')}</div>
           <div><strong>Fallback:</strong> ${escapeHtml((imbalance && imbalance.fallback) || 'none')}</div>
           <div><strong>Class Weighting:</strong> ${imbalance && (imbalance.class_weighting || imbalance.class_weighting_effective) ? 'yes' : 'no'}</div>
+          <div><strong>PR AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.pr_auc) : '')}</div>
+          <div><strong>ROC AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.roc_auc) : '')}</div>
         </div>
         <p class="candidate-copy">The rows stay in memory only. Stored labels and source data are not changed.</p>
       </article>

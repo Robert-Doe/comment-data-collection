@@ -1550,6 +1550,8 @@ async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {
       precision: bestByMetric('candidate_metrics', 'precision'),
       recall: bestByMetric('candidate_metrics', 'recall'),
       f1: bestByMetric('candidate_metrics', 'f1'),
+      pr_auc: bestByMetric('candidate_metrics', 'pr_auc'),
+      roc_auc: bestByMetric('candidate_metrics', 'roc_auc'),
       top_1_accuracy: bestByMetric('ranking_metrics', 'top_1_accuracy'),
     },
   };
