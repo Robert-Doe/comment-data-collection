@@ -151,9 +151,9 @@
           <div id="site-group-results" class="table-shell empty">No site-group probe has been run yet.</div>
         </section>
 
-        <section class="panel">
-          <div class="panel-header"><h2>Live URL Probe</h2></div>
-          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. Enable priority scan to keep the live probe moving without a hard deadline while the panel reports scan steps and model counts.</p>
+      <section class="panel">
+        <div class="panel-header"><h2>Live URL Probe</h2></div>
+        <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. Enable priority scan to keep the live probe moving without a hard deadline while the panel reports scan steps and model counts.</p>
           <form id="live-probe-form" class="model-form live-probe-form">
             <label class="field">
               <span>Model</span>
@@ -190,6 +190,32 @@
         </section>
 
     </main>
+
+    <dialog id="live-probe-inspect-dialog" class="inspect-dialog" aria-labelledby="live-probe-inspect-title">
+      <div class="inspect-card">
+        <div class="inspect-header">
+          <div class="inspect-title-block">
+            <p class="eyebrow subtle">Live Probe Inspect</p>
+            <h3 id="live-probe-inspect-title">Candidate #0</h3>
+            <p id="live-probe-inspect-meta" class="candidate-copy inspect-meta"></p>
+            <div id="live-probe-inspect-pills" class="feature-chip-list inspect-pill-row"></div>
+          </div>
+          <button id="live-probe-inspect-close" class="secondary compact" type="button">Close</button>
+        </div>
+        <div class="inspect-grid">
+          <section class="inspect-panel">
+            <h4>Screenshots</h4>
+            <div id="live-probe-inspect-screenshots" class="inspect-screenshot-grid"></div>
+          </section>
+          <section class="inspect-panel inspect-markup-shell">
+            <h4>Signals And HTML</h4>
+            <div id="live-probe-inspect-signals" class="inspect-signals"></div>
+            <div id="live-probe-inspect-notes" class="inspect-notes"></div>
+            <div id="live-probe-inspect-markup"></div>
+          </section>
+        </div>
+      </div>
+    </dialog>
 
     <script src="./modeling.js"></script>
   </body>

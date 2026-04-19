@@ -46,6 +46,15 @@
   const liveProbeProgress = document.getElementById('live-probe-progress');
   const liveProbeSummary = document.getElementById('live-probe-summary');
   const liveProbeResults = document.getElementById('live-probe-results');
+  const liveProbeInspectDialog = document.getElementById('live-probe-inspect-dialog');
+  const liveProbeInspectTitle = document.getElementById('live-probe-inspect-title');
+  const liveProbeInspectMeta = document.getElementById('live-probe-inspect-meta');
+  const liveProbeInspectPills = document.getElementById('live-probe-inspect-pills');
+  const liveProbeInspectScreenshots = document.getElementById('live-probe-inspect-screenshots');
+  const liveProbeInspectSignals = document.getElementById('live-probe-inspect-signals');
+  const liveProbeInspectNotes = document.getElementById('live-probe-inspect-notes');
+  const liveProbeInspectMarkup = document.getElementById('live-probe-inspect-markup');
+  const liveProbeInspectClose = document.getElementById('live-probe-inspect-close');
 
   let currentModels = [];
   let currentVariants = [];
@@ -398,8 +407,8 @@
     if (!candidate) return '';
     const resolvedTag = candidate.candidate_resolved_tag_name ? `${candidate.candidate_resolved_tag_name}` : '';
     const outerMeta = candidate.candidate_outer_html_length
-      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars`
-      : '';
+      ? `${resolvedTag ? `${resolvedTag} - ` : ''}${candidate.candidate_outer_html_length} chars${candidate.candidate_outer_html_truncated ? ' (truncated)' : ''}`
+      : (candidate.candidate_outer_html_truncated ? 'Outer HTML truncated' : '');
     const markupSections = [];
     if (candidate.candidate_outer_html_excerpt) {
       markupSections.push(renderCandidateMarkupSection('Rendered HTML', candidate.candidate_outer_html_excerpt, outerMeta));
@@ -811,18 +820,279 @@
 
   function resolveLiveProbeCandidateDetail(candidate) {
     if (!candidate) return null;
+    const candidateValue = candidate.candidate && typeof candidate.candidate === 'object'
+      ? candidate.candidate
+      : {};
     const featureValues = candidate.feature_values && typeof candidate.feature_values === 'object'
       ? candidate.feature_values
       : {};
+    const outerHtmlLength = Number(
+      candidate.candidate_outer_html_length
+      || candidateValue.candidate_outer_html_length
+      || featureValues.candidate_outer_html_length
+      || 0,
+    ) || 0;
     return {
+      ...candidateValue,
       ...featureValues,
-      candidate_screenshot_url: candidate.candidate_screenshot_url || featureValues.candidate_screenshot_url || '',
-      candidate_screenshot_error: candidate.candidate_screenshot_error || featureValues.candidate_screenshot_error || '',
-      item_screenshot_url: candidate.item_screenshot_url || featureValues.item_screenshot_url || '',
-      item_manual_uploaded_screenshot_url: candidate.item_manual_uploaded_screenshot_url || featureValues.item_manual_uploaded_screenshot_url || '',
-      candidate_markup_error: candidate.candidate_markup_error || featureValues.candidate_markup_error || '',
-      candidate_markup_loading: candidate.candidate_markup_loading || featureValues.candidate_markup_loading || false,
+      frame_url: candidate.frame_url || candidateValue.frame_url || featureValues.frame_url || '',
+      frame_host: candidate.frame_host || candidateValue.frame_host || featureValues.frame_host || '',
+      sample_text: candidate.sample_text || candidateValue.sample_text || featureValues.sample_text || '',
+      score: candidate.score || candidateValue.score || featureValues.score || 0,
+      confidence: candidate.confidence || candidateValue.confidence || featureValues.confidence || '',
+      ugc_type: candidate.ugc_type || candidateValue.ugc_type || featureValues.ugc_type || '',
+      candidate_screenshot_url: candidate.candidate_screenshot_url || candidateValue.candidate_screenshot_url || featureValues.candidate_screenshot_url || '',
+      candidate_screenshot_error: candidate.candidate_screenshot_error || candidateValue.candidate_screenshot_error || featureValues.candidate_screenshot_error || '',
+      item_screenshot_url: candidate.item_screenshot_url || candidateValue.item_screenshot_url || featureValues.item_screenshot_url || '',
+      item_manual_uploaded_screenshot_url: candidate.item_manual_uploaded_screenshot_url || candidateValue.item_manual_uploaded_screenshot_url || featureValues.item_manual_uploaded_screenshot_url || '',
+      candidate_outer_html_excerpt: candidate.candidate_outer_html_excerpt || candidateValue.candidate_outer_html_excerpt || featureValues.candidate_outer_html_excerpt || '',
+      candidate_outer_html_length: outerHtmlLength,
+      candidate_outer_html_truncated: !!(candidate.candidate_outer_html_truncated
+        ?? candidateValue.candidate_outer_html_truncated
+        ?? featureValues.candidate_outer_html_truncated),
+      candidate_text_excerpt: candidate.candidate_text_excerpt || candidateValue.candidate_text_excerpt || featureValues.candidate_text_excerpt || '',
+      candidate_markup_error: candidate.candidate_markup_error || candidateValue.candidate_markup_error || featureValues.candidate_markup_error || '',
+      candidate_markup_loading: !!(candidate.candidate_markup_loading ?? candidateValue.candidate_markup_loading ?? featureValues.candidate_markup_loading),
+      candidate_resolved_tag_name: candidate.candidate_resolved_tag_name || candidateValue.candidate_resolved_tag_name || featureValues.candidate_resolved_tag_name || '',
+      candidate_markup_source: candidate.candidate_markup_source || candidateValue.candidate_markup_source || featureValues.candidate_markup_source || '',
     };
+  }
+
+  function getCurrentLiveProbeCandidates() {
+    const items = currentLiveProbeResult && Array.isArray(currentLiveProbeResult.items)
+      ? currentLiveProbeResult.items
+      : [];
+    const item = items[0] || null;
+    return item && Array.isArray(item.candidates) ? item.candidates : [];
+  }
+
+  function getLiveProbeCandidateAtIndex(index) {
+    const numericIndex = Number(index);
+    if (!Number.isInteger(numericIndex) || numericIndex < 0) {
+      return null;
+    }
+    const candidates = getCurrentLiveProbeCandidates();
+    if (numericIndex >= candidates.length) {
+      return null;
+    }
+    return {
+      candidate: candidates[numericIndex],
+      index: numericIndex,
+      total: candidates.length,
+    };
+  }
+
+  function renderInspectScreenshotPanel(label, url, options = {}) {
+    const resolvedUrl = resolveAssetUrl(url || '');
+    const error = String(options.error || '');
+    const emptyText = String(options.emptyText || 'No screenshot was captured for this candidate.');
+    const fallbackText = error || (resolvedUrl ? 'The stored screenshot URL could not be loaded.' : emptyText);
+    const captionText = String(options.caption || '');
+    const captionTone = error
+      ? (String(error).toLowerCase().includes('skipped') ? 'warn' : 'error')
+      : '';
+
+    return `
+      <figure class="inspect-screenshot-panel">
+        <div class="inspect-screenshot-header">
+          <strong>${escapeHtml(label)}</strong>
+          ${resolvedUrl ? `<a href="${escapeHtml(resolvedUrl)}" target="_blank" rel="noreferrer">Open</a>` : ''}
+        </div>
+        <div class="inspect-screenshot-frame" data-inspect-screenshot-frame data-state="${resolvedUrl ? 'loading' : 'empty'}">
+          ${resolvedUrl ? `
+            <img
+              class="inspect-screenshot-image"
+              data-inspect-screenshot-image
+              src="${escapeHtml(resolvedUrl)}"
+              alt="${escapeHtml(label)}"
+              loading="eager"
+              decoding="async"
+              referrerpolicy="no-referrer">
+            <div class="inspect-screenshot-fallback" data-inspect-screenshot-fallback hidden>
+              <strong>${escapeHtml(label)} unavailable</strong>
+              <span>${escapeHtml(fallbackText)}</span>
+            </div>
+          ` : `
+            <div class="inspect-screenshot-fallback" data-inspect-screenshot-fallback>
+              <strong>${escapeHtml(label)} unavailable</strong>
+              <span>${escapeHtml(fallbackText)}</span>
+            </div>
+          `}
+        </div>
+        ${captionText || error ? `<figcaption class="inspect-screenshot-caption${captionTone ? ` ${captionTone}` : ''}">${escapeHtml(captionText || error)}</figcaption>` : ''}
+      </figure>
+    `;
+  }
+
+  function hydrateInspectScreenshotPanels(root) {
+    if (!root) return;
+    root.querySelectorAll('[data-inspect-screenshot-image]').forEach((img) => {
+      const frame = img.closest('[data-inspect-screenshot-frame]');
+      if (!frame) return;
+      const fallback = frame.querySelector('[data-inspect-screenshot-fallback]');
+      const setState = (state) => {
+        frame.dataset.state = state;
+        if (fallback) {
+          fallback.hidden = state === 'loaded';
+        }
+        img.hidden = state === 'error';
+      };
+
+      const markLoaded = () => {
+        setState(img.naturalWidth > 0 ? 'loaded' : 'error');
+      };
+
+      img.addEventListener('load', markLoaded);
+      img.addEventListener('error', () => setState('error'));
+      if (img.complete) {
+        markLoaded();
+      }
+    });
+  }
+
+  function openLiveProbeInspectModal(index) {
+    if (!liveProbeInspectDialog || !liveProbeInspectTitle || !liveProbeInspectMeta || !liveProbeInspectPills || !liveProbeInspectScreenshots || !liveProbeInspectSignals || !liveProbeInspectNotes || !liveProbeInspectMarkup) {
+      return;
+    }
+
+    const lookup = getLiveProbeCandidateAtIndex(index);
+    if (!lookup || !lookup.candidate) {
+      return;
+    }
+
+    const candidate = lookup.candidate;
+    const detail = resolveLiveProbeCandidateDetail(candidate) || {};
+    const summary = currentLiveProbeResult && currentLiveProbeResult.summary ? currentLiveProbeResult.summary : {};
+    const scan = currentLiveProbeResult && currentLiveProbeResult.scan ? currentLiveProbeResult.scan : {};
+    const artifactLimit = Math.max(0, Number(scan.candidate_review_artifact_limit) || 0);
+    const rank = Number(candidate.candidate_rank || lookup.index + 1) || lookup.index + 1;
+    const predictionLabel = formatPredictionLabel(candidate) || (candidate.predicted_label === 1 ? 'predicted positive' : candidate.predicted_label === 0 ? 'predicted negative' : 'uncertain');
+    const humanLabel = candidate.human_label ? formatHumanLabel(candidate.human_label) || candidate.human_label : '';
+    const candidateKey = String(candidate.candidate_key || candidate.xpath || candidate.css_path || `row-${rank}`);
+    const candidateTag = detail.candidate_resolved_tag_name || detail.tag_name || detail.tag || '';
+    const markupSource = detail.candidate_markup_source ? String(detail.candidate_markup_source).replace(/_/g, ' ') : '';
+    const signalBits = [
+      ...(candidate.explanation && Array.isArray(candidate.explanation.top_positive_contributors)
+        ? candidate.explanation.top_positive_contributors.slice(0, 3)
+        : []),
+      ...(candidate.explanation && Array.isArray(candidate.explanation.top_negative_contributors)
+        ? candidate.explanation.top_negative_contributors.slice(0, 2)
+        : []),
+    ];
+    const inspectPills = [
+      `<span class="candidate-pill ${candidate.predicted_label === 1 ? 'good' : 'warn'}">${escapeHtml(formatMetric(candidate.probability))}</span>`,
+      `<span class="candidate-pill ${candidate.predicted_label === 1 ? 'good' : 'bad'}">${escapeHtml(humanLabel || predictionLabel)}</span>`,
+      `<span class="candidate-pill plain">rank ${escapeHtml(rank)}</span>`,
+      candidateTag ? `<span class="candidate-pill plain">${escapeHtml(candidateTag)}</span>` : '',
+      markupSource ? `<span class="candidate-pill plain">${escapeHtml(markupSource)}</span>` : '',
+      candidate.candidate_outer_html_truncated || detail.candidate_outer_html_truncated ? '<span class="candidate-pill warn">outer HTML truncated</span>' : '',
+      artifactLimit && rank > artifactLimit && !detail.candidate_screenshot_url
+        ? `<span class="candidate-pill warn">screenshot cap ${escapeHtml(artifactLimit)}</span>`
+        : '',
+    ].filter(Boolean).join('');
+
+    const inspectMeta = [
+      summary.page_title ? `Title: ${summary.page_title}` : '',
+      detail.frame_host ? `Frame host: ${detail.frame_host}` : '',
+      detail.frame_url ? `Frame URL: ${detail.frame_url}` : '',
+      `Candidate key: ${candidateKey}`,
+    ].filter(Boolean).join(' | ');
+
+    const screenshotPanels = [
+      renderInspectScreenshotPanel(
+        'Candidate screenshot',
+        detail.candidate_screenshot_url,
+        {
+          error: detail.candidate_screenshot_error,
+          emptyText: artifactLimit && rank > artifactLimit
+            ? `This candidate is outside the top ${artifactLimit} review-artifact captures.`
+            : 'No candidate screenshot was captured for this row.',
+          caption: detail.candidate_screenshot_url ? `Candidate rank ${rank}` : '',
+        },
+      ),
+      renderInspectScreenshotPanel(
+        'Page screenshot',
+        detail.item_screenshot_url,
+        {
+          error: detail.item_screenshot_url ? '' : 'No page screenshot was recorded for this probe.',
+          emptyText: 'No page screenshot is available for this probe.',
+          caption: summary.page_final_url ? summary.page_final_url : '',
+        },
+      ),
+    ];
+
+    if (detail.item_manual_uploaded_screenshot_url && detail.item_manual_uploaded_screenshot_url !== detail.item_screenshot_url) {
+      screenshotPanels.push(renderInspectScreenshotPanel(
+        'Manual uploaded screenshot',
+        detail.item_manual_uploaded_screenshot_url,
+        {
+          error: '',
+          emptyText: 'No manually uploaded screenshot is attached to this row.',
+          caption: 'Stored manual upload',
+        },
+      ));
+    }
+
+    const notes = [];
+    if (artifactLimit && rank > artifactLimit && !detail.candidate_screenshot_url) {
+      notes.push(`<p class="inspect-note warn">This candidate falls outside the live probe screenshot cap of ${escapeHtml(artifactLimit)}. The candidate is still scored, but its screenshot artifact was not captured.</p>`);
+    } else if (detail.candidate_screenshot_error) {
+      notes.push(`<p class="inspect-note ${String(detail.candidate_screenshot_error).toLowerCase().includes('skipped') ? 'warn' : 'error'}">${escapeHtml(detail.candidate_screenshot_error)}</p>`);
+    }
+
+    if (detail.candidate_markup_loading) {
+      notes.push('<p class="inspect-note warn">Candidate HTML is still loading.</p>');
+    } else if (detail.candidate_markup_error) {
+      notes.push(`<p class="inspect-note error">${escapeHtml(detail.candidate_markup_error)}</p>`);
+    }
+
+    if (detail.candidate_outer_html_truncated) {
+      notes.push(`<p class="inspect-note warn">Outer HTML is truncated at ${escapeHtml(detail.candidate_outer_html_length || 0)} characters.</p>`);
+    }
+
+    if (detail.sample_text) {
+      const sampleText = String(detail.sample_text || '').trim();
+      const samplePreview = sampleText.length > 360 ? `${sampleText.slice(0, 360)}...` : sampleText;
+      notes.push(`<p class="inspect-note">Sample text: ${escapeHtml(samplePreview)}</p>`);
+    }
+
+    liveProbeInspectTitle.textContent = `Candidate #${rank} of ${lookup.total}`;
+    liveProbeInspectMeta.textContent = inspectMeta;
+    liveProbeInspectPills.innerHTML = inspectPills || '<span class="candidate-copy model-card-empty">No summary values are available for this candidate.</span>';
+    liveProbeInspectScreenshots.innerHTML = screenshotPanels.join('');
+    liveProbeInspectSignals.innerHTML = `
+      <div class="candidate-copy inspect-signals-copy"><strong>Signals:</strong> ${escapeHtml(signalBits.length)} contributor${signalBits.length === 1 ? '' : 's'} surfaced by the model.</div>
+      <div class="feature-chip-list">
+        ${signalBits.length ? signalBits.map((entry) => `
+          <span class="feature-chip ${entry.contribution >= 0 ? 'good' : 'muted'}">
+            <strong>${escapeHtml(entry.title || entry.output_key)}</strong>
+            <span>${escapeHtml(formatMetric(entry.contribution))}</span>
+          </span>
+        `).join('') : '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}
+      </div>
+    `;
+    liveProbeInspectNotes.innerHTML = notes.join('');
+    liveProbeInspectMarkup.innerHTML = renderCandidateMarkupDetails(detail)
+      || '<p class="candidate-copy model-card-empty">No outer HTML excerpt was captured for this candidate.</p>';
+
+    hydrateInspectScreenshotPanels(liveProbeInspectDialog);
+    if (typeof liveProbeInspectDialog.showModal === 'function') {
+      if (liveProbeInspectDialog.open) {
+        liveProbeInspectDialog.close();
+      }
+      liveProbeInspectDialog.showModal();
+    } else {
+      liveProbeInspectDialog.setAttribute('open', '');
+    }
+
+    const inspectCard = liveProbeInspectDialog.querySelector('.inspect-card');
+    if (inspectCard) {
+      inspectCard.scrollTop = 0;
+    }
+
+    if (liveProbeInspectClose && typeof liveProbeInspectClose.focus === 'function') {
+      liveProbeInspectClose.focus();
+    }
   }
 
   const STRATEGY_COLORS = {
@@ -1822,13 +2092,18 @@
                 <td class="mono">${escapeHtml(detail.tag_name || detail._root_tag || detail.tag || '')}</td>
                 <td>${escapeHtml((detail.sample_text || '').slice(0, 140))}</td>
                 <td>
-                  <details class="score-details" data-score-detail="probe-${escapeHtml(candidate.candidate_key || candidate.xpath || index)}">
-                    <summary>Inspect</summary>
-                    <div class="score-details-body">
-                      <div class="feature-chip-list">${signalBits || '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}</div>
-                      ${renderCandidateMarkupDetails(detail)}
-                    </div>
-                  </details>
+                  <div class="candidate-inspect-stack">
+                    <div class="feature-chip-list">${signalBits || '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}</div>
+                    <button
+                      class="secondary compact inspect-button"
+                      type="button"
+                      title="Open a wider inspect modal with screenshots and outer HTML"
+                      aria-haspopup="dialog"
+                      aria-controls="live-probe-inspect-dialog"
+                      data-live-probe-inspect-index="${pageStart + index}">
+                      Inspect
+                    </button>
+                  </div>
                 </td>
               </tr>
             `;
@@ -1843,6 +2118,16 @@
       const button = event.target && typeof event.target.closest === 'function'
         ? event.target.closest('button[data-live-probe-page]')
         : null;
+      const inspectButton = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('button[data-live-probe-inspect-index]')
+        : null;
+
+      if (inspectButton && !inspectButton.disabled && currentLiveProbeResult) {
+        const inspectIndex = Number(inspectButton.getAttribute('data-live-probe-inspect-index'));
+        openLiveProbeInspectModal(inspectIndex);
+        return;
+      }
+
       if (!button || button.disabled || !currentLiveProbeResult) {
         return;
       }
@@ -1871,6 +2156,24 @@
 
       currentLiveProbePage = nextPage;
       renderLiveProbe(currentLiveProbeResult);
+    });
+  }
+
+  if (liveProbeInspectClose && liveProbeInspectDialog) {
+    liveProbeInspectClose.addEventListener('click', () => {
+      if (typeof liveProbeInspectDialog.close === 'function' && liveProbeInspectDialog.open) {
+        liveProbeInspectDialog.close();
+      } else {
+        liveProbeInspectDialog.removeAttribute('open');
+      }
+    });
+  }
+
+  if (liveProbeInspectDialog) {
+    liveProbeInspectDialog.addEventListener('click', (event) => {
+      if (event.target === liveProbeInspectDialog && typeof liveProbeInspectDialog.close === 'function') {
+        liveProbeInspectDialog.close();
+      }
     });
   }
 
