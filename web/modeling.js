@@ -899,7 +899,7 @@
   }
 
   function renderKnnDiagram(comparisonRows) {
-    const smoteRows = comparisonRows.filter((e) => e.nearestNeighbors !== null && e.syntheticRows > 0);
+    const smoteRows = comparisonRows.filter((e) => e.nearestNeighbors > 0 && e.syntheticRows > 0);
     if (!smoteRows.length) return '';
     // Fixed illustrative point positions in a 200x160 canvas
     const minority = [[40,80],[60,50],[90,65],[70,100],[110,45],[130,80],[50,120]];
@@ -1147,7 +1147,7 @@
         </div>
       </article>
 
-      ${comparisonRows.some((e) => e.nearestNeighbors !== null && e.syntheticRows > 0) ? `
+      ${comparisonRows.some((e) => e.nearestNeighbors > 0 && e.syntheticRows > 0) ? `
       <article class="model-card comparison-knn-card">
         <p class="eyebrow subtle">How K-Nearest Neighbours Works</p>
         <h3>KNN Synthesis Diagram</h3>
