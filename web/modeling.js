@@ -825,6 +825,139 @@
     };
   }
 
+  const STRATEGY_COLORS = {
+    baseline: '#64748b',
+    class_weighted: '#3b82f6',
+    undersample: '#f97316',
+    oversample: '#22c55e',
+    smote: '#a855f7',
+    smote_weighted: '#ec4899',
+  };
+
+  function getStrategyColor(strategyId) {
+    const key = String(strategyId || '').toLowerCase().replace(/[\s-]+/g, '_');
+    return STRATEGY_COLORS[key] || '#94a3b8';
+  }
+
+  function renderRadarChart(comparisonRows, focusStrategy) {
+    if (!comparisonRows.length) return '';
+    const cx = 165, cy = 165, r = 115;
+    const W = 330, H = 330;
+    const metrics = [
+      { label: 'F1', getter: (e) => e.candidateMetrics ? e.candidateMetrics.f1 : null },
+      { label: 'Precision', getter: (e) => e.candidateMetrics ? e.candidateMetrics.precision : null },
+      { label: 'Recall', getter: (e) => e.candidateMetrics ? e.candidateMetrics.recall : null },
+      { label: 'PR AUC', getter: (e) => e.candidateMetrics ? e.candidateMetrics.pr_auc : null },
+      { label: 'ROC AUC', getter: (e) => e.candidateMetrics ? e.candidateMetrics.roc_auc : null },
+      { label: 'Top-1', getter: (e) => e.rankingMetrics ? e.rankingMetrics.top_1_accuracy : null },
+    ];
+    const n = metrics.length;
+    const axes = metrics.map((m, i) => {
+      const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+      return { ...m, angle,
+        ax: cx + r * Math.cos(angle), ay: cy + r * Math.sin(angle),
+        lx: cx + (r + 26) * Math.cos(angle), ly: cy + (r + 26) * Math.sin(angle),
+      };
+    });
+    const rings = [0.25, 0.5, 0.75, 1.0].map((level) => {
+      const pts = axes.map((a) => `${(cx + level * r * Math.cos(a.angle)).toFixed(1)},${(cy + level * r * Math.sin(a.angle)).toFixed(1)}`).join(' ');
+      return `<polygon points="${pts}" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="1"/>`;
+    }).join('');
+    const ringLabels = [0.25, 0.5, 0.75, 1.0].map((level) => {
+      const y = cy - level * r - 3;
+      return `<text x="${cx + 4}" y="${y}" font-size="9" fill="rgba(0,0,0,0.3)" font-family="inherit">${Math.round(level * 100)}%</text>`;
+    }).join('');
+    const axisLines = axes.map((a) => `<line x1="${cx}" y1="${cy}" x2="${a.ax.toFixed(1)}" y2="${a.ay.toFixed(1)}" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>`).join('');
+    const axisLabels = axes.map((a) => {
+      const anchor = Math.abs(Math.cos(a.angle)) < 0.15 ? 'middle' : (Math.cos(a.angle) > 0 ? 'start' : 'end');
+      const dy = Math.sin(a.angle) > 0.5 ? 14 : (Math.sin(a.angle) < -0.5 ? 0 : 4);
+      return `<text x="${a.lx.toFixed(1)}" y="${(a.ly + dy).toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="var(--muted)" font-family="inherit" font-weight="600">${escapeHtml(a.label)}</text>`;
+    }).join('');
+    const polygons = comparisonRows.map((entry) => {
+      const color = getStrategyColor(entry.run.strategy_id);
+      const isFocus = entry.run.strategy_id === focusStrategy;
+      const pts = axes.map((a) => {
+        const val = a.getter(entry);
+        const v = Number.isFinite(Number(val)) ? Math.max(0, Math.min(1, Number(val))) : 0;
+        return `${(cx + v * r * Math.cos(a.angle)).toFixed(1)},${(cy + v * r * Math.sin(a.angle)).toFixed(1)}`;
+      }).join(' ');
+      return `<polygon points="${pts}" fill="${escapeHtml(color)}" fill-opacity="${isFocus ? 0.25 : 0.1}" stroke="${escapeHtml(color)}" stroke-width="${isFocus ? 2.5 : 1.5}" stroke-opacity="0.85"/>`;
+    }).join('');
+    const legendItems = comparisonRows.map((entry) => {
+      const color = getStrategyColor(entry.run.strategy_id);
+      const isFocus = entry.run.strategy_id === focusStrategy;
+      return `<div class="radar-legend-item${isFocus ? ' is-focus' : ''}"><span class="radar-legend-dot" style="background:${escapeHtml(color)}"></span><span>${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</span></div>`;
+    }).join('');
+    return `
+      <div class="radar-chart-wrap">
+        <svg viewBox="0 0 ${W} ${H}" class="radar-chart-svg" role="img" aria-label="Metric comparison radar chart">
+          ${rings}${ringLabels}${axisLines}${polygons}${axisLabels}
+        </svg>
+        <div class="radar-legend">${legendItems}</div>
+      </div>
+    `;
+  }
+
+  function renderKnnDiagram(comparisonRows) {
+    const smoteRows = comparisonRows.filter((e) => e.nearestNeighbors !== null && e.syntheticRows > 0);
+    if (!smoteRows.length) return '';
+    // Fixed illustrative point positions in a 200x160 canvas
+    const minority = [[40,80],[60,50],[90,65],[70,100],[110,45],[130,80],[50,120]];
+    const majority = [[20,30],[150,30],[170,90],[160,140],[30,140],[100,130],[140,55],[80,20],[170,20]];
+    const seedIdx = 2; // point at [90,65] is the "query" point
+    const seed = minority[seedIdx];
+    function dist(a, b) { return Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2); }
+    // K=5 neighbors (closest minority points to seed, excluding seed itself)
+    const neighbors = minority
+      .map((p, i) => ({ p, i, d: dist(p, seed) }))
+      .filter((x) => x.i !== seedIdx)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 5);
+    // Synthetic point = midpoint between seed and first neighbor
+    const synth = [
+      Math.round((seed[0] + neighbors[0].p[0]) / 2),
+      Math.round((seed[1] + neighbors[0].p[1]) / 2),
+    ];
+    const neighborLines = neighbors.map((nb) => `<line x1="${seed[0]}" y1="${seed[1]}" x2="${nb.p[0]}" y2="${nb.p[1]}" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.6"/>`).join('');
+    const majorityDots = majority.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="rgba(138,45,45,0.7)" stroke="rgba(138,45,45,0.9)" stroke-width="1"/>`).join('');
+    const minorityDots = minority.map((p, i) => {
+      if (i === seedIdx) return `<circle cx="${p[0]}" cy="${p[1]}" r="7" fill="rgba(29,107,87,0.9)" stroke="rgba(29,107,87,1)" stroke-width="2"/>`;
+      const isNeighbor = neighbors.some((nb) => nb.i === i);
+      return `<circle cx="${p[0]}" cy="${p[1]}" r="${isNeighbor ? 6 : 5}" fill="${isNeighbor ? 'rgba(29,107,87,0.95)' : 'rgba(29,107,87,0.55)'}" stroke="rgba(29,107,87,0.8)" stroke-width="${isNeighbor ? 2 : 1}"/>`;
+    }).join('');
+    const synthDot = `<circle cx="${synth[0]}" cy="${synth[1]}" r="6" fill="rgba(168,85,247,0.3)" stroke="#a855f7" stroke-width="2" stroke-dasharray="3 2"/>`;
+    const kCircle = `<circle cx="${seed[0]}" cy="${seed[1]}" r="${neighbors[neighbors.length-1].d.toFixed(1)}" fill="none" stroke="rgba(168,85,247,0.18)" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    const svgStr = `<svg viewBox="0 0 200 160" class="knn-diagram-svg" role="img" aria-label="KNN synthesis diagram">
+      ${kCircle}${neighborLines}${majorityDots}${minorityDots}${synthDot}
+      <text x="92" y="60" font-size="9" fill="#1d6b57" font-weight="700" font-family="inherit">seed</text>
+      <text x="${synth[0]+8}" y="${synth[1]+4}" font-size="9" fill="#a855f7" font-family="inherit">synthetic</text>
+    </svg>`;
+    const cards = smoteRows.map((entry) => {
+      const color = getStrategyColor(entry.run.strategy_id);
+      return `<div class="knn-stat-card">
+        <div class="knn-stat-label">${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</div>
+        <div class="knn-stat-k" style="color:${escapeHtml(color)}">K = ${escapeHtml(entry.nearestNeighbors)}</div>
+        <div class="knn-stat-rows">${escapeHtml(entry.syntheticRows)} synthetic rows generated</div>
+        <div class="knn-stat-shift">Minority share: ${escapeHtml(formatPercentage(entry.originalMinorityShare))} → ${escapeHtml(formatPercentage(entry.preparedMinorityShare))}</div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="knn-diagram-wrap">
+        <div class="knn-diagram-visual">
+          ${svgStr}
+          <div class="knn-diagram-legend">
+            <div class="knn-legend-item"><span class="knn-dot minority-seed"></span>Seed minority point</div>
+            <div class="knn-legend-item"><span class="knn-dot minority-neighbor"></span>K nearest neighbors</div>
+            <div class="knn-legend-item"><span class="knn-dot synthetic-point"></span>Synthetic point (interpolated)</div>
+            <div class="knn-legend-item"><span class="knn-dot majority-point"></span>Majority class</div>
+            <div class="knn-legend-item"><span class="knn-dot knn-radius"></span>K-neighborhood radius</div>
+          </div>
+        </div>
+        <div class="knn-stat-cards">${cards}</div>
+      </div>
+    `;
+  }
+
   function renderImbalanceComparison(result) {
     if (!imbalanceResults) return;
     const runs = result && Array.isArray(result.runs) ? result.runs : [];
@@ -886,232 +1019,146 @@
       leaderboard.top_1_accuracy ? `<div><strong>Top-1:</strong> ${escapeHtml(leaderboard.top_1_accuracy.strategy.title || leaderboard.top_1_accuracy.strategy_id)} (${escapeHtml(formatMetric(leaderboard.top_1_accuracy.value))})</div>` : '',
     ].filter(Boolean);
 
-    const renderComparisonPanel = (title, subtitle, valueGetter, options = {}) => {
-      const numericValues = comparisonRows
-        .map((entry) => Number(valueGetter(entry)))
-        .filter((value) => Number.isFinite(value));
-      const maxValue = options.scale === 'max'
-        ? (numericValues.length ? Math.max(...numericValues) : 0)
-        : 1;
-
-      return `
-        <section class="comparison-metric-panel">
-          <div>
-            <h4>${escapeHtml(title)}</h4>
-            ${subtitle ? `<p class="candidate-copy">${escapeHtml(subtitle)}</p>` : ''}
-          </div>
-          <div class="comparison-chart">
-            ${comparisonRows.map((entry) => {
-              const numeric = Number(valueGetter(entry));
-              const hasValue = Number.isFinite(numeric);
-              const width = hasValue
-                ? (options.scale === 'max'
-                  ? (maxValue > 0 ? Math.max(0, Math.min(100, (numeric / maxValue) * 100)) : 0)
-                  : Math.max(0, Math.min(100, numeric * 100)))
-                : 0;
-              const tone = entry.run.strategy_id === focusStrategy
-                ? 'good'
-                : (options.tone || 'plain');
-              const display = hasValue
-                ? (options.formatter ? options.formatter(numeric, entry) : formatMetric(numeric))
-                : '';
-              return `
-                <div class="comparison-chart-row">
-                  <div class="comparison-chart-label">${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</div>
-                  <div class="comparison-chart-track"><span class="comparison-chart-fill ${escapeHtml(tone)}" style="width:${width}%"></span></div>
-                  <div class="comparison-chart-value">${escapeHtml(display)}</div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </section>
-      `;
-    };
-
-    const renderComparisonTable = () => {
-      const describeCounts = (counts) => {
-        const positive = Math.max(0, Number(counts && counts.positive) || 0);
-        const negative = Math.max(0, Number(counts && counts.negative) || 0);
-        const minority = Math.min(positive, negative);
-        const majority = Math.max(positive, negative);
-        const total = positive + negative;
-        return {
-          positive,
-          negative,
-          ratio: minority > 0 ? `${formatMetric(majority / minority, 2)}:1` : 'n/a',
-          minorityShare: total > 0 ? minority / total : null,
-        };
-      };
-
-      return `
-          <article class="model-card comparison-table-card">
-          <p class="eyebrow subtle">Comparison Table</p>
-          <h3>Strategy-by-strategy breakdown</h3>
-          <p class="candidate-copy">
-            This table is designed for review meetings: <code>K</code> shows the nearest-neighbor count used by the SMOTE-like path, and the count/share columns show exactly how the class balance changed in memory.
-          </p>
-          <div class="table-shell comparison-table-shell">
-            <table class="comparison-data-table">
-              <thead>
-                <tr>
-                  <th>Strategy</th>
-                  <th>K</th>
-                  <th>Original counts</th>
-                  <th>Prepared counts</th>
-                  <th>Minority share</th>
-                  <th>Shift</th>
-                  <th>Synthetic rows</th>
-                  <th>Precision</th>
-                  <th>Recall</th>
-                  <th>F1</th>
-                  <th>PR AUC</th>
-                  <th>ROC AUC</th>
-                  <th>Top-1</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${comparisonRows.map((entry) => {
-                  const isFocus = entry.run.strategy_id === focusStrategy;
-                  const original = describeCounts(entry.originalCounts);
-                  const prepared = describeCounts(entry.preparedCounts);
-                  const minorityShift = prepared.minorityShare !== null && original.minorityShare !== null
-                    ? prepared.minorityShare - original.minorityShare
-                    : null;
-                  return `
-                    <tr class="${isFocus ? 'is-current' : ''}">
-                      <td>
-                        <strong>${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</strong>
-                        <div class="table-muted">${escapeHtml(entry.imbalance.balancing_mode || entry.imbalance.id || 'baseline')}</div>
-                      </td>
-                      <td>${escapeHtml(entry.nearestNeighbors !== null && entry.nearestNeighbors !== undefined ? entry.nearestNeighbors : 'n/a')}</td>
-                      <td>
-                        <strong>${escapeHtml(original.positive)} / ${escapeHtml(original.negative)}</strong>
-                        <div class="table-muted">ratio ${escapeHtml(original.ratio)}</div>
-                      </td>
-                      <td>
-                        <strong>${escapeHtml(prepared.positive)} / ${escapeHtml(prepared.negative)}</strong>
-                        <div class="table-muted">ratio ${escapeHtml(prepared.ratio)}</div>
-                      </td>
-                      <td>${escapeHtml(entry.originalMinorityShare !== null && entry.originalMinorityShare !== undefined ? `${formatPercentage(entry.originalMinorityShare)}` : 'n/a')} -> ${escapeHtml(entry.preparedMinorityShare !== null && entry.preparedMinorityShare !== undefined ? `${formatPercentage(entry.preparedMinorityShare)}` : 'n/a')}</td>
-                      <td>${escapeHtml(formatPercentagePoints(minorityShift) || 'n/a')}</td>
-                      <td>${escapeHtml(entry.syntheticRows)}</td>
-                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.precision) : '')}</td>
-                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.recall) : '')}</td>
-                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.f1) : '')}</td>
-                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.pr_auc) : '')}</td>
-                      <td>${escapeHtml(entry.candidateMetrics ? formatMetric(entry.candidateMetrics.roc_auc) : '')}</td>
-                      <td>${escapeHtml(entry.rankingMetrics ? formatMetric(entry.rankingMetrics.top_1_accuracy) : '')}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-          <p class="candidate-copy">Use the row highlight to track the currently selected focus strategy. Stored labels are unchanged; the balancing happens only inside the training run.</p>
-        </article>
-      `;
-    };
-
     imbalanceResults.className = 'model-card-grid imbalance-comparison-grid';
     imbalanceResults.innerHTML = `
       <article class="model-card comparison-summary-card">
         <p class="eyebrow subtle">Imbalance Comparison</p>
         <h3>Metric Leaderboard</h3>
+        <p class="candidate-copy">Which strategy topped each metric. Each run uses the same labeled dataset and model family — only the in-memory balancing changes.</p>
         <div class="summary tight-summary">
           ${leaderboardRows.join('')}
-          <div><strong>Focus:</strong> ${escapeHtml((getImbalanceStrategyMeta(focusStrategy) || {}).title || focusStrategy || 'Baseline')}</div>
-          <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(focusRow && focusRow.imbalance && focusRow.imbalance.nearest_neighbors !== null && focusRow.imbalance.nearest_neighbors !== undefined ? focusRow.imbalance.nearest_neighbors : 'n/a')}</div>
+          <div><strong>Focus strategy:</strong> ${escapeHtml((getImbalanceStrategyMeta(focusStrategy) || {}).title || focusStrategy || 'Baseline')}</div>
         </div>
-        <p class="candidate-copy">Each run uses the same labeled dataset and the same model family. Only the in-memory balancing strategy changes.</p>
       </article>
+
       ${renderConfusionMatrixCard(focusConfusion, {
         eyebrow: 'Focus Strategy',
         title: `${(focusRun && focusRun.strategy && focusRun.strategy.title) || focusStrategy || 'Baseline'} Confusion Matrix`,
-        emptyText: 'The selected strategy does not have a binary confusion matrix yet.',
+        emptyText: 'No confusion matrix for the selected strategy.',
         cardClass: 'comparison-confusion-card',
       })}
-      <article class="model-card comparison-chart-card comparison-metrics-card">
-        <p class="eyebrow subtle">Decision Metrics</p>
-        <h3>How each strategy changes model quality</h3>
-        <div class="comparison-metric-panels">
-          ${renderComparisonPanel('F1', 'Best single score when precision and recall both matter.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.f1 : null, { tone: 'good' })}
-          ${renderComparisonPanel('Precision', 'How many predicted positives are correct.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.precision : null, { tone: 'plain' })}
-          ${renderComparisonPanel('Recall', 'How many true positives the model finds.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.recall : null, { tone: 'good' })}
-          ${renderComparisonPanel('PR AUC', 'Most useful summary when the positive class is rare.', (entry) => entry.candidateMetrics ? entry.candidateMetrics.pr_auc : null, { tone: 'muted' })}
-          ${renderComparisonPanel('Top-1', 'Whether the highest-ranked candidate is actually the positive one.', (entry) => entry.rankingMetrics ? entry.rankingMetrics.top_1_accuracy : null, { tone: 'muted' })}
+
+      <article class="model-card comparison-radar-card">
+        <p class="eyebrow subtle">Multi-Metric View</p>
+        <h3>Strategy Radar</h3>
+        <p class="candidate-copy">Each coloured polygon represents one strategy. A larger area means better overall performance. The <strong>focus strategy</strong> is shown with a stronger fill. Perfect scores reach the outer ring; watch for strategies that are strong on recall but weak on precision (lopsided shapes).</p>
+        ${renderRadarChart(comparisonRows, focusStrategy)}
+      </article>
+
+      <article class="model-card comparison-table-card">
+        <p class="eyebrow subtle">Full Breakdown</p>
+        <h3>Strategy-by-Strategy Table</h3>
+        <p class="candidate-copy">
+          <strong>K</strong> = nearest neighbours used by SMOTE-like synthesis (n/a for strategies that don't generate synthetic rows).
+          <strong>Shift</strong> = how many percentage points the minority share grew after resampling — higher means more aggressive balancing.
+          <strong>F1</strong> is the harmonic mean of precision and recall; use it when you want to balance both.
+          <strong>PR AUC</strong> is the most reliable metric when positive examples are rare.
+          The highlighted row is the current focus strategy.
+        </p>
+        <div class="table-shell comparison-table-shell">
+          <table class="comparison-data-table">
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th title="Nearest neighbours used during SMOTE-like synthesis">K</th>
+                <th title="Original positive / negative class counts before resampling">Original split</th>
+                <th title="Prepared positive / negative counts used for training">Prepared split</th>
+                <th title="How the minority class share changed">Minority share → shift</th>
+                <th title="Rows created in memory by oversampling or SMOTE">Synth rows</th>
+                <th title="F1 score on held-out test set">F1</th>
+                <th title="Precision: of all predicted positives, how many were correct">Precision</th>
+                <th title="Recall: of all true positives, how many did the model find">Recall</th>
+                <th title="Area under Precision-Recall curve — best metric for rare positive class">PR AUC</th>
+                <th title="Area under ROC curve">ROC AUC</th>
+                <th title="Whether the top-ranked candidate per page is truly positive">Top-1</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${comparisonRows.map((entry) => {
+                const isFocus = entry.run.strategy_id === focusStrategy;
+                const color = getStrategyColor(entry.run.strategy_id);
+                const original = (() => {
+                  const pos = Number(entry.originalCounts.positive) || 0;
+                  const neg = Number(entry.originalCounts.negative) || 0;
+                  const total = pos + neg;
+                  return { pos, neg, total, ratio: neg > 0 ? (neg/Math.max(pos,1)).toFixed(1)+':1' : 'n/a' };
+                })();
+                const prepared = (() => {
+                  const pos = Number(entry.preparedCounts.positive) || 0;
+                  const neg = Number(entry.preparedCounts.negative) || 0;
+                  const total = pos + neg;
+                  return { pos, neg, total, ratio: neg > 0 ? (neg/Math.max(pos,1)).toFixed(1)+':1' : 'n/a' };
+                })();
+                const shift = entry.preparedMinorityShare !== null && entry.originalMinorityShare !== null
+                  ? entry.preparedMinorityShare - entry.originalMinorityShare : null;
+                const renderMetricCell = (value, allValues) => {
+                  if (value == null || !Number.isFinite(Number(value))) return '<td class="table-muted">—</td>';
+                  const v = Number(value);
+                  const maxV = Math.max(...allValues.filter(Number.isFinite));
+                  const isBest = Math.abs(v - maxV) < 0.001;
+                  const pct = maxV > 0 ? Math.round((v / maxV) * 100) : 0;
+                  return `<td class="${isBest ? 'metric-best' : ''}">
+                    <div class="metric-cell">
+                      <div class="metric-mini-bar"><div class="metric-mini-fill" style="width:${pct}%;background:${escapeHtml(color)}"></div></div>
+                      <span class="metric-cell-value">${escapeHtml(formatMetric(v))}</span>
+                    </div>
+                  </td>`;
+                };
+                const allF1 = comparisonRows.map((e) => e.candidateMetrics ? Number(e.candidateMetrics.f1) : NaN);
+                const allPrec = comparisonRows.map((e) => e.candidateMetrics ? Number(e.candidateMetrics.precision) : NaN);
+                const allRecall = comparisonRows.map((e) => e.candidateMetrics ? Number(e.candidateMetrics.recall) : NaN);
+                const allPrAuc = comparisonRows.map((e) => e.candidateMetrics ? Number(e.candidateMetrics.pr_auc) : NaN);
+                const allRocAuc = comparisonRows.map((e) => e.candidateMetrics ? Number(e.candidateMetrics.roc_auc) : NaN);
+                const allTop1 = comparisonRows.map((e) => e.rankingMetrics ? Number(e.rankingMetrics.top_1_accuracy) : NaN);
+                return `<tr class="${isFocus ? 'is-current' : ''}">
+                  <td>
+                    <div class="strategy-name-cell">
+                      <span class="strategy-color-dot" style="background:${escapeHtml(color)}"></span>
+                      <div>
+                        <strong>${escapeHtml(entry.run.strategy.title || entry.run.strategy_id)}</strong>
+                        <div class="table-muted">${escapeHtml(entry.imbalance.balancing_mode || entry.imbalance.id || 'baseline')}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><strong>${escapeHtml(entry.nearestNeighbors !== null ? entry.nearestNeighbors : '—')}</strong></td>
+                  <td>
+                    <strong>${escapeHtml(original.pos)} / ${escapeHtml(original.neg)}</strong>
+                    <div class="table-muted">${escapeHtml(original.ratio)} ratio</div>
+                  </td>
+                  <td>
+                    <strong>${escapeHtml(prepared.pos)} / ${escapeHtml(prepared.neg)}</strong>
+                    <div class="table-muted">${escapeHtml(prepared.ratio)} ratio</div>
+                  </td>
+                  <td>
+                    <div>${escapeHtml(formatPercentage(entry.originalMinorityShare))} → <strong>${escapeHtml(formatPercentage(entry.preparedMinorityShare))}</strong></div>
+                    <div class="table-muted shift-cell ${shift !== null && shift > 0 ? 'shift-positive' : ''}">${shift !== null ? (shift > 0 ? '+' : '') + escapeHtml(formatPercentagePoints(shift)) : '—'}</div>
+                  </td>
+                  <td>${escapeHtml(entry.syntheticRows > 0 ? String(entry.syntheticRows) : '—')}</td>
+                  ${renderMetricCell(entry.candidateMetrics ? entry.candidateMetrics.f1 : null, allF1)}
+                  ${renderMetricCell(entry.candidateMetrics ? entry.candidateMetrics.precision : null, allPrec)}
+                  ${renderMetricCell(entry.candidateMetrics ? entry.candidateMetrics.recall : null, allRecall)}
+                  ${renderMetricCell(entry.candidateMetrics ? entry.candidateMetrics.pr_auc : null, allPrAuc)}
+                  ${renderMetricCell(entry.candidateMetrics ? entry.candidateMetrics.roc_auc : null, allRocAuc)}
+                  ${renderMetricCell(entry.rankingMetrics ? entry.rankingMetrics.top_1_accuracy : null, allTop1)}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
         </div>
       </article>
-      <article class="model-card comparison-chart-card comparison-balance-card">
-        <p class="eyebrow subtle">Balancing Effect</p>
-        <h3>How the prepared training set changes</h3>
-        <div class="comparison-metric-panels">
-          ${renderComparisonPanel('Original minority share', 'Share of the smaller class before resampling. Higher is closer to balanced.', (entry) => entry.originalMinorityShare, {
-            tone: 'plain',
-            formatter: (value) => formatPercentage(value),
-          })}
-          ${renderComparisonPanel('Prepared minority share', 'Share of the smaller class after resampling. Target is near 50%.', (entry) => entry.preparedMinorityShare, {
-            tone: 'good',
-            formatter: (value) => formatPercentage(value),
-          })}
-          ${renderComparisonPanel('Nearest Neighbors (K)', 'SMOTE-like synthesis uses this many minority neighbors per synthetic row. It is a generation setting, not a score.', (entry) => entry.nearestNeighbors, {
-            scale: 'max',
-            tone: 'muted',
-            formatter: (value) => String(Math.round(value)),
-          })}
-          ${renderComparisonPanel('Synthetic rows', 'Rows created in memory by oversampling or SMOTE-like synthesis.', (entry) => entry.syntheticRows, {
-            scale: 'max',
-            tone: 'muted',
-            formatter: (value) => String(Math.round(value)),
-          })}
-        </div>
+
+      ${comparisonRows.some((e) => e.nearestNeighbors !== null && e.syntheticRows > 0) ? `
+      <article class="model-card comparison-knn-card">
+        <p class="eyebrow subtle">How K-Nearest Neighbours Works</p>
+        <h3>KNN Synthesis Diagram</h3>
+        <p class="candidate-copy">
+          SMOTE-like synthesis works in feature space, not in raw data. For each minority sample (green), the algorithm finds its <strong>K nearest minority neighbours</strong> (connected by dashed lines). A new synthetic row is created at a random point along the line between the seed and one of those neighbours (purple dashed circle).
+          Majority class samples (red) are ignored during synthesis — the goal is to increase the density of the minority class without simply duplicating rows.
+          A higher K creates more diverse synthetic samples; a lower K keeps synthesis conservative and close to existing examples.
+        </p>
+        ${renderKnnDiagram(comparisonRows)}
       </article>
-      ${renderComparisonTable()}
-      ${runs.map((run) => {
-        const summary = run.summary || {};
-        const counts = summary.training_counts || {};
-        const imbalance = summary.imbalance_strategy || {};
-        const evaluation = summary.evaluation && (summary.evaluation.test || summary.evaluation.train)
-          ? (summary.evaluation.test || summary.evaluation.train)
-          : null;
-        const candidateMetrics = evaluation && evaluation.candidate_metrics ? evaluation.candidate_metrics : null;
-        const rankingMetrics = evaluation && evaluation.ranking_metrics ? evaluation.ranking_metrics : null;
-        const isFocus = run.strategy_id === focusStrategy;
-        const originalCounts = imbalance.original_label_counts || counts.train_label_counts || {};
-        const preparedCounts = imbalance.prepared_label_counts || counts.effective_train_label_counts || originalCounts;
-        return `
-          <article class="model-card ${isFocus ? 'is-focused' : ''}">
-            <p class="eyebrow subtle">${escapeHtml(run.strategy.title || run.strategy_id)}</p>
-            <h3>${escapeHtml(run.strategy.title || run.strategy_id)}</h3>
-            <p class="candidate-copy">${escapeHtml(run.strategy.description || '')}</p>
-            ${renderLabelBalanceDonut(preparedCounts, {
-              centerTitle: `${preparedCounts.positive || 0}:${preparedCounts.negative || 0}`,
-              centerLabel: 'prepared',
-              title: run.strategy.title,
-              subtitle: imbalance.balancing_mode ? `Mode: ${imbalance.balancing_mode}` : '',
-            })}
-            <div class="summary tight-summary">
-              <div><strong>Original:</strong> ${escapeHtml(originalCounts.positive || 0)} / ${escapeHtml(originalCounts.negative || 0)}</div>
-              <div><strong>Prepared:</strong> ${escapeHtml(preparedCounts.positive || 0)} / ${escapeHtml(preparedCounts.negative || 0)}</div>
-              <div><strong>Rows:</strong> ${escapeHtml(imbalance.original_row_count || counts.train_rows || 0)} -> ${escapeHtml(imbalance.prepared_row_count || counts.effective_train_rows || counts.train_rows || 0)}</div>
-              <div><strong>Nearest Neighbors (K):</strong> ${escapeHtml(imbalance.nearest_neighbors !== null && imbalance.nearest_neighbors !== undefined ? imbalance.nearest_neighbors : 'n/a')}</div>
-              <div><strong>Fallback:</strong> ${escapeHtml(imbalance.fallback || 'none')}</div>
-              <div><strong>Class Weighting:</strong> ${imbalance.class_weighting || imbalance.class_weighting_effective ? 'yes' : 'no'}</div>
-              <div><strong>F1:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.f1) : '')}</div>
-              <div><strong>Recall:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.recall) : '')}</div>
-              <div><strong>Precision:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.precision) : '')}</div>
-              <div><strong>PR AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.pr_auc) : '')}</div>
-              <div><strong>ROC AUC:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.roc_auc) : '')}</div>
-              <div><strong>Top-1:</strong> ${escapeHtml(rankingMetrics ? formatMetric(rankingMetrics.top_1_accuracy) : '')}</div>
-            </div>
-            <div class="metric-stack">
-              ${renderMetricBar('F1', candidateMetrics ? Number(candidateMetrics.f1) : NaN, isFocus ? 'good' : 'plain')}
-              ${renderMetricBar('Recall', candidateMetrics ? Number(candidateMetrics.recall) : NaN, 'good')}
-              ${renderMetricBar('Precision', candidateMetrics ? Number(candidateMetrics.precision) : NaN, 'plain')}
-              ${renderMetricBar('Top-1', rankingMetrics ? Number(rankingMetrics.top_1_accuracy) : NaN, 'muted')}
-            </div>
-          </article>
-        `;
-      }).join('')}
+      ` : ''}
     `;
   }
 
