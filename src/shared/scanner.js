@@ -1108,8 +1108,12 @@ async function scanUrl(normalizedUrl, options = {}) {
   const candidateSelectionLimit = resolveCandidateLimit(options);
   const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
   const candidateSelectionMode = resolveCandidateSelectionMode(options);
-  page.setDefaultNavigationTimeout(timeoutMs);
-  page.setDefaultTimeout(timeoutMs);
+  // Playwright treats timeout:0 as "wait forever". For priority probes timeoutMs
+  // is 0 (no external deadline), so use a generous finite ceiling so operations
+  // like page.content() and evaluate() can't hang indefinitely.
+  const playwrightOpTimeout = timeoutMs > 0 ? timeoutMs : 60000;
+  page.setDefaultNavigationTimeout(playwrightOpTimeout);
+  page.setDefaultTimeout(playwrightOpTimeout);
   const deadline = createScanDeadline(page, context, timeoutMs, scanLabel);
   const updateProgress = (current, message, extra = {}) => {
     emitProgress(progress, {
