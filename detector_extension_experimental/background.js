@@ -117,6 +117,36 @@ async function detachCDP(tabId) {
   } catch (_) {}
 }
 
+async function broadcastRuntimeModel(bundle) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(tabs.map(async (tab) => {
+    if (!tab || typeof tab.id !== 'number') {
+      return;
+    }
+
+    const message = {
+      type: bundle ? 'RUNTIME_MODEL' : 'CLEAR_RUNTIME_MODEL',
+      payload: bundle || null,
+    };
+
+    try {
+      const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+      if (Array.isArray(frames) && frames.length) {
+        await Promise.all(frames.map(async (frame) => {
+          try {
+            await chrome.tabs.sendMessage(tab.id, message, { frameId: frame.frameId });
+          } catch (_) {}
+        }));
+        return;
+      }
+    } catch (_) {}
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+    } catch (_) {}
+  }));
+}
+
 function handleCDPEvent(tabId, method, params) {
   switch (method) {
     case 'Network.responseReceived': {
@@ -211,7 +241,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'SET_RUNTIME_MODEL': {
       store.saveRuntimeModel(message.payload)
-        .then(() => sendResponse({ ok: true }))
+        .then(async () => {
+          await broadcastRuntimeModel(message.payload || null);
+          sendResponse({ ok: true });
+        })
         .catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
     }
@@ -225,7 +258,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'CLEAR_RUNTIME_MODEL': {
       store.clearRuntimeModel()
-        .then(() => sendResponse({ ok: true }))
+        .then(async () => {
+          await broadcastRuntimeModel(null);
+          sendResponse({ ok: true });
+        })
         .catch((e) => sendResponse({ ok: false, error: e.message }));
       return true;
     }

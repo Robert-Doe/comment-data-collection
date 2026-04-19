@@ -84,6 +84,9 @@ function buildJobItemRecord(item) {
   const scanResult = item.scan_result || {};
   return {
     job_id: item.job_id || '',
+    source_job_id: item.source_job_id || '',
+    source_item_id: item.source_item_id || '',
+    source_row_number: item.source_row_number ?? '',
     row_number: item.row_number,
     input_url: item.input_url,
     normalized_url: item.normalized_url,
@@ -258,6 +261,12 @@ function buildJobSummaryRows(job, items) {
     {
       section: 'overview',
       group: 'job',
+      metric: 'source_job_ids',
+      value: Array.isArray(job && job.source_job_ids) ? JSON.stringify(job.source_job_ids) : '',
+    },
+    {
+      section: 'overview',
+      group: 'job',
       metric: 'source_column',
       value: job && job.source_column ? job.source_column : '',
     },
@@ -396,6 +405,9 @@ function buildSiteBreakdownRows(items) {
     const bestCandidate = resolveBestCandidate(item);
     const record = {
       job_id: item.job_id || '',
+      source_job_id: item.source_job_id || '',
+      source_item_id: item.source_item_id || '',
+      source_row_number: item.source_row_number ?? '',
       item_id: item.id || '',
       row_number: item.row_number,
       input_url: item.input_url || '',
@@ -521,6 +533,9 @@ function buildCandidateRows(items) {
     candidates.forEach((candidate) => {
       const row = {
         job_id: item.job_id || '',
+        source_job_id: item.source_job_id || '',
+        source_item_id: item.source_item_id || '',
+        source_row_number: item.source_row_number ?? '',
         item_id: item.id || '',
         row_number: item.row_number,
         input_url: item.input_url || '',
@@ -707,6 +722,9 @@ async function buildJobReportWorkbook(job, items) {
   ]);
   appendSheet(workbook, 'SiteBreakdown', buildSiteBreakdownRows(items), [
     'job_id',
+    'source_job_id',
+    'source_item_id',
+    'source_row_number',
     'item_id',
     'row_number',
     'normalized_url',

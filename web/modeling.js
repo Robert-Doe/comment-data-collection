@@ -3,6 +3,10 @@
   const apiBase = (config.apiBaseUrl || '').replace(/\/$/, '');
 
   const refreshButton = document.getElementById('refresh-modeling');
+  const overviewForm = document.getElementById('overview-form');
+  const overviewJobIds = document.getElementById('overview-job-ids');
+  const overviewClear = document.getElementById('overview-clear');
+  const overviewMessage = document.getElementById('overview-message');
   const overviewShell = document.getElementById('model-overview');
   const variantCards = document.getElementById('variant-cards');
   const trainJobIds = document.getElementById('train-job-ids');
@@ -40,6 +44,21 @@
   let currentModels = [];
   let currentVariants = [];
   let currentOverview = null;
+  let currentOverviewScope = '';
+  let overviewPollHandle = null;
+  let overviewPollScope = '';
+  let overviewPollFetchInFlight = false;
+  let liveProbeProgressPollHandle = null;
+  let liveProbeProgressRequestToken = 0;
+  let liveProbeProgressFetchInFlight = false;
+  const overviewPollIntervalMs = 5000;
+  const initialOverviewScope = new URLSearchParams(window.location.search).get('jobIds')
+    || new URLSearchParams(window.location.search).get('jobId')
+    || '';
+
+  if (overviewJobIds && initialOverviewScope) {
+    overviewJobIds.value = initialOverviewScope;
+  }
 
   const ALGORITHM_LABELS = {
     logistic_regression: 'Logistic Regression',
@@ -91,6 +110,86 @@
     node.className = isError ? 'message error' : 'message';
   }
 
+  function setOverviewMessage(text, isError) {
+    if (!overviewMessage) return;
+    overviewMessage.textContent = text || '';
+    overviewMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function stopOverviewPolling() {
+    if (overviewPollHandle) {
+      window.clearInterval(overviewPollHandle);
+    }
+    overviewPollHandle = null;
+    overviewPollScope = '';
+    overviewPollFetchInFlight = false;
+  }
+
+  async function fetchOverviewSnapshot() {
+    const jobIds = normalizeOverviewJobIds(overviewJobIds ? overviewJobIds.value : '');
+    currentOverviewScope = jobIds.join(',');
+    const overviewPath = `/api/modeling/overview${currentOverviewScope ? `?jobIds=${encodeURIComponent(currentOverviewScope)}` : ''}`;
+    const selectedJobDetails = jobIds.length
+      ? await Promise.all(jobIds.map(async (jobId) => {
+        try {
+          const response = await fetchJson(`/api/jobs/${encodeURIComponent(jobId)}?limit=1`);
+          return response && response.job ? response.job : null;
+        } catch (_) {
+          return null;
+        }
+      }))
+      : [];
+
+    const overview = await fetchJson(overviewPath);
+    return {
+      ...overview,
+      selected_job_details: selectedJobDetails.filter(Boolean),
+    };
+  }
+
+  function startOverviewPolling() {
+    if (!currentOverviewScope || overviewPollHandle) {
+      return;
+    }
+
+    overviewPollScope = currentOverviewScope;
+    const tick = () => {
+      if (document.hidden || overviewPollFetchInFlight || overviewPollScope !== currentOverviewScope) {
+        return;
+      }
+
+      overviewPollFetchInFlight = true;
+      fetchOverviewSnapshot()
+        .then((overview) => {
+          if (overviewPollScope !== currentOverviewScope) {
+            return;
+          }
+          renderOverview(overview);
+        })
+        .catch(() => {})
+        .finally(() => {
+          overviewPollFetchInFlight = false;
+        });
+    };
+
+    overviewPollHandle = window.setInterval(tick, overviewPollIntervalMs);
+    tick();
+  }
+
+  function syncOverviewPolling() {
+    if (!currentOverviewScope) {
+      stopOverviewPolling();
+      return;
+    }
+
+    if (overviewPollHandle && overviewPollScope === currentOverviewScope) {
+      return;
+    }
+
+    stopOverviewPolling();
+    startOverviewPolling();
+  }
+
   function setBusyState(element, busy) {
     if (!element) return;
 
@@ -139,6 +238,32 @@
     if (!node) return;
     node.hidden = true;
     node.innerHTML = '';
+  }
+
+  function formatProbeProgressLine(progress) {
+    if (!progress || typeof progress !== 'object') {
+      return '';
+    }
+
+    const currentValue = Number(progress.current);
+    const totalValue = Number(progress.total);
+    const hasTotal = Number.isFinite(totalValue) && totalValue > 0;
+    const current = Number.isFinite(currentValue) && currentValue >= 0 ? currentValue : 0;
+    const percentValue = Number(progress.percent);
+    const hasPercent = progress.percent !== null
+      && progress.percent !== undefined
+      && Number.isFinite(percentValue);
+    const unit = String(progress.unit || '').trim();
+    const parts = [];
+
+    if (hasTotal) {
+      parts.push(`${current}/${totalValue}${unit ? ` ${unit}` : ''}`);
+    }
+    if (hasPercent) {
+      parts.push(`${percentValue}%`);
+    }
+
+    return parts.join(' • ');
   }
 
   function formatDurationLabel(ms) {
@@ -261,16 +386,84 @@
     `;
   }
 
-  function setProbeProgress(node, title, detail) {
+  function setProbeProgress(node, title, detail, progress) {
     if (!node) return;
     node.hidden = false;
+    const progressLine = formatProbeProgressLine(progress);
     node.innerHTML = `
       <div class="probe-spinner" aria-hidden="true"></div>
       <div>
         <div class="probe-progress-title">${escapeHtml(title || 'Working...')}</div>
+        ${progressLine ? `<div class="probe-progress-count">${escapeHtml(progressLine)}</div>` : ''}
         ${detail ? `<p class="probe-progress-copy">${escapeHtml(detail)}</p>` : ''}
       </div>
     `;
+  }
+
+  function stopLiveProbeProgressPolling() {
+    if (liveProbeProgressPollHandle) {
+      window.clearInterval(liveProbeProgressPollHandle);
+    }
+    liveProbeProgressPollHandle = null;
+    liveProbeProgressFetchInFlight = false;
+    liveProbeProgressRequestToken += 1;
+  }
+
+  function findLiveProbeRequest(snapshot) {
+    const activeRequests = Array.isArray(snapshot && snapshot.activeRequests) ? snapshot.activeRequests : [];
+    return activeRequests
+      .slice()
+      .reverse()
+      .find((request) => request && request.path === '/api/modeling/probe-url') || null;
+  }
+
+  function renderLiveProbeProgressSnapshot(snapshot, fallbackTitle, fallbackDetail) {
+    const request = findLiveProbeRequest(snapshot);
+    if (!request) {
+      return false;
+    }
+
+    const title = request.stage === 'scoring'
+      ? 'Scoring live URL'
+      : request.stage === 'scanning'
+        ? (fallbackTitle || 'Scanning live URL')
+        : (request.label || fallbackTitle || 'Working...');
+    const detail = request.message || fallbackDetail || '';
+    setProbeProgress(liveProbeProgress, title, detail, request.progress || null);
+    return true;
+  }
+
+  async function refreshLiveProbeProgress(pollToken, fallbackTitle, fallbackDetail) {
+    if (pollToken !== liveProbeProgressRequestToken || liveProbeProgressFetchInFlight) {
+      return false;
+    }
+
+    liveProbeProgressFetchInFlight = true;
+    try {
+      const snapshot = await fetchJson('/api/requests', { cache: 'no-store' });
+      if (pollToken !== liveProbeProgressRequestToken) {
+        return false;
+      }
+      return renderLiveProbeProgressSnapshot(snapshot, fallbackTitle, fallbackDetail);
+    } catch (_) {
+      return false;
+    } finally {
+      liveProbeProgressFetchInFlight = false;
+    }
+  }
+
+  function startLiveProbeProgressPolling(fallbackTitle, fallbackDetail) {
+    stopLiveProbeProgressPolling();
+    const pollToken = ++liveProbeProgressRequestToken;
+    const tick = () => {
+      if (document.hidden) {
+        return;
+      }
+      refreshLiveProbeProgress(pollToken, fallbackTitle, fallbackDetail).catch(() => {});
+    };
+
+    liveProbeProgressPollHandle = window.setInterval(tick, 850);
+    tick();
   }
 
   function syncLiveProbePriorityState() {
@@ -302,30 +495,97 @@
     });
   }
 
+  function normalizeOverviewJobIds(value) {
+    return Array.from(new Set(String(value || '')
+      .split(/[,\s]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)));
+  }
+
+  function buildOverviewUrl() {
+    const jobIds = normalizeOverviewJobIds(overviewJobIds ? overviewJobIds.value : '');
+    currentOverviewScope = jobIds.join(',');
+    return `/api/modeling/overview${currentOverviewScope ? `?jobIds=${encodeURIComponent(currentOverviewScope)}` : ''}`;
+  }
+
   function renderOverview(overview) {
     currentOverview = overview;
+    setOverviewMessage('', false);
     const dataset = overview && overview.dataset ? overview.dataset : null;
     const models = overview && Array.isArray(overview.models) ? overview.models : [];
     const families = overview && Array.isArray(overview.feature_families) ? overview.feature_families : [];
+    const selectedJobs = overview && Array.isArray(overview.selected_jobs) ? overview.selected_jobs : [];
+    const selectedJobDetails = overview && Array.isArray(overview.selected_job_details) ? overview.selected_job_details : [];
+    const visibleJobs = selectedJobs.length ? selectedJobs : selectedJobDetails;
+    const scopeLabel = currentOverviewScope
+      ? normalizeOverviewJobIds(currentOverviewScope).join(', ')
+      : 'Global dataset';
 
-    if (!dataset) {
+    if (!dataset && !visibleJobs.length) {
       overviewShell.className = 'summary empty';
       overviewShell.textContent = 'No modeling overview available.';
+      syncOverviewPolling();
       return;
     }
 
     overviewShell.className = 'summary';
+    const summaryRows = dataset
+      ? [
+        `<div><strong>Labeled Candidates:</strong> ${escapeHtml(dataset.labeled_candidate_count)}</div>`,
+        `<div><strong>Positive Labels:</strong> ${escapeHtml(dataset.positive_candidate_count)}</div>`,
+        `<div><strong>Negative Labels:</strong> ${escapeHtml(dataset.negative_candidate_count)}</div>`,
+        `<div><strong>Uncertain Labels:</strong> ${escapeHtml(dataset.uncertain_candidate_count)}</div>`,
+        `<div><strong>Candidate Rows:</strong> ${escapeHtml(dataset.candidate_count)}</div>`,
+        `<div><strong>Reviewed Items:</strong> ${escapeHtml(dataset.review_complete_binary_item_count)}</div>`,
+        `<div><strong>Hostnames:</strong> ${escapeHtml(dataset.hostname_count)}</div>`,
+      ]
+      : [
+        '<div><strong>Labeled Candidates:</strong> 0</div>',
+        '<div><strong>Positive Labels:</strong> 0</div>',
+        '<div><strong>Negative Labels:</strong> 0</div>',
+        '<div><strong>Uncertain Labels:</strong> 0</div>',
+        '<div><strong>Candidate Rows:</strong> 0</div>',
+        '<div><strong>Reviewed Items:</strong> 0</div>',
+        '<div><strong>Hostnames:</strong> 0</div>',
+      ];
+
+    const selectedJobRows = visibleJobs.length
+      ? visibleJobs.flatMap((job, index) => {
+        const sourceJobIds = Array.isArray(job.source_job_ids) ? job.source_job_ids.filter(Boolean).join(', ') : '';
+        const jobLabel = visibleJobs.length > 1 ? `Job ${index + 1}` : 'Selected Job';
+        return [
+          `<div><strong>${jobLabel} ID:</strong> ${escapeHtml(job.id || '')}</div>`,
+          `<div><strong>Status:</strong> ${escapeHtml(job.status || '')}</div>`,
+          `<div><strong>Total URLs:</strong> ${escapeHtml(job.total_urls || 0)}</div>`,
+          `<div><strong>Completed:</strong> ${escapeHtml(job.completed_count || 0)}</div>`,
+          `<div><strong>Failed:</strong> ${escapeHtml(job.failed_count || 0)}</div>`,
+          `<div><strong>Detected:</strong> ${escapeHtml(job.detected_count || 0)}</div>`,
+          `<div><strong>Pending:</strong> ${escapeHtml(job.pending_count || 0)}</div>`,
+          `<div><strong>Queued:</strong> ${escapeHtml(job.queued_count || 0)}</div>`,
+          `<div><strong>Running:</strong> ${escapeHtml(job.running_count || 0)}</div>`,
+          `<div><strong>Mode:</strong> ${escapeHtml(job.candidate_mode || '')}</div>`,
+          `<div><strong>Source:</strong> ${escapeHtml(job.source_filename || '')}</div>`,
+          `<div><strong>Column:</strong> ${escapeHtml(job.source_column || '')}</div>`,
+          sourceJobIds ? `<div><strong>Source Jobs:</strong> ${escapeHtml(sourceJobIds)}</div>` : '',
+          `<div><strong>Updated:</strong> ${escapeHtml(job.updated_at || '')}</div>`,
+        ].filter(Boolean);
+      })
+      : [];
+
+    const noteRows = !dataset && visibleJobs.length
+      ? [`<div class="candidate-copy">No labeled candidate rows were found for the selected job(s) yet. Live job totals are shown below.</div>`]
+      : [];
+
     overviewShell.innerHTML = [
-      `<div><strong>Labeled Candidates:</strong> ${escapeHtml(dataset.labeled_candidate_count)}</div>`,
-      `<div><strong>Positive Labels:</strong> ${escapeHtml(dataset.positive_candidate_count)}</div>`,
-      `<div><strong>Negative Labels:</strong> ${escapeHtml(dataset.negative_candidate_count)}</div>`,
-      `<div><strong>Uncertain Labels:</strong> ${escapeHtml(dataset.uncertain_candidate_count)}</div>`,
-      `<div><strong>Candidate Rows:</strong> ${escapeHtml(dataset.candidate_count)}</div>`,
-      `<div><strong>Reviewed Items:</strong> ${escapeHtml(dataset.review_complete_binary_item_count)}</div>`,
-      `<div><strong>Hostnames:</strong> ${escapeHtml(dataset.hostname_count)}</div>`,
+      ...selectedJobRows,
+      ...summaryRows,
       `<div><strong>Saved Models:</strong> ${escapeHtml(models.length)}</div>`,
       `<div><strong>Feature Families:</strong> ${escapeHtml(families.length)}</div>`,
+      `<div><strong>Scope:</strong> ${escapeHtml(scopeLabel)}</div>`,
+      ...noteRows,
     ].join('');
+
+    syncOverviewPolling();
   }
 
   function renderVariantCards(variants) {
@@ -801,10 +1061,16 @@
     return '';
   }
 
+  async function refreshOverview() {
+    const overview = await fetchOverviewSnapshot();
+    renderOverview(overview);
+    return overview;
+  }
+
   async function refreshPage() {
     updateDatasetDownloadLink();
     const [overview, recentJobs] = await Promise.all([
-      fetchJson('/api/modeling/overview'),
+      fetchOverviewSnapshot(),
       fetchJson('/api/jobs?limit=15'),
     ]);
 
@@ -812,6 +1078,7 @@
     renderVariantCards(overview.variants || []);
     renderModelList(overview.models || []);
     renderRecentJobs(recentJobs.jobs || []);
+    syncOverviewPolling();
   }
 
   async function trainVariant(variantId) {
@@ -836,9 +1103,29 @@
 
   refreshButton.addEventListener('click', () => {
     refreshPage().catch((error) => {
-      setMessage(trainMessage, error.message || String(error), true);
+      setOverviewMessage(error.message || String(error), true);
     });
   });
+
+  if (overviewForm) {
+    overviewForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      refreshOverview().catch((error) => {
+        setOverviewMessage(error.message || String(error), true);
+      });
+    });
+  }
+
+  if (overviewClear) {
+    overviewClear.addEventListener('click', () => {
+      if (overviewJobIds) {
+        overviewJobIds.value = '';
+      }
+      refreshOverview().catch((error) => {
+        setOverviewMessage(error.message || String(error), true);
+      });
+    });
+  }
 
   trainJobIds.addEventListener('input', updateDatasetDownloadLink);
 
@@ -874,10 +1161,22 @@
     const jobId = button.getAttribute('data-use-job');
     if (!jobId) return;
     scoreJobId.value = jobId;
+    if (overviewJobIds) {
+      overviewJobIds.value = jobId;
+    }
+    refreshOverview().catch((error) => {
+      setOverviewMessage(error.message || String(error), true);
+    });
   });
 
   scoreJobForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (overviewJobIds) {
+      overviewJobIds.value = scoreJobId.value.trim();
+    }
+    refreshOverview().catch((error) => {
+      setOverviewMessage(error.message || String(error), true);
+    });
     setMessage(scoreJobMessage, 'Scoring job...', false);
     fetchJson('/api/modeling/score-job', {
       method: 'POST',
@@ -944,13 +1243,22 @@
       : (Number.isFinite(timeoutValue) && timeoutValue >= 1000 ? timeoutValue : 300000);
     runElementAction(submitButton, async () => {
       setMessage(liveProbeMessage, priorityProbe ? 'Probing live URL at priority...' : 'Probing live URL...', false);
+      const liveProbeTitle = priorityProbe ? 'Priority live URL scan' : 'Scanning live URL';
+      const liveProbeDetail = priorityProbe
+        ? 'The live probe keeps reporting scan steps and model scoring counts while it runs.'
+        : `This can take up to ${formatDurationLabel(timeoutMs)} on heavy pages. Keep this tab open while the probe reports live scan steps and candidate counts. Previous results stay visible until the new scan completes.`;
       setProbeProgress(
         liveProbeProgress,
-        priorityProbe ? 'Priority live URL scan' : 'Scanning live URL',
-        priorityProbe
-          ? 'The browser tab stays open until the scan finishes. Candidate features, rendered HTML, and model scoring are collected without a hard timeout.'
-          : `This can take up to ${formatDurationLabel(timeoutMs)} on heavy pages. Keep this tab open while the browser collects and scores candidates. Previous results stay visible until the new scan completes.`,
+        liveProbeTitle,
+        liveProbeDetail,
+        {
+          current: 0,
+          total: 5,
+          unit: 'scan steps',
+          indeterminate: false,
+        },
       );
+      startLiveProbeProgressPolling(liveProbeTitle, liveProbeDetail);
       const result = await fetchJson('/api/modeling/probe-url', {
         method: 'POST',
         headers: {
@@ -979,6 +1287,7 @@
     }).catch((error) => {
       setMessage(liveProbeMessage, error.message || String(error), true);
     }).finally(() => {
+      stopLiveProbeProgressPolling();
       clearProbeProgress(liveProbeProgress);
     });
   });
@@ -988,6 +1297,6 @@
   renderLiveProbe(null);
   updateDatasetDownloadLink();
   refreshPage().catch((error) => {
-    setMessage(trainMessage, error.message || String(error), true);
+    setOverviewMessage(error.message || String(error), true);
   });
 }());

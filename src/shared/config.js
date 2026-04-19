@@ -86,14 +86,15 @@ function getRuntimeProfile() {
   const memoryBound = totalMemoryMb > reservedMemoryMb
     ? Math.max(1, Math.floor((totalMemoryMb - reservedMemoryMb) / estimatedWorkerMemoryMb))
     : 1;
+  const reservedCpuCount = cpuCount > 1 ? 1 : 0;
+  const workerCpuBudget = Math.max(1, cpuCount - reservedCpuCount);
 
   return {
     cpuCount,
     totalMemoryMb,
-    // Playwright scans are mostly I/O-bound (network + settle delays), so
-    // oversubscribing CPUs up to 2x is safe and improves throughput. Memory
-    // is the real constraint; cap at cpuCount*2 so the API/UI stay responsive.
-    maxRecommendedWorkerConcurrency: Math.max(1, Math.min(cpuCount * 2, memoryBound)),
+    // Leave one CPU available for the API and live-probe path so the worker
+    // does not monopolize the host while long scans are running.
+    maxRecommendedWorkerConcurrency: Math.max(1, Math.min(workerCpuBudget, memoryBound)),
   };
 }
 

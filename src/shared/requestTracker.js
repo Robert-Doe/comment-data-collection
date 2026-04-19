@@ -210,7 +210,7 @@ function createRequestTracker(options = {}) {
       return req
         && req.method !== 'OPTIONS'
         && path.indexOf('/api/') === 0
-        && !/^\/api\/(?:health(?:\/detailed)?|events)(?:\/|$)/.test(path);
+        && !/^\/api\/(?:health(?:\/detailed)?|events|requests)(?:\/|$)/.test(path);
     };
 
   function recordHistory(snapshot) {

@@ -12,6 +12,21 @@ const {
 const { enqueueScanItems } = require('./queue');
 const { extractJobScanSettings } = require('./jobSettings');
 
+async function removeTerminalQueueJob(queue, itemId) {
+  const queueJob = await queue.getJob(itemId);
+  if (!queueJob) {
+    return false;
+  }
+
+  const queueState = await queueJob.getState().catch(() => '');
+  if (queueState === 'completed' || queueState === 'failed') {
+    await queueJob.remove();
+    return true;
+  }
+
+  return false;
+}
+
 async function fillQueueForJob(jobId, count, databaseUrl, queue) {
   const limit = Math.max(0, Number(count) || 0);
   if (!limit) return [];
@@ -29,6 +44,9 @@ async function fillQueueForJob(jobId, count, databaseUrl, queue) {
   }
 
   try {
+    for (const item of claimedItems) {
+      await removeTerminalQueueJob(queue, item.id);
+    }
     await enqueueScanItems(queue, claimedItems.map((item) => ({
       jobId,
       itemId: item.id,

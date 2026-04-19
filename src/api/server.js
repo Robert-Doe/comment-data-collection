@@ -39,6 +39,9 @@ const {
 const {
   ensureSchema,
   createJob,
+  buildProjectBackup,
+  restoreProjectBackup,
+  combineJobs,
   replaceJobRecords,
   restartJob,
   resumeJob,
@@ -67,6 +70,10 @@ const {
   recomputeJob,
 } = require('../shared/store');
 const {
+  decodeProjectBackup,
+  encodeProjectBackup,
+} = require('../shared/projectBackup');
+const {
   getSharedQueue,
   removeQueueItems,
 } = require('../shared/queue');
@@ -77,6 +84,13 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
+  },
+});
+
+const backupUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 200 * 1024 * 1024,
   },
 });
 
@@ -218,6 +232,16 @@ function queueFillCountForJob(job, config) {
   const pendingCount = Math.max(0, Number(job.pending_count) || 0);
   const totalUrls = Math.max(0, Number(job.total_urls) || 0);
   return Math.min(config.initialQueueFill, pendingCount || totalUrls);
+}
+
+function normalizeJobIdList(values) {
+  return Array.isArray(values)
+    ? Array.from(new Set(values.map((entry) => String(entry || '').trim()).filter(Boolean)))
+    : [];
+}
+
+function buildBackupDownloadName(format) {
+  return `comment-data-collection-backup${String(format || 'json').trim().toLowerCase() === 'db' ? '.db' : '.json'}`;
 }
 
 async function listAllJobItemsForAction(jobId, config, progress) {
@@ -453,6 +477,103 @@ function createApp(config = getConfig()) {
       res.json({
         ok: true,
         deletedCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/backups/export.json', async (_req, res, next) => {
+    try {
+      const backup = await buildProjectBackup(config.databaseUrl);
+      const encoded = encodeProjectBackup(backup, 'json');
+      res.setHeader('Content-Type', encoded.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${buildBackupDownloadName('json')}"`);
+      res.send(encoded.buffer);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/backups/export.db', async (_req, res, next) => {
+    try {
+      const backup = await buildProjectBackup(config.databaseUrl);
+      const encoded = encodeProjectBackup(backup, 'db');
+      res.setHeader('Content-Type', encoded.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${buildBackupDownloadName('db')}"`);
+      res.send(encoded.buffer);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/backups/import', backupUpload.single('file'), async (req, res, next) => {
+    try {
+      const uploadedFile = req.file || null;
+      if (!uploadedFile || !uploadedFile.buffer || !uploadedFile.buffer.length) {
+        res.status(400).json({ error: 'Upload a JSON or .db backup file' });
+        return;
+      }
+
+      const backup = decodeProjectBackup(uploadedFile.buffer, uploadedFile.originalname || '');
+      const result = await restoreProjectBackup(backup, config.databaseUrl);
+      res.json({
+        ok: true,
+        imported: {
+          jobs: result.jobCount,
+          items: result.itemCount,
+          events: result.eventCount,
+          manualReviewTargets: result.manualReviewTargetCount,
+        },
+        touchedJobIds: result.jobIds,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/merge', async (req, res, next) => {
+    try {
+      const sourceJobIds = normalizeJobIdList(req.body && (req.body.jobIds || req.body.sourceJobIds));
+      if (sourceJobIds.length < 2) {
+        res.status(400).json({ error: 'Provide at least two job IDs to combine' });
+        return;
+      }
+
+      const combined = await combineJobs(sourceJobIds, {
+        sourceFilename: req.body && req.body.sourceFilename,
+        sourceColumn: req.body && req.body.sourceColumn,
+        scanDelayMs: req.body && req.body.scanDelayMs,
+        screenshotDelayMs: req.body && req.body.screenshotDelayMs,
+        candidateMode: req.body && req.body.candidateMode,
+        defaultScanDelayMs: config.postLoadDelayMs,
+        defaultScreenshotDelayMs: config.preScreenshotDelayMs,
+        artifactRoot: config.artifactRoot,
+        artifactUrlBasePath: config.artifactUrlBasePath,
+        publicBaseUrl: config.publicBaseUrl,
+      }, config.databaseUrl);
+
+      await appendJobEvent({
+        jobId: combined.jobId,
+        scope: 'job',
+        eventType: 'job_combined',
+        eventKey: `job_combined:${combined.jobId}`,
+        message: `Combined ${sourceJobIds.length} jobs into a new aggregate job.`,
+        details: {
+          source_job_ids: sourceJobIds,
+          total_urls: combined.totalUrls,
+          counts: combined.counts,
+        },
+      }, config.databaseUrl).catch(() => {});
+
+      const job = await getJob(combined.jobId, config.databaseUrl);
+      res.status(201).json({
+        ok: true,
+        job,
+        jobId: combined.jobId,
+        sourceJobIds: combined.sourceJobIds,
+        totalUrls: combined.totalUrls,
+        counts: combined.counts,
       });
     } catch (error) {
       next(error);
@@ -1400,6 +1521,11 @@ function createApp(config = getConfig()) {
     } catch (error) {
       next(error);
     }
+  });
+
+  app.get('/api/requests', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(requestTracker.getSnapshot());
   });
 
   app.get('/api/admin/search', async (req, res, next) => {

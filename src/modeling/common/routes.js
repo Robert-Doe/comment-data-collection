@@ -87,7 +87,14 @@ function createModelingRouter(dependencies) {
       const overview = await buildOverview(items, dependencies.artifactRoot, {
         progress,
       });
-      res.json(overview);
+      const selectedJobs = jobIds.length
+        ? (await Promise.all(jobIds.map(async (jobId) => dependencies.getJob(jobId)))).filter(Boolean)
+        : [];
+      res.json({
+        ...overview,
+        selected_job_ids: jobIds,
+        selected_jobs: selectedJobs,
+      });
     } catch (error) {
       next(error);
     }
@@ -282,13 +289,24 @@ function createModelingRouter(dependencies) {
       const liveProbePreScreenshotDelayMs = body.preScreenshotDelayMs !== undefined && body.preScreenshotDelayMs !== ''
         ? body.preScreenshotDelayMs
         : 1500;
-      progress && progress({ stage: 'scanning', message: priorityProbe ? 'Scanning live URL at priority' : 'Scanning live URL' });
+      progress && progress({
+        stage: 'scanning',
+        message: priorityProbe ? 'Priority live URL scan started' : 'Live URL scan started',
+        progress: {
+          current: 0,
+          total: 5,
+          unit: 'scan steps',
+          indeterminate: false,
+        },
+      });
       const scanResult = await dependencies.scanUrl(normalizedUrl, {
         timeoutMs: priorityProbe ? 0 : liveProbeTimeoutMs,
         postLoadDelayMs: liveProbePostLoadDelayMs,
         preScreenshotDelayMs: liveProbePreScreenshotDelayMs,
         candidateMode,
+        scanLabel: 'Live URL probe',
         priorityProbe,
+        progress,
         captureScreenshots: req.body && req.body.captureScreenshots !== undefined ? !!req.body.captureScreenshots : true,
         captureHtmlSnapshots: req.body && req.body.captureHtmlSnapshots !== undefined ? !!req.body.captureHtmlSnapshots : true,
         artifactRoot: dependencies.artifactRoot,
@@ -309,6 +327,8 @@ function createModelingRouter(dependencies) {
         rowNumber: 'live-url',
         includeExplanations: req.body && req.body.includeExplanations !== false,
         threshold: req.body && req.body.threshold,
+        progress,
+        progressInterval: 10,
       });
 
       res.json({

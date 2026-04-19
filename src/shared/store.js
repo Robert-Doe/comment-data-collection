@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { upsertCandidateReview: upsertCandidateReviewArray } = require('./candidateReviews');
 const { buildSearchClause } = require('./adminSearch');
 const { normalizeCandidateSelectionMode } = require('./jobSettings');
+const { cloneValueWithArtifactCopies } = require('./jobArtifacts');
 
 let pool;
 
@@ -29,6 +30,7 @@ async function ensureSchema(databaseUrl) {
       id TEXT PRIMARY KEY,
       source_filename TEXT,
       source_column TEXT,
+      source_job_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       scan_delay_ms INTEGER NOT NULL DEFAULT 6000,
       screenshot_delay_ms INTEGER NOT NULL DEFAULT 1500,
       candidate_mode TEXT NOT NULL DEFAULT 'default',
@@ -49,6 +51,9 @@ async function ensureSchema(databaseUrl) {
     CREATE TABLE IF NOT EXISTS job_items (
       id TEXT PRIMARY KEY,
       job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      source_job_id TEXT,
+      source_item_id TEXT,
+      source_row_number INTEGER,
       row_number INTEGER NOT NULL,
       input_url TEXT NOT NULL,
       normalized_url TEXT NOT NULL,
@@ -134,8 +139,20 @@ async function ensureSchema(databaseUrl) {
     ALTER TABLE jobs
     ADD COLUMN IF NOT EXISTS candidate_mode TEXT NOT NULL DEFAULT 'default';
 
+    ALTER TABLE jobs
+    ADD COLUMN IF NOT EXISTS source_job_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS scan_result JSONB;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS source_job_id TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS source_item_id TEXT;
+
+    ALTER TABLE job_items
+    ADD COLUMN IF NOT EXISTS source_row_number INTEGER;
 
     ALTER TABLE job_items
     ADD COLUMN IF NOT EXISTS screenshot_path TEXT;
@@ -232,20 +249,24 @@ async function createJob({
   scanDelayMs = 6000,
   screenshotDelayMs = 1500,
   candidateMode = 'default',
+  sourceJobIds = [],
 }, databaseUrl) {
   const db = getPool(databaseUrl);
   const client = await db.connect();
   const jobId = crypto.randomUUID();
   const normalizedCandidateMode = normalizeCandidateSelectionMode(candidateMode);
+  const normalizedSourceJobIds = Array.isArray(sourceJobIds)
+    ? sourceJobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
 
   try {
     await client.query('BEGIN');
 
     await client.query(
       `INSERT INTO jobs (
-        id, source_filename, source_column, scan_delay_ms, screenshot_delay_ms, candidate_mode, status, total_urls, pending_count, queued_count
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $7, 0)`,
-      [jobId, sourceFilename || '', sourceColumn || '', scanDelayMs, screenshotDelayMs, normalizedCandidateMode, records.length],
+        id, source_filename, source_column, source_job_ids, scan_delay_ms, screenshot_delay_ms, candidate_mode, status, total_urls, pending_count, queued_count
+      ) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, 'queued', $8, $8, 0)`,
+      [jobId, sourceFilename || '', sourceColumn || '', JSON.stringify(normalizedSourceJobIds), scanDelayMs, screenshotDelayMs, normalizedCandidateMode, records.length],
     );
 
     for (let offset = 0; offset < records.length; offset += batchSize) {
@@ -1338,11 +1359,517 @@ async function clearJobArtifactPaths(jobId, databaseUrl) {
   );
 }
 
+function normalizeIdList(values) {
+  return Array.isArray(values)
+    ? Array.from(new Set(values.map((entry) => String(entry || '').trim()).filter(Boolean)))
+    : [];
+}
+
+function computeJobCountsFromItems(items) {
+  const counts = {
+    pending_count: 0,
+    queued_count: 0,
+    running_count: 0,
+    completed_count: 0,
+    failed_count: 0,
+    detected_count: 0,
+  };
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const status = String(item && item.status || '').trim();
+    if (status === 'pending') counts.pending_count += 1;
+    if (status === 'queued') counts.queued_count += 1;
+    if (status === 'running') counts.running_count += 1;
+    if (status === 'completed') counts.completed_count += 1;
+    if (status === 'failed') counts.failed_count += 1;
+    if (item && item.ugc_detected === true) counts.detected_count += 1;
+  }
+
+  return counts;
+}
+
+function computeJobStatusFromCounts(counts, totalUrls) {
+  const total = Math.max(0, Number(totalUrls) || 0);
+  const pending = Math.max(0, Number(counts && counts.pending_count) || 0);
+  const queued = Math.max(0, Number(counts && counts.queued_count) || 0);
+  const running = Math.max(0, Number(counts && counts.running_count) || 0);
+  const completed = Math.max(0, Number(counts && counts.completed_count) || 0);
+  const failed = Math.max(0, Number(counts && counts.failed_count) || 0);
+
+  if ((completed + failed) === total && failed === total && total > 0) {
+    return 'failed';
+  }
+
+  if ((completed + failed) === total && failed > 0) {
+    return 'completed_with_errors';
+  }
+
+  if ((completed + failed) === total && total > 0) {
+    return 'completed';
+  }
+
+  if (running > 0 || completed > 0 || failed > 0) {
+    return 'running';
+  }
+
+  if (queued > 0) {
+    return 'queued';
+  }
+
+  if (pending > 0) {
+    return 'pending';
+  }
+
+  return total > 0 ? 'queued' : 'pending';
+}
+
+async function upsertJsonbRows(client, spec, rows) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (!normalizedRows.length) {
+    return;
+  }
+
+  const columns = Array.isArray(spec && spec.columns) ? spec.columns : [];
+  if (!columns.length) {
+    return;
+  }
+
+  const tableName = String(spec && spec.tableName || '').trim();
+  const conflictTarget = String(spec && spec.conflictTarget || '').trim();
+  const updateColumns = Array.isArray(spec && spec.updateColumns) ? spec.updateColumns : [];
+  if (!tableName || !conflictTarget || !updateColumns.length) {
+    throw new Error('Invalid upsert specification');
+  }
+
+  const columnList = columns.map((column) => column.name).join(', ');
+  const columnDefinitions = columns.map((column) => `${column.name} ${column.type}`).join(', ');
+  const assignments = updateColumns.map((column) => `${column} = EXCLUDED.${column}`).join(', ');
+  const query = `
+    INSERT INTO ${tableName} (${columnList})
+    SELECT ${columnList}
+    FROM jsonb_to_recordset($1::jsonb) AS input(${columnDefinitions})
+    ON CONFLICT (${conflictTarget}) DO UPDATE SET ${assignments}
+  `;
+  await client.query(query, [JSON.stringify(normalizedRows)]);
+}
+
+async function insertJsonbRows(client, spec, rows) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (!normalizedRows.length) {
+    return 0;
+  }
+
+  const columns = Array.isArray(spec && spec.columns) ? spec.columns : [];
+  if (!columns.length) {
+    return 0;
+  }
+
+  const tableName = String(spec && spec.tableName || '').trim();
+  const conflictTarget = String(spec && spec.conflictTarget || '').trim();
+  if (!tableName || !conflictTarget) {
+    throw new Error('Invalid insert specification');
+  }
+
+  const columnList = columns.map((column) => column.name).join(', ');
+  const columnDefinitions = columns.map((column) => `${column.name} ${column.type}`).join(', ');
+  const query = `
+    INSERT INTO ${tableName} (${columnList})
+    SELECT ${columnList}
+    FROM jsonb_to_recordset($1::jsonb) AS input(${columnDefinitions})
+    ON CONFLICT (${conflictTarget}) DO NOTHING
+    RETURNING 1
+  `;
+  const result = await client.query(query, [JSON.stringify(normalizedRows)]);
+  return result.rowCount || 0;
+}
+
+const JOB_BACKUP_COLUMNS = [
+  { name: 'id', type: 'text' },
+  { name: 'source_filename', type: 'text' },
+  { name: 'source_column', type: 'text' },
+  { name: 'source_job_ids', type: 'jsonb' },
+  { name: 'scan_delay_ms', type: 'integer' },
+  { name: 'screenshot_delay_ms', type: 'integer' },
+  { name: 'candidate_mode', type: 'text' },
+  { name: 'status', type: 'text' },
+  { name: 'total_urls', type: 'integer' },
+  { name: 'pending_count', type: 'integer' },
+  { name: 'queued_count', type: 'integer' },
+  { name: 'running_count', type: 'integer' },
+  { name: 'completed_count', type: 'integer' },
+  { name: 'failed_count', type: 'integer' },
+  { name: 'detected_count', type: 'integer' },
+  { name: 'error_message', type: 'text' },
+  { name: 'created_at', type: 'timestamptz' },
+  { name: 'updated_at', type: 'timestamptz' },
+  { name: 'finished_at', type: 'timestamptz' },
+];
+
+const JOB_BACKUP_UPDATES = JOB_BACKUP_COLUMNS.map((column) => column.name);
+
+const JOB_ITEM_BACKUP_COLUMNS = [
+  { name: 'id', type: 'text' },
+  { name: 'job_id', type: 'text' },
+  { name: 'source_job_id', type: 'text' },
+  { name: 'source_item_id', type: 'text' },
+  { name: 'source_row_number', type: 'integer' },
+  { name: 'row_number', type: 'integer' },
+  { name: 'input_url', type: 'text' },
+  { name: 'normalized_url', type: 'text' },
+  { name: 'status', type: 'text' },
+  { name: 'attempts', type: 'integer' },
+  { name: 'title', type: 'text' },
+  { name: 'final_url', type: 'text' },
+  { name: 'ugc_detected', type: 'boolean' },
+  { name: 'best_score', type: 'integer' },
+  { name: 'best_confidence', type: 'text' },
+  { name: 'best_ugc_type', type: 'text' },
+  { name: 'best_xpath', type: 'text' },
+  { name: 'best_css_path', type: 'text' },
+  { name: 'best_sample_text', type: 'text' },
+  { name: 'screenshot_path', type: 'text' },
+  { name: 'screenshot_url', type: 'text' },
+  { name: 'manual_uploaded_screenshot_path', type: 'text' },
+  { name: 'manual_uploaded_screenshot_url', type: 'text' },
+  { name: 'analysis_source', type: 'text' },
+  { name: 'manual_capture_required', type: 'boolean' },
+  { name: 'manual_capture_reason', type: 'text' },
+  { name: 'manual_capture_mode', type: 'text' },
+  { name: 'manual_html_path', type: 'text' },
+  { name: 'manual_html_url', type: 'text' },
+  { name: 'manual_raw_html_path', type: 'text' },
+  { name: 'manual_raw_html_url', type: 'text' },
+  { name: 'manual_capture_url', type: 'text' },
+  { name: 'manual_capture_title', type: 'text' },
+  { name: 'manual_capture_notes', type: 'text' },
+  { name: 'manual_captured_at', type: 'timestamptz' },
+  { name: 'candidate_reviews', type: 'jsonb' },
+  { name: 'best_candidate', type: 'jsonb' },
+  { name: 'candidates', type: 'jsonb' },
+  { name: 'scan_result', type: 'jsonb' },
+  { name: 'error_message', type: 'text' },
+  { name: 'created_at', type: 'timestamptz' },
+  { name: 'updated_at', type: 'timestamptz' },
+  { name: 'started_at', type: 'timestamptz' },
+  { name: 'completed_at', type: 'timestamptz' },
+];
+
+const JOB_ITEM_BACKUP_UPDATES = JOB_ITEM_BACKUP_COLUMNS.map((column) => column.name);
+
+const JOB_EVENT_BACKUP_COLUMNS = [
+  { name: 'id', type: 'text' },
+  { name: 'job_id', type: 'text' },
+  { name: 'item_id', type: 'text' },
+  { name: 'row_number', type: 'integer' },
+  { name: 'level', type: 'text' },
+  { name: 'scope', type: 'text' },
+  { name: 'event_type', type: 'text' },
+  { name: 'event_key', type: 'text' },
+  { name: 'message', type: 'text' },
+  { name: 'details', type: 'jsonb' },
+  { name: 'created_at', type: 'timestamptz' },
+];
+
+const JOB_EVENT_BACKUP_UPDATES = JOB_EVENT_BACKUP_COLUMNS.map((column) => column.name);
+
+const MANUAL_REVIEW_TARGET_BACKUP_COLUMNS = [
+  { name: 'selection_key', type: 'text' },
+  { name: 'job_id', type: 'text' },
+  { name: 'item_id', type: 'text' },
+  { name: 'capture_url', type: 'text' },
+  { name: 'title', type: 'text' },
+  { name: 'created_at', type: 'timestamptz' },
+  { name: 'updated_at', type: 'timestamptz' },
+];
+
+const MANUAL_REVIEW_TARGET_BACKUP_UPDATES = MANUAL_REVIEW_TARGET_BACKUP_COLUMNS.map((column) => column.name);
+
+async function listAllJobs(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('SELECT * FROM jobs ORDER BY created_at ASC, id ASC');
+  return result.rows;
+}
+
+async function listAllJobItems(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('SELECT * FROM job_items ORDER BY created_at ASC, row_number ASC, id ASC');
+  return result.rows;
+}
+
+async function listAllJobEvents(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('SELECT * FROM job_events ORDER BY created_at ASC, id ASC');
+  return result.rows;
+}
+
+async function listAllManualReviewTargets(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query('SELECT * FROM manual_review_targets ORDER BY created_at ASC, selection_key ASC');
+  return result.rows;
+}
+
+async function buildProjectBackup(databaseUrl) {
+  const [jobs, jobItems, jobEvents, manualReviewTargets, summary] = await Promise.all([
+    listAllJobs(databaseUrl),
+    listAllJobItems(databaseUrl),
+    listAllJobEvents(databaseUrl),
+    listAllManualReviewTargets(databaseUrl),
+    getDatabaseSummary(databaseUrl),
+  ]);
+
+  return {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    jobs,
+    jobItems,
+    jobEvents,
+    manualReviewTargets,
+    metadata: summary,
+  };
+}
+
+async function restoreProjectBackup(backup, databaseUrl) {
+  const normalizedBackup = backup && typeof backup === 'object' ? backup : {};
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const touchedJobIds = new Set();
+  let insertedJobCount = 0;
+  let insertedItemCount = 0;
+  let insertedEventCount = 0;
+  let insertedManualReviewTargetCount = 0;
+
+  try {
+    await client.query('BEGIN');
+
+    const jobs = Array.isArray(normalizedBackup.jobs) ? normalizedBackup.jobs : [];
+    const jobItems = Array.isArray(normalizedBackup.jobItems) ? normalizedBackup.jobItems : [];
+    const jobEvents = Array.isArray(normalizedBackup.jobEvents) ? normalizedBackup.jobEvents : [];
+    const manualReviewTargets = Array.isArray(normalizedBackup.manualReviewTargets) ? normalizedBackup.manualReviewTargets : [];
+
+    jobs.forEach((job) => {
+      if (job && job.id) {
+        touchedJobIds.add(String(job.id));
+      }
+    });
+    jobItems.forEach((item) => {
+      if (item && item.job_id) {
+        touchedJobIds.add(String(item.job_id));
+      }
+    });
+    manualReviewTargets.forEach((target) => {
+      if (target && target.job_id) {
+        touchedJobIds.add(String(target.job_id));
+      }
+    });
+    jobEvents.forEach((event) => {
+      if (event && event.job_id) {
+        touchedJobIds.add(String(event.job_id));
+      }
+    });
+
+    insertedJobCount = await insertJsonbRows(client, {
+      tableName: 'jobs',
+      columns: JOB_BACKUP_COLUMNS,
+      conflictTarget: 'id',
+    }, jobs);
+
+    insertedItemCount = await insertJsonbRows(client, {
+      tableName: 'job_items',
+      columns: JOB_ITEM_BACKUP_COLUMNS,
+      conflictTarget: 'id',
+    }, jobItems);
+
+    insertedManualReviewTargetCount = await insertJsonbRows(client, {
+      tableName: 'manual_review_targets',
+      columns: MANUAL_REVIEW_TARGET_BACKUP_COLUMNS,
+      conflictTarget: 'selection_key',
+    }, manualReviewTargets);
+
+    insertedEventCount = await insertJsonbRows(client, {
+      tableName: 'job_events',
+      columns: JOB_EVENT_BACKUP_COLUMNS,
+      conflictTarget: 'id',
+    }, jobEvents);
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return {
+    jobIds: Array.from(touchedJobIds),
+    jobCount: insertedJobCount,
+    itemCount: insertedItemCount,
+    eventCount: insertedEventCount,
+    manualReviewTargetCount: insertedManualReviewTargetCount,
+  };
+}
+
+function buildMergedSourceFilename(sourceJobs, fallbackLabel) {
+  const labels = Array.isArray(sourceJobs)
+    ? sourceJobs.map((job) => String(job && (job.source_filename || job.id) || '').trim()).filter(Boolean)
+    : [];
+  if (labels.length) {
+    return `Combined: ${labels.join(' + ')}`;
+  }
+  return String(fallbackLabel || 'combined-jobs');
+}
+
+async function combineJobs(jobIds, options = {}, databaseUrl) {
+  const normalizedJobIds = normalizeIdList(jobIds);
+  if (normalizedJobIds.length < 2) {
+    throw new Error('At least two job IDs are required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const newJobId = crypto.randomUUID();
+  const artifactOptions = {
+    artifactRoot: options.artifactRoot || '',
+    artifactUrlBasePath: options.artifactUrlBasePath || '/artifacts',
+    publicBaseUrl: options.publicBaseUrl || '',
+    jobId: newJobId,
+  };
+  const hasScanDelayOverride = options.scanDelayMs !== undefined && options.scanDelayMs !== null && String(options.scanDelayMs).trim() !== '';
+  const hasScreenshotDelayOverride = options.screenshotDelayMs !== undefined && options.screenshotDelayMs !== null && String(options.screenshotDelayMs).trim() !== '';
+  const hasSourceFilenameOverride = options.sourceFilename !== undefined && options.sourceFilename !== null && String(options.sourceFilename).trim() !== '';
+  const hasSourceColumnOverride = options.sourceColumn !== undefined && options.sourceColumn !== null && String(options.sourceColumn).trim() !== '';
+  const defaultScanDelayMs = Number.isFinite(Number(options.defaultScanDelayMs))
+    ? Number(options.defaultScanDelayMs)
+    : 0;
+  const defaultScreenshotDelayMs = Number.isFinite(Number(options.defaultScreenshotDelayMs))
+    ? Number(options.defaultScreenshotDelayMs)
+    : 0;
+
+  try {
+    const sourceJobsResult = await client.query(
+      'SELECT * FROM jobs WHERE id = ANY($1::text[])',
+      [normalizedJobIds],
+    );
+    if (sourceJobsResult.rows.length !== normalizedJobIds.length) {
+      throw new Error('One or more jobs were not found');
+    }
+
+    const sourceJobMap = new Map(sourceJobsResult.rows.map((job) => [String(job.id), job]));
+    const orderedSourceJobs = normalizedJobIds.map((jobId) => sourceJobMap.get(jobId)).filter(Boolean);
+    const mergedItems = [];
+    let rowNumber = 1;
+
+    for (const sourceJob of orderedSourceJobs) {
+      const itemsResult = await client.query(
+        'SELECT * FROM job_items WHERE job_id = $1 ORDER BY row_number ASC, created_at ASC, id ASC',
+        [sourceJob.id],
+      );
+
+      for (const sourceItem of itemsResult.rows) {
+        const cloned = await cloneValueWithArtifactCopies(sourceItem, artifactOptions);
+        cloned.id = crypto.randomUUID();
+        cloned.job_id = newJobId;
+        cloned.source_job_id = String(sourceJob.id);
+        cloned.source_item_id = String(sourceItem.id);
+        cloned.source_row_number = Number.isFinite(Number(sourceItem.row_number))
+          ? Number(sourceItem.row_number)
+          : null;
+        cloned.row_number = rowNumber;
+        mergedItems.push(cloned);
+        rowNumber += 1;
+      }
+    }
+
+    const counts = computeJobCountsFromItems(mergedItems);
+    const totalUrls = mergedItems.length;
+    const jobStatus = computeJobStatusFromCounts(counts, totalUrls);
+    const sourceJobIds = orderedSourceJobs.map((job) => String(job.id));
+    const sourceFilename = hasSourceFilenameOverride
+      ? String(options.sourceFilename || '')
+      : buildMergedSourceFilename(orderedSourceJobs, 'combined-jobs');
+    const sourceColumn = hasSourceColumnOverride
+      ? String(options.sourceColumn || '')
+      : 'combined';
+    const now = new Date().toISOString();
+    const mergedJob = {
+      id: newJobId,
+      source_filename: sourceFilename,
+      source_column: sourceColumn,
+      source_job_ids: sourceJobIds,
+      scan_delay_ms: hasScanDelayOverride && Number.isFinite(Number(options.scanDelayMs))
+        ? Number(options.scanDelayMs)
+        : (
+          Number.isFinite(Number(orderedSourceJobs[0] && orderedSourceJobs[0].scan_delay_ms))
+            ? Number(orderedSourceJobs[0].scan_delay_ms)
+            : defaultScanDelayMs
+        ),
+      screenshot_delay_ms: hasScreenshotDelayOverride && Number.isFinite(Number(options.screenshotDelayMs))
+        ? Number(options.screenshotDelayMs)
+        : (
+          Number.isFinite(Number(orderedSourceJobs[0] && orderedSourceJobs[0].screenshot_delay_ms))
+            ? Number(orderedSourceJobs[0].screenshot_delay_ms)
+            : defaultScreenshotDelayMs
+        ),
+      candidate_mode: normalizeCandidateSelectionMode(
+        options.candidateMode !== undefined
+          ? options.candidateMode
+          : (orderedSourceJobs[0] && orderedSourceJobs[0].candidate_mode),
+      ),
+      status: jobStatus,
+      total_urls: totalUrls,
+      pending_count: counts.pending_count,
+      queued_count: counts.queued_count,
+      running_count: counts.running_count,
+      completed_count: counts.completed_count,
+      failed_count: counts.failed_count,
+      detected_count: counts.detected_count,
+      error_message: '',
+      created_at: now,
+      updated_at: now,
+      finished_at: jobStatus === 'completed' || jobStatus === 'completed_with_errors' || jobStatus === 'failed'
+        ? now
+        : null,
+    };
+
+    await client.query('BEGIN');
+    await upsertJsonbRows(client, {
+      tableName: 'jobs',
+      columns: JOB_BACKUP_COLUMNS,
+      conflictTarget: 'id',
+      updateColumns: JOB_BACKUP_UPDATES,
+    }, [mergedJob]);
+
+    await upsertJsonbRows(client, {
+      tableName: 'job_items',
+      columns: JOB_ITEM_BACKUP_COLUMNS,
+      conflictTarget: 'id',
+      updateColumns: JOB_ITEM_BACKUP_UPDATES,
+    }, mergedItems);
+
+    await client.query('COMMIT');
+
+    return {
+      job: mergedJob,
+      jobId: newJobId,
+      sourceJobIds,
+      totalUrls,
+      counts,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getPool,
   ensureSchema,
   clearJobArtifactPaths,
   createJob,
+  buildProjectBackup,
+  restoreProjectBackup,
+  combineJobs,
   replaceJobRecords,
   restartJob,
   resumeJob,

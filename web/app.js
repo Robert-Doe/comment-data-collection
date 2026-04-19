@@ -20,6 +20,8 @@
   const downloadCandidatesCsv = document.getElementById('download-candidates-csv');
   const downloadCsv = document.getElementById('download-csv');
   const downloadJson = document.getElementById('download-json');
+  const downloadBackupJson = document.getElementById('download-backup-json');
+  const downloadBackupDb = document.getElementById('download-backup-db');
   const downloadSampleCsv = document.getElementById('download-sample-csv');
   const downloadExtensionZip = document.getElementById('download-extension-zip');
   const workspaceSelection = document.getElementById('workspace-selection');
@@ -39,6 +41,16 @@
   const manualCopyConfigButton = document.getElementById('manual-copy-config');
   const candidateReview = document.getElementById('candidate-review');
   const candidateMessage = document.getElementById('candidate-message');
+  const backupImportForm = document.getElementById('backup-import-form');
+  const backupFileInput = document.getElementById('backup-file');
+  const mergeForm = document.getElementById('job-merge-form');
+  const mergeJobIdA = document.getElementById('merge-job-id-a');
+  const mergeJobIdB = document.getElementById('merge-job-id-b');
+  const mergeSourceFilename = document.getElementById('merge-source-filename');
+  const mergeCandidateModeInput = document.getElementById('merge-candidate-mode');
+  const mergeScanDelayInput = document.getElementById('merge-scan-delay-ms');
+  const mergeScreenshotDelayInput = document.getElementById('merge-screenshot-delay-ms');
+  const mergeMessage = document.getElementById('merge-message');
   const jobLabelerReview = document.getElementById('job-labeler-review');
   const jobLabelerMessage = document.getElementById('job-labeler-message');
   const jobLabelerReloadButton = document.getElementById('job-labeler-reload');
@@ -228,6 +240,12 @@
   function setResourceDownloads() {
     downloadSampleCsv.href = apiUrl('/api/downloads/sample-sites-labeled.csv');
     downloadExtensionZip.href = apiUrl('/api/downloads/extension.zip');
+    if (downloadBackupJson) {
+      downloadBackupJson.href = apiUrl('/api/backups/export.json');
+    }
+    if (downloadBackupDb) {
+      downloadBackupDb.href = apiUrl('/api/backups/export.db');
+    }
   }
 
   function resolveAssetUrl(url) {
@@ -305,6 +323,12 @@
   function setManagerMessage(text, isError) {
     managerMessage.textContent = text || '';
     managerMessage.className = isError ? 'message error' : 'message';
+  }
+
+  function setMergeMessage(text, isError) {
+    if (!mergeMessage) return;
+    mergeMessage.textContent = text || '';
+    mergeMessage.className = isError ? 'message error' : 'message';
   }
 
   function showToast(text, options = {}) {
@@ -557,6 +581,9 @@
       `<div><strong>Detected:</strong> ${escapeHtml(job.detected_count)}</div>`,
       `<div><strong>Total:</strong> ${escapeHtml(job.total_urls)}</div>`,
       `<div><strong>Scanner Mode:</strong> ${escapeHtml(formatCandidateMode(job.candidate_mode || job.candidateMode))}</div>`,
+      ...(Array.isArray(job.source_job_ids) && job.source_job_ids.length
+        ? [`<div><strong>Source Jobs:</strong> ${escapeHtml(job.source_job_ids.join(', '))}</div>`]
+        : []),
       `<div><strong>Scan Delay:</strong> ${escapeHtml(job.scan_delay_ms ?? '')} ms</div>`,
       `<div><strong>Screenshot Delay:</strong> ${escapeHtml(job.screenshot_delay_ms ?? '')} ms</div>`,
     ].join('');
@@ -2803,6 +2830,7 @@
       managerScanDelayInput.value = '';
       managerScreenshotDelayInput.value = '';
       managerReplaceFile.value = '';
+      if (backupFileInput) backupFileInput.value = '';
       managerResumeButton.disabled = true;
       managerRestartButton.disabled = true;
       managerDeleteButton.disabled = true;
@@ -2986,6 +3014,22 @@
     if (nextJobId) {
       currentOffset = 0;
       await refreshJob(nextJobId);
+    }
+    return body;
+  }
+
+  async function postJsonAction(path, payload, options = {}) {
+    const response = await fetch(apiUrl(path), {
+      method: options.method || 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      body: JSON.stringify(payload || {}),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || 'Request failed.');
     }
     return body;
   }
@@ -3211,6 +3255,94 @@
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleBackupImport(event) {
+    event.preventDefault();
+    if (!backupFileInput) {
+      return;
+    }
+
+    const file = backupFileInput.files[0];
+    if (!file) {
+      setManagerMessage('Choose a backup file first.', true);
+      showToast('Choose a backup file first.', { tone: 'error' });
+      return;
+    }
+
+    const submitButton = backupImportForm ? backupImportForm.querySelector('button[type="submit"]') : null;
+    try {
+      setManagerMessage('Importing backup...', false);
+      const formData = new FormData();
+      formData.append('file', file);
+      const body = await runElementAction(submitButton, async () => {
+        const response = await fetch(apiUrl('/api/backups/import'), {
+          method: 'POST',
+          body: formData,
+        });
+        const responseBody = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(responseBody.error || 'Backup import failed.');
+        }
+        return responseBody;
+      });
+
+      backupFileInput.value = '';
+      await refreshJobs().catch((error) => console.error(error));
+      if (currentJobId) {
+        await refreshJob(currentJobId).catch((error) => console.error(error));
+      }
+      const imported = body.imported || {};
+      const message = `Imported backup: ${imported.jobs || 0} jobs, ${imported.items || 0} items.`;
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleCombineJobs(event) {
+    event.preventDefault();
+
+    const jobIdA = mergeJobIdA ? mergeJobIdA.value.trim() : '';
+    const jobIdB = mergeJobIdB ? mergeJobIdB.value.trim() : '';
+    if (!jobIdA || !jobIdB) {
+      setMergeMessage('Provide two source job IDs first.', true);
+      showToast('Provide two source job IDs first.', { tone: 'error' });
+      return;
+    }
+
+    const submitButton = mergeForm ? mergeForm.querySelector('button[type="submit"]') : null;
+    try {
+      setMergeMessage('Combining jobs...', false);
+      const body = await runElementAction(submitButton, () => postJsonAction('/api/jobs/merge', {
+        jobIds: [jobIdA, jobIdB],
+        sourceFilename: mergeSourceFilename ? mergeSourceFilename.value.trim() : '',
+        candidateMode: mergeCandidateModeInput ? mergeCandidateModeInput.value.trim() : 'default',
+        scanDelayMs: mergeScanDelayInput ? mergeScanDelayInput.value.trim() : '',
+        screenshotDelayMs: mergeScreenshotDelayInput ? mergeScreenshotDelayInput.value.trim() : '',
+      }));
+
+      const mergedJobId = body.jobId || (body.job && body.job.id) || '';
+      if (mergedJobId) {
+        currentOffset = 0;
+        await refreshJob(mergedJobId).catch((error) => console.error(error));
+      } else {
+        await refreshJobs().catch((error) => console.error(error));
+      }
+
+      const message = mergedJobId
+        ? `Combined jobs into new job ${mergedJobId}.`
+        : 'Combined jobs into a new aggregate job.';
+      setMergeMessage(message, false);
+      showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setMergeMessage(message, true);
       showToast(message, { tone: 'error' });
     }
   }
@@ -3467,6 +3599,18 @@
   managerForm.addEventListener('submit', (event) => {
     handleReplaceJob(event).catch((error) => console.error(error));
   });
+
+  if (backupImportForm) {
+    backupImportForm.addEventListener('submit', (event) => {
+      handleBackupImport(event).catch((error) => console.error(error));
+    });
+  }
+
+  if (mergeForm) {
+    mergeForm.addEventListener('submit', (event) => {
+      handleCombineJobs(event).catch((error) => console.error(error));
+    });
+  }
 
   manualCopyConfigButton.addEventListener('click', () => {
     copyManualConfig().catch((error) => {

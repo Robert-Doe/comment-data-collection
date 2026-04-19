@@ -15,6 +15,9 @@
   let featureExtractorReady = false;
   let pendingPageSignals = null;
   let pendingRuntimeModel = null;
+  // Set to true when the background requests the runtime model to be cleared so
+  // flushPendingPushes() sends a RUNTIME_MODEL with null payload to the wrapper.
+  let pendingClearModel = false;
 
   function injectScript(src, options = {}) {
     const script = document.createElement('script');
@@ -50,6 +53,11 @@
     if (pendingRuntimeModel) {
       postToPage('RUNTIME_MODEL', pendingRuntimeModel);
       pendingRuntimeModel = null;
+      pendingClearModel = false; // loading a model supersedes any pending clear
+    } else if (pendingClearModel) {
+      // Explicitly push null so the wrapper clears _runtimeModel and re-classifies.
+      postToPage('RUNTIME_MODEL', null);
+      pendingClearModel = false;
     }
     if (featureExtractorReady) {
       postToPage('FEATURE_EXTRACTOR_READY', { ready: true });
@@ -82,6 +90,24 @@
         payload: response,
       }, '*');
     });
+  });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message || typeof message !== 'object') {
+      return;
+    }
+
+    if (message.type === 'RUNTIME_MODEL') {
+      pendingRuntimeModel = message.payload || null;
+      flushPendingPushes();
+      return;
+    }
+
+    if (message.type === 'CLEAR_RUNTIME_MODEL') {
+      pendingRuntimeModel = null;
+      pendingClearModel = true;
+      flushPendingPushes();
+    }
   });
 
   // Fetch background data. The wrapper receives it once it announces

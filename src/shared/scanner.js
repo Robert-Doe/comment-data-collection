@@ -88,6 +88,18 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
   }
 }
 
+function emitProgress(progress, patch) {
+  if (typeof progress !== 'function') {
+    return;
+  }
+
+  try {
+    progress(patch || {});
+  } catch (_) {
+    // Progress reporting must never interrupt scanning.
+  }
+}
+
 function createScanDeadline(page, context, timeoutMs, label = 'scan') {
   const numericTimeout = Number(timeoutMs || 0);
   if (!Number.isFinite(numericTimeout) || numericTimeout <= 0) {
@@ -1078,18 +1090,34 @@ async function scanUrl(normalizedUrl, options = {}) {
   const page = await context.newPage();
   const priorityProbe = options.priorityProbe === true || Number(options.timeoutMs) <= 0;
   const timeoutMs = priorityProbe ? 0 : Math.max(1000, Number(options.timeoutMs ?? 90000));
+  const scanLabel = String(options.scanLabel || options.deadlineLabel || 'URL scan').trim() || 'URL scan';
+  const progress = typeof options.progress === 'function' ? options.progress : null;
   const postLoadDelayMs = Math.max(0, Number(options.postLoadDelayMs ?? 6000));
   const preScreenshotDelayMs = Math.max(0, Number(options.preScreenshotDelayMs ?? 1500));
   const navigationRetries = Math.max(1, Number(options.navigationRetries ?? 2));
   const loadSettlePasses = Math.max(1, Number(options.loadSettlePasses ?? 2));
   const negativeRetrySettlePasses = Math.max(1, Number(options.negativeRetrySettlePasses ?? 2));
   const actionSettleMs = Math.max(0, Number(options.actionSettleMs ?? 1250));
+  const scanStepTotal = 5;
   const candidateSelectionLimit = resolveCandidateLimit(options);
   const candidateReviewArtifactLimit = resolveCandidateReviewArtifactLimit(options);
   const candidateSelectionMode = resolveCandidateSelectionMode(options);
   page.setDefaultNavigationTimeout(timeoutMs);
   page.setDefaultTimeout(timeoutMs);
-  const deadline = createScanDeadline(page, context, timeoutMs, 'Live URL probe');
+  const deadline = createScanDeadline(page, context, timeoutMs, scanLabel);
+  const updateProgress = (current, message, extra = {}) => {
+    emitProgress(progress, {
+      stage: 'scanning',
+      message,
+      progress: {
+        current,
+        total: scanStepTotal,
+        unit: 'scan steps',
+        indeterminate: false,
+      },
+      ...extra,
+    });
+  };
 
   const result = {
     input_url: normalizedUrl,
@@ -1129,6 +1157,7 @@ async function scanUrl(normalizedUrl, options = {}) {
   };
 
   try {
+    updateProgress(0, `Starting ${scanLabel.toLowerCase()}`);
     const navigation = await deadline.wrap(loadPageWithRetries(page, normalizedUrl, {
       timeoutMs,
       navigationRetries,
@@ -1137,6 +1166,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     }));
     const response = navigation.response;
     result.navigation_attempts = navigation.attemptCount;
+    updateProgress(1, `Navigation completed for ${scanLabel.toLowerCase()}`);
 
     await deadline.wrap(settlePageForDetection(page, {
       timeoutMs,
@@ -1147,6 +1177,7 @@ async function scanUrl(normalizedUrl, options = {}) {
       priorityProbe,
     }));
     result.settle_passes_applied = loadSettlePasses;
+    updateProgress(2, 'Page settled and candidate signals collected');
 
     const responseText = response ? await deadline.wrap(response.text().catch(() => '')) : '';
     const responseHeaders = response ? response.headers() : {};
@@ -1159,6 +1190,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     }));
     let bestCandidate = candidates[0] || null;
     let ugcDetected = candidates.some((candidate) => !!candidate.detected);
+    updateProgress(3, `Collected ${candidates.length} candidate(s)`);
 
     if (!access.blocked && !ugcDetected) {
       result.negative_retry_applied = true;
@@ -1180,6 +1212,7 @@ async function scanUrl(normalizedUrl, options = {}) {
       }));
       bestCandidate = candidates[0] || null;
       ugcDetected = candidates.some((candidate) => !!candidate.detected);
+      updateProgress(3, `Collected ${candidates.length} candidate(s) after a retry settle`);
     }
 
     await deadline.wrap(waitForDocumentComplete(page, 5000));
@@ -1195,6 +1228,9 @@ async function scanUrl(normalizedUrl, options = {}) {
     } catch (error) {
       result.screenshot_error = error && error.message ? error.message : String(error);
     }
+    updateProgress(4, result.screenshot_error
+      ? 'Captured scan results with a screenshot warning'
+      : 'Captured screenshot and HTML snapshot');
 
     result.final_url = page.url();
     result.title = await deadline.wrap(page.title().catch(() => access.title || ''));
@@ -1216,6 +1252,7 @@ async function scanUrl(normalizedUrl, options = {}) {
     result.heuristic_best_candidate_reason = bestCandidate
       ? (bestCandidate.heuristic_pseudo_reason || bestCandidate.acceptance_gate_reason || '')
       : '';
+    updateProgress(5, `Finished ${scanLabel.toLowerCase()}`);
   } catch (error) {
     if (deadline.timedOut()) {
       result.timed_out = true;

@@ -37,6 +37,16 @@
             <h2>Overview</h2>
             <button id="refresh-modeling" class="secondary" type="button">Refresh</button>
           </div>
+          <form id="overview-form" class="model-form">
+            <label class="field">
+              <span>Job IDs Scope</span>
+              <input id="overview-job-ids" type="text" placeholder="Optional: job-1, job-2">
+            </label>
+            <button class="primary" type="submit">Apply Scope</button>
+            <button id="overview-clear" class="secondary" type="button">Show All</button>
+          </form>
+          <p class="lede manual-lede">Leave the scope blank for the global dataset. Enter one or more job IDs to focus the overview on specific jobs, and the selected job statistics will refresh live while the job changes.</p>
+          <p id="overview-message" class="message"></p>
           <div id="model-overview" class="summary empty">Loading model overview...</div>
         </section>
 
@@ -122,7 +132,7 @@
 
         <section class="panel">
           <div class="panel-header"><h2>Live URL Probe</h2></div>
-          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. Enable priority scan to remove the hard deadline while the browser keeps collecting candidate features and rendered HTML.</p>
+          <p class="lede manual-lede">Probe one live page, choose a trained model, and switch between the default candidate path and the repetition-first research mode. The backend will scan the URL, score the returned candidates, and surface a page-level verdict plus the candidate list the model considered most likely. Enable priority scan to keep the live probe moving without a hard deadline while the panel reports scan steps and model counts.</p>
           <form id="live-probe-form" class="model-form live-probe-form">
             <label class="field">
               <span>Model</span>

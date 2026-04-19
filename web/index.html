@@ -104,6 +104,7 @@
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates">Candidates</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="labeler">Labeler</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring">Scoring</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="merge">Merge</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager">Manager</button>
           </div>
           <div id="workspace-selection" class="workspace-selection empty">Select a row from the table to open the manual or candidate review workspace.</div>
@@ -198,6 +199,47 @@
             <p class="lede manual-lede">Inspect why the selected row scored the way it did. This view surfaces the best candidate, its matched signals, penalty signals, and a feature truth table so a reviewer can understand the decision without reading raw JSON.</p>
             <div id="scoring-breakdown" class="candidate-review empty">Select a row from Job Status to inspect the scoring breakdown.</div>
           </section>
+          <section id="workspace-panel-merge" class="workspace-panel" data-workspace-panel="merge">
+            <div class="panel-header compact-header">
+              <h3>Job Merge</h3>
+            </div>
+            <p class="lede manual-lede">Create a new aggregate job from two existing jobs. The source jobs stay intact, their completed rows are copied into a new job namespace, and the scanner settings only matter if you later restart the merged job.</p>
+            <section class="manager-tool">
+              <div class="manager-tool-heading">Combine Jobs</div>
+              <p class="manager-tool-copy">Enter two job IDs to build a new aggregate without touching the originals. Scanner mode, scan delay, and screenshot delay are stored on the new job so a future restart behaves the way you expect.</p>
+              <form id="job-merge-form" class="manual-form manager-form">
+                <label class="field">
+                  <span>Source Job 1</span>
+                  <input id="merge-job-id-a" name="jobIdA" type="text" placeholder="job id">
+                </label>
+                <label class="field">
+                  <span>Source Job 2</span>
+                  <input id="merge-job-id-b" name="jobIdB" type="text" placeholder="job id">
+                </label>
+                <label class="field manual-wide">
+                  <span>Combined Source Label</span>
+                  <input id="merge-source-filename" name="sourceFilename" type="text" placeholder="Combined: source A + source B">
+                </label>
+                <label class="field">
+                  <span>Scanner Mode</span>
+                  <select id="merge-candidate-mode" name="candidateMode">
+                    <option value="default" selected>Default</option>
+                    <option value="repetition_first">Research mode, repetition first</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Scan Delay (ms)</span>
+                  <input id="merge-scan-delay-ms" name="scanDelayMs" type="number" min="0" step="500">
+                </label>
+                <label class="field">
+                  <span>Screenshot Delay (ms)</span>
+                  <input id="merge-screenshot-delay-ms" name="screenshotDelayMs" type="number" min="0" step="500">
+                </label>
+                <button class="primary" type="submit">Combine Jobs</button>
+              </form>
+              <p id="merge-message" class="message"></p>
+            </section>
+          </section>
           <section id="workspace-panel-manager" class="workspace-panel" data-workspace-panel="manager">
             <div class="panel-header compact-header">
               <h3>Job Manager</h3>
@@ -239,6 +281,21 @@
               </label>
               <button class="primary" type="submit" disabled>Replace Job CSV</button>
             </form>
+            <section class="manager-tool">
+              <div class="manager-tool-heading">Project Backup</div>
+              <p class="manager-tool-copy">Download the full project snapshot as readable JSON or as a compressed .db backup. Importing a backup adds missing rows without deleting or overwriting what is already in the database.</p>
+              <div class="panel-actions">
+                <a id="download-backup-json" class="link-button compact" href="#" download>Download JSON Backup</a>
+                <a id="download-backup-db" class="link-button compact" href="#" download>Download .db Backup</a>
+              </div>
+              <form id="backup-import-form" class="manual-form manager-form">
+                <label class="field manual-wide">
+                  <span>Backup File</span>
+                  <input id="backup-file" name="file" type="file" accept=".json,.db,application/json,application/octet-stream">
+                </label>
+                <button class="primary" type="submit">Import Backup</button>
+              </form>
+            </section>
             <p id="manager-message" class="message"></p>
             <div class="manager-danger-zone">
               <div class="manager-danger-copy">

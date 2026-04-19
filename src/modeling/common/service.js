@@ -866,6 +866,8 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
       || options.candidateMode
       || 'default',
   );
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
 
   const candidateRows = candidateRowsSource.map((candidate, index) => ({
     dataset_row_id: `${probeItemId}:${String(candidate.candidate_key || candidate.xpath || candidate.css_path || candidate.candidate_rank || index + 1)}`,
@@ -908,15 +910,28 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
       status: itemStatus,
       ugc_detected: !!(scanResult && scanResult.ugc_detected),
       scan_result: scanResult || null,
+      },
+    }));
+
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: candidateRows.length
+      ? `Scoring ${candidateRows.length} live candidate row(s)`
+      : 'No live candidate rows to score',
+    progress: {
+      current: 0,
+      total: candidateRows.length || 1,
+      unit: 'rows',
+      indeterminate: candidateRows.length === 0,
     },
-  }));
+  });
 
   const scoredRows = candidateRows.length
     ? scoreRows(candidateRows, artifact, {
       includeExplanations: options.includeExplanations !== false,
       threshold: options.threshold,
-      progress: options.progress,
-      progressInterval: options.progressInterval,
+      progress,
+      progressInterval,
     })
     : [];
 
@@ -937,6 +952,17 @@ async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options =
       manual_review_suggested: false,
       review_complete_binary: false,
     }];
+
+  emitProgress(progress, {
+    stage: 'scoring',
+    message: `Scored ${scoredItems.length} live item(s)`,
+    progress: {
+      current: scoredItems.length,
+      total: scoredItems.length || 1,
+      unit: 'items',
+      indeterminate: false,
+    },
+  });
 
   const summary = summarizeScoredItems(scoredItems);
   const topCandidate = scoredItems[0] ? scoredItems[0].top_candidate : null;

@@ -120,6 +120,18 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.thread_depth_indicator     = indentData.hasDepthIndicator;
   fv.depth_indicator_unit_count = indentData.depthCount;
 
+  // Additional repetition metrics required by the runtime model vectorizer.
+  // xpath_star_group_count mirrors dominantFamilySize (the strongest repeated family).
+  fv.xpath_star_group_count       = candidateMeta?.dominantFamilySize || 0;
+  // child_sig_id_group_count: how many distinct direct-child tag families have >= 2 members.
+  fv.child_sig_id_group_count     = computeChildSigGroupCount(el);
+  // child_xpath_star_group_count: how many class+tag signature groups among direct children have >= 2 members.
+  fv.child_xpath_star_group_count = computeChildXPathStarGroupCount(el);
+  // Signature repetition tier flags (mirrors min_k thresholds from the backend feature extractor).
+  fv.sig_id_count_weak            = (candidateMeta?.dominantFamilySize || 0) >= 3;
+  fv.sig_id_count_medium          = (candidateMeta?.dominantFamilySize || 0) >= 5;
+  fv.sig_id_count_strong          = (candidateMeta?.dominantFamilySize || 0) >= 8;
+
   // ── C. Keyword and semantic signals ───────────────────────────────────────
 
   const attrBlob                = buildAttributeBlob(el);
@@ -127,6 +139,10 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.keyword_container_med      = hasKeyword(attrBlob, KW.MED);
   fv.keyword_container_low      = hasKeyword(attrBlob, KW.LOW);
   fv.attributes_contain_keywords = fv.keyword_container_high || fv.keyword_container_med;
+
+  // Granular keyword breakdown: attribute names vs. values (separate signals for the model).
+  fv.keyword_attr_name_high  = hasKeywordInAttrNames(el, KW.HIGH);
+  fv.keyword_attr_value_high = hasKeywordInAttrValues(el, KW.HIGH);
 
   const units                   = getRepeatedUnits(el);
   fv.unit_count                 = units.length;
@@ -166,6 +182,13 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
     ? words.reduce((s, w) => s + w.length, 0) / words.length : 0;
   fv.has_text_content           = subtreeText.trim().length > 30;
   fv.total_text_length          = subtreeText.length;
+
+  // Text-based keyword signals (subtree visible text, not attributes).
+  const subtreeTextLower        = subtreeText.toLowerCase();
+  fv.keyword_text_high          = hasKeyword(subtreeTextLower, KW.HIGH);
+  fv.keyword_text_med           = hasKeyword(subtreeTextLower, KW.MED);
+  // Direct-text: keywords in short text directly attached to the candidate root.
+  fv.keyword_direct_text_high   = hasKeyword(getDirectText(el), KW.HIGH);
 
   fv.text_contains_mentions     = RE_MENTION.test(subtreeText);
   fv.mention_count              = (subtreeText.match(/@\w+/g) || []).length;
@@ -299,6 +322,8 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.char_counter_near_textarea = composerData.hasCharCounter;
   fv.collapse_expand_control    = el.querySelector('[class*="collapse"],[class*="expand"],[aria-expanded]') !== null;
   fv.pagination_load_more_adjacent = composerData.hasLoadMore;
+  // Nearby submit/post/reply buttons that carry HIGH-confidence discussion keywords.
+  fv.submit_button_keyword_high = detectSubmitButtonKeywords(el);
 
   // ── I. Negative control features ──────────────────────────────────────────
 
@@ -340,6 +365,23 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.response_csp_has_script_src = ps.csp_has_script_src || false;
   fv.response_csp_allows_unsafe_inline = ps.csp_allows_unsafe_inline || false;
   fv.response_csp_allows_unsafe_eval   = ps.csp_allows_unsafe_eval || false;
+
+  // JSON-LD interaction/comment action signal (distinct from json_ld_has_comment_type).
+  fv.json_ld_has_comment_action = ps.json_ld_has_comment_action || false;
+
+  // ── K. Page-level context features ───────────────────────────────────────────
+
+  // frame_count: number of frames visible on the page (iframes + main frame).
+  // Training mean ≈ 1.75 (std 0.97), so most pages have 1–3 frames.
+  fv.frame_count = document.querySelectorAll('iframe,frame').length + 1;
+
+  // analysis_source: 'automated' matches the training distribution (backend Playwright scans).
+  // Using this value keeps the model calibrated; the extension is also automated.
+  fv.analysis_source = 'automated';
+
+  // blocker_type: null normalises to '__missing__' in the vectorizer, which is the
+  // dominant training value (most scanned pages had no blocker).
+  fv.blocker_type = null;
 
   return fv;
 }
@@ -677,4 +719,125 @@ function findNavAncestor(el) {
     depth++;
   }
   return null;
+}
+
+// ─── Helpers added for runtime-model feature parity ──────────────────────────
+
+/**
+ * Returns lowercased short text taken directly from the candidate root's own
+ * text nodes (not from descendants). Used for keyword_direct_text_high.
+ */
+function getDirectText(el) {
+  const parts = [];
+  for (const child of el.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const t = (child.textContent || '').trim();
+      if (t) parts.push(t);
+    }
+  }
+  return parts.join(' ').slice(0, 200).toLowerCase();
+}
+
+/**
+ * Returns true if any attribute NAME on el contains a keyword from kwSet.
+ * Used for keyword_attr_name_high.
+ */
+function hasKeywordInAttrNames(el, kwSet) {
+  if (!el || !el.attributes) return false;
+  for (const attr of el.attributes) {
+    const n = attr.name.toLowerCase();
+    for (const kw of kwSet) {
+      if (n.includes(kw)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns true if any attribute VALUE on el contains a keyword from kwSet.
+ * Used for keyword_attr_value_high.
+ */
+function hasKeywordInAttrValues(el, kwSet) {
+  if (!el || !el.attributes) return false;
+  for (const attr of el.attributes) {
+    const v = attr.value.toLowerCase();
+    for (const kw of kwSet) {
+      if (v.includes(kw)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns how many distinct direct-child tag families contain >= 2 members.
+ * Approximates the backend's child_sig_id_group_count.
+ */
+function computeChildSigGroupCount(el) {
+  if (!el || !el.children) return 0;
+  const tagGroups = new Map();
+  for (const child of el.children) {
+    const tag = child.tagName;
+    tagGroups.set(tag, (tagGroups.get(tag) || 0) + 1);
+  }
+  let count = 0;
+  for (const n of tagGroups.values()) {
+    if (n >= 2) count++;
+  }
+  return count;
+}
+
+/**
+ * Returns how many distinct class+tag signature groups among direct children
+ * contain >= 2 members.  Approximates child_xpath_star_group_count.
+ */
+function computeChildXPathStarGroupCount(el) {
+  if (!el || !el.children) return 0;
+  const sigGroups = new Map();
+  for (const child of el.children) {
+    const classes = [...(child.classList || [])].sort().join('.');
+    const sig = (child.tagName || '') + ':' + classes;
+    sigGroups.set(sig, (sigGroups.get(sig) || 0) + 1);
+  }
+  let count = 0;
+  for (const n of sigGroups.values()) {
+    if (n >= 2) count++;
+  }
+  return count;
+}
+
+/**
+ * Returns true when nearby submit/post/send/reply buttons carry at least one
+ * HIGH-confidence discussion keyword.  Used for submit_button_keyword_high.
+ */
+function detectSubmitButtonKeywords(el) {
+  const selectors = [
+    'button[type="submit"]',
+    'input[type="submit"]',
+    '[class*="submit"]',
+    '[class*="post-btn"]',
+    '[class*="send-btn"]',
+    '[class*="reply-btn"]',
+  ];
+  const candidates = [
+    ...el.querySelectorAll(selectors.join(',')),
+  ];
+  // Also check siblings/parent for a composer submit button
+  const parent = el.parentElement;
+  if (parent) {
+    candidates.push(
+      ...parent.querySelectorAll('button[type="submit"],input[type="submit"]')
+    );
+  }
+  for (const btn of candidates) {
+    const text = (
+      (btn.textContent  || '') + ' ' +
+      (btn.value        || '') + ' ' +
+      (btn.getAttribute('aria-label') || '') + ' ' +
+      (btn.getAttribute('title')      || '')
+    ).toLowerCase();
+    for (const kw of KW.HIGH) {
+      if (text.includes(kw)) return true;
+    }
+  }
+  return false;
 }

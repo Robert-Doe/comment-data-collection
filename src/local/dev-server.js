@@ -42,6 +42,11 @@ const { analyzeManualCapture } = require('../shared/manualCapture');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { createRequestTracker } = require('../shared/requestTracker');
+const { cloneValueWithArtifactCopies } = require('../shared/jobArtifacts');
+const {
+  decodeProjectBackup,
+  encodeProjectBackup,
+} = require('../shared/projectBackup');
 const {
   normalizeCandidateReviewLabel,
   applyCandidateReviews,
@@ -53,6 +58,13 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
+  },
+});
+
+const backupUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 200 * 1024 * 1024,
   },
 });
 
@@ -609,6 +621,166 @@ function createLocalRuntime(options = {}) {
     return deletedCount;
   }
 
+  function buildProjectBackup() {
+    return {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      jobs: JSON.parse(JSON.stringify(state.jobs)),
+      jobItems: JSON.parse(JSON.stringify(state.items)),
+      jobEvents: [],
+      manualReviewTargets: state.manual_review_target ? [JSON.parse(JSON.stringify(state.manual_review_target))] : [],
+      metadata: {
+        jobCount: state.jobs.length,
+        itemCount: state.items.length,
+        eventCount: 0,
+        manualReviewTargetCount: state.manual_review_target ? 1 : 0,
+      },
+    };
+  }
+
+  function restoreProjectBackup(backup) {
+    const normalized = backup && typeof backup === 'object' ? backup : {};
+    const jobs = Array.isArray(normalized.jobs) ? normalized.jobs.map((entry) => ({ ...entry })) : [];
+    const items = Array.isArray(normalized.jobItems) ? normalized.jobItems.map((entry) => ({ ...entry })) : [];
+    const manualReviewTargets = Array.isArray(normalized.manualReviewTargets)
+      ? normalized.manualReviewTargets.map((entry) => ({ ...entry }))
+      : [];
+
+    const jobMap = new Map(state.jobs.map((job) => [job.id, { ...job }]));
+    let insertedJobCount = 0;
+    jobs.forEach((job) => {
+      if (job && job.id && !jobMap.has(job.id)) {
+        jobMap.set(job.id, { ...job });
+        insertedJobCount += 1;
+      }
+    });
+    state.jobs = Array.from(jobMap.values()).sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0));
+
+    const itemMap = new Map(state.items.map((item) => [item.id, { ...item }]));
+    let insertedItemCount = 0;
+    items.forEach((item) => {
+      if (item && item.id && !itemMap.has(item.id)) {
+        itemMap.set(item.id, { ...item });
+        insertedItemCount += 1;
+      }
+    });
+    state.items = Array.from(itemMap.values()).sort((left, right) => {
+      const leftCreated = new Date(left.created_at || 0).getTime();
+      const rightCreated = new Date(right.created_at || 0).getTime();
+      return leftCreated - rightCreated || (Number(left.row_number) || 0) - (Number(right.row_number) || 0);
+    });
+
+    let insertedManualReviewTargetCount = 0;
+    if (manualReviewTargets.length && !state.manual_review_target) {
+      state.manual_review_target = { ...manualReviewTargets[manualReviewTargets.length - 1] };
+      insertedManualReviewTargetCount = 1;
+    }
+
+    state.jobs.forEach((job) => {
+      recomputeJob(job.id);
+    });
+    persist();
+
+    return {
+      jobIds: Array.from(jobMap.keys()),
+      jobCount: insertedJobCount,
+      itemCount: insertedItemCount,
+      eventCount: 0,
+      manualReviewTargetCount: insertedManualReviewTargetCount,
+    };
+  }
+
+  async function combineJobs(jobIds, options = {}) {
+    const normalizedJobIds = Array.isArray(jobIds)
+      ? Array.from(new Set(jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)))
+      : [];
+    if (normalizedJobIds.length < 2) {
+      throw new Error('At least two job IDs are required');
+    }
+
+    const sourceJobs = normalizedJobIds.map((jobId) => getJob(jobId)).filter(Boolean);
+    if (sourceJobs.length !== normalizedJobIds.length) {
+      throw new Error('One or more jobs were not found');
+    }
+
+    const newJobId = crypto.randomUUID();
+    const sourceJobIdSet = new Set(normalizedJobIds);
+    const artifactOptions = {
+      artifactRoot: config.artifactRoot,
+      artifactUrlBasePath: config.artifactUrlBasePath,
+      publicBaseUrl: config.publicBaseUrl,
+      jobId: newJobId,
+    };
+    const hasScanDelayOverride = options.scanDelayMs !== undefined && options.scanDelayMs !== null && String(options.scanDelayMs).trim() !== '';
+    const hasScreenshotDelayOverride = options.screenshotDelayMs !== undefined && options.screenshotDelayMs !== null && String(options.screenshotDelayMs).trim() !== '';
+    const hasSourceFilenameOverride = options.sourceFilename !== undefined && options.sourceFilename !== null && String(options.sourceFilename).trim() !== '';
+    const hasSourceColumnOverride = options.sourceColumn !== undefined && options.sourceColumn !== null && String(options.sourceColumn).trim() !== '';
+    const sourceScanDelay = Number.isFinite(Number(sourceJobs[0].scan_delay_ms))
+      ? Number(sourceJobs[0].scan_delay_ms)
+      : Number(config.postLoadDelayMs || 0);
+    const sourceScreenshotDelay = Number.isFinite(Number(sourceJobs[0].screenshot_delay_ms))
+      ? Number(sourceJobs[0].screenshot_delay_ms)
+      : Number(config.preScreenshotDelayMs || 0);
+    const mergedItems = [];
+    let rowNumber = 1;
+
+    for (const sourceJob of sourceJobs) {
+      const sourceItems = getItemsForJob(sourceJob.id);
+      for (const sourceItem of sourceItems) {
+        const cloned = await cloneValueWithArtifactCopies(sourceItem, artifactOptions);
+        cloned.id = crypto.randomUUID();
+        cloned.job_id = newJobId;
+        cloned.source_job_id = sourceJob.id;
+        cloned.source_item_id = sourceItem.id;
+        cloned.source_row_number = Number.isFinite(Number(sourceItem.row_number))
+          ? Number(sourceItem.row_number)
+          : null;
+        cloned.row_number = rowNumber;
+        mergedItems.push(cloned);
+        rowNumber += 1;
+      }
+    }
+
+    const now = new Date().toISOString();
+    const mergedJob = {
+      id: newJobId,
+      source_filename: hasSourceFilenameOverride ? String(options.sourceFilename) : `Combined: ${sourceJobs.map((job) => job.source_filename || job.id).join(' + ')}`,
+      source_column: hasSourceColumnOverride ? String(options.sourceColumn) : 'combined',
+      source_job_ids: Array.from(sourceJobIdSet),
+      scan_delay_ms: hasScanDelayOverride && Number.isFinite(Number(options.scanDelayMs))
+        ? Number(options.scanDelayMs)
+        : sourceScanDelay,
+      screenshot_delay_ms: hasScreenshotDelayOverride && Number.isFinite(Number(options.screenshotDelayMs))
+        ? Number(options.screenshotDelayMs)
+        : sourceScreenshotDelay,
+      candidate_mode: options.candidateMode ? String(options.candidateMode) : String(sourceJobs[0].candidate_mode || 'default'),
+      status: 'pending',
+      total_urls: mergedItems.length,
+      pending_count: mergedItems.length,
+      queued_count: 0,
+      running_count: 0,
+      completed_count: 0,
+      failed_count: 0,
+      detected_count: 0,
+      error_message: '',
+      created_at: now,
+      updated_at: now,
+      finished_at: null,
+    };
+
+    state.jobs.unshift(mergedJob);
+    state.items.push(...mergedItems);
+    recomputeJob(newJobId);
+    persist();
+
+    return {
+      job: getJob(newJobId),
+      jobId: newJobId,
+      sourceJobIds: Array.from(sourceJobIdSet),
+      totalUrls: mergedItems.length,
+    };
+  }
+
   function resumeIncompleteJobs() {
     const incompleteJobs = state.jobs.filter((job) => {
       const terminal = job && ['completed', 'completed_with_errors', 'failed'].includes(job.status);
@@ -693,6 +865,9 @@ function createLocalRuntime(options = {}) {
       const candidates = state.items.filter((item) => item.manual_capture_required || item.analysis_source === 'manual_snapshot');
       return findManualReviewMatches(candidates, rawUrl, limit);
     },
+    buildProjectBackup,
+    restoreProjectBackup,
+    combineJobs,
     createJobFromRecords,
     persist,
     async applyManualCapture(jobId, itemId, capture) {
@@ -926,6 +1101,11 @@ function createLocalApp(options = {}) {
     });
   });
 
+  app.get('/api/requests', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(requestTracker.getSnapshot());
+  });
+
   app.get('/api/admin/search', (req, res) => {
     const scope = String(req.query.scope || 'all').trim().toLowerCase();
     const query = String(req.query.q != null ? req.query.q : req.query.query || '').trim();
@@ -1069,17 +1249,79 @@ function createLocalApp(options = {}) {
   });
 
   app.post('/api/jobs/clear', (_req, res) => {
-    const deletedCount = runtime.clearJobs();
+      const deletedCount = runtime.clearJobs();
+      res.json({
+        ok: true,
+        deletedCount,
+      });
+    });
+
+  app.get('/api/backups/export.json', (_req, res) => {
+    const backup = runtime.buildProjectBackup();
+    const encoded = encodeProjectBackup(backup, 'json');
+    res.setHeader('Content-Type', encoded.contentType);
+    res.setHeader('Content-Disposition', 'attachment; filename="comment-data-collection-backup.json"');
+    res.send(encoded.buffer);
+  });
+
+  app.get('/api/backups/export.db', (_req, res) => {
+    const backup = runtime.buildProjectBackup();
+    const encoded = encodeProjectBackup(backup, 'db');
+    res.setHeader('Content-Type', encoded.contentType);
+    res.setHeader('Content-Disposition', 'attachment; filename="comment-data-collection-backup.db"');
+    res.send(encoded.buffer);
+  });
+
+  app.post('/api/backups/import', backupUpload.single('file'), (req, res) => {
+    const file = req.file || null;
+    if (!file || !file.buffer || !file.buffer.length) {
+      res.status(400).json({ error: 'Upload a JSON or .db backup file' });
+      return;
+    }
+
+    const backup = decodeProjectBackup(file.buffer, file.originalname || '');
+    const result = runtime.restoreProjectBackup(backup);
     res.json({
       ok: true,
-      deletedCount,
+      imported: {
+        jobs: result.jobCount,
+        items: result.itemCount,
+        events: result.eventCount,
+        manualReviewTargets: result.manualReviewTargetCount,
+      },
+      touchedJobIds: result.jobIds,
     });
   });
 
+  app.post('/api/jobs/merge', async (req, res, next) => {
+    try {
+      const jobIds = Array.isArray(req.body && (req.body.jobIds || req.body.sourceJobIds))
+        ? (req.body.jobIds || req.body.sourceJobIds)
+        : [];
+      const combined = await runtime.combineJobs(jobIds, {
+        sourceFilename: req.body && req.body.sourceFilename,
+        sourceColumn: req.body && req.body.sourceColumn,
+        scanDelayMs: req.body && req.body.scanDelayMs,
+        screenshotDelayMs: req.body && req.body.screenshotDelayMs,
+        candidateMode: req.body && req.body.candidateMode,
+      });
+
+      res.status(201).json({
+        ok: true,
+        job: combined.job,
+        jobId: combined.jobId,
+        sourceJobIds: combined.sourceJobIds,
+        totalUrls: combined.totalUrls,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/jobs/:jobId/resume', (req, res) => {
-    const job = runtime.getJob(req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'Job not found' });
+      const job = runtime.getJob(req.params.jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
       return;
     }
 

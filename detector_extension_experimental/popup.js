@@ -162,6 +162,25 @@ function getCandidatesFromPage() {
   }));
 }
 
+function isValidRuntimeBundle(bundle) {
+  return (
+    bundle &&
+    typeof bundle === 'object' &&
+    bundle.model?.weights?.length > 0 &&
+    bundle.vectorizer?.descriptors?.length > 0
+  );
+}
+
+function derivePositiveThreshold(bundle) {
+  // Prefer the training threshold recorded in the evaluation section,
+  // then fall back to the legacy thresholds object, then default to 0.50.
+  const evalThreshold = bundle?.evaluation?.train?.candidate_metrics?.threshold;
+  if (Number.isFinite(evalThreshold)) return evalThreshold;
+  const legacyThreshold = bundle?.thresholds?.positive;
+  if (Number.isFinite(Number(legacyThreshold))) return Number(legacyThreshold);
+  return 0.50;
+}
+
 function renderRuntimeModel(bundle) {
   const artifactEl = document.getElementById('runtime-model-artifact');
   const algorithmEl = document.getElementById('runtime-model-algorithm');
@@ -170,7 +189,7 @@ function renderRuntimeModel(bundle) {
   const messageEl = document.getElementById('runtime-model-message');
   if (!artifactEl || !algorithmEl || !featuresEl || !thresholdEl || !messageEl) return;
 
-  if (!bundle || typeof bundle !== 'object' || bundle.artifact_type !== 'ugc_candidate_runtime_model') {
+  if (!isValidRuntimeBundle(bundle)) {
     artifactEl.textContent = '—';
     algorithmEl.textContent = '—';
     featuresEl.textContent = '—';
@@ -179,13 +198,16 @@ function renderRuntimeModel(bundle) {
     return;
   }
 
-  const thresholds = bundle.thresholds || {};
-  artifactEl.textContent = bundle.artifact_id || '—';
+  // bundle.id is the canonical identifier produced by the server; bundle.artifact_id is a
+  // legacy alias that may be present in older exports.
+  const artifactId = bundle.id || bundle.artifact_id || '—';
+  // Shorten a long ISO-timestamp id for display (e.g. "keyword-aware-2026-04-01T07-19-38-597Z")
+  artifactEl.textContent = artifactId.length > 20
+    ? artifactId.replace(/T\d{2}-\d{2}-\d{2}-\d{3}Z$/, '').slice(-20) + '…'
+    : artifactId;
   algorithmEl.textContent = bundle.algorithm || '—';
   featuresEl.textContent = String(bundle.feature_count || (bundle.feature_catalog || []).length || 0);
-  thresholdEl.textContent = Number.isFinite(Number(thresholds.positive))
-    ? Number(thresholds.positive).toFixed(2)
-    : '0.50';
+  thresholdEl.textContent = derivePositiveThreshold(bundle).toFixed(2);
   const savedAt = bundle.savedAt ? new Date(bundle.savedAt).toLocaleString() : '';
   messageEl.textContent = savedAt
     ? `Runtime model loaded and saved locally at ${savedAt}.`
@@ -208,11 +230,8 @@ async function loadRuntimeModelFromFile() {
   try {
     const text = await input.files[0].text();
     const bundle = JSON.parse(text);
-    if (!bundle || typeof bundle !== 'object' || bundle.artifact_type !== 'ugc_candidate_runtime_model') {
-      throw new Error('This file does not look like a runtime model bundle from Model Lab.');
-    }
-    if (!bundle.model || !bundle.vectorizer) {
-      throw new Error('Runtime bundle is missing model or vectorizer data.');
+    if (!isValidRuntimeBundle(bundle)) {
+      throw new Error('This file does not look like a runtime model bundle from Model Lab (missing model.weights or vectorizer.descriptors).');
     }
     const response = await bgMessage({ type: 'SET_RUNTIME_MODEL', payload: bundle });
     if (!response || response.ok !== true) {

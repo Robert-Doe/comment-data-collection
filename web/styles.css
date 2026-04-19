@@ -336,6 +336,15 @@ button:active,
   line-height: 1.35;
 }
 
+.probe-progress-count {
+  margin-top: 4px;
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
 .probe-progress-copy {
   margin: 4px 0 0;
   color: var(--muted);
@@ -621,6 +630,34 @@ button[data-error="true"],
 
 .manager-form {
   margin-top: 8px;
+}
+
+.manager-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.manager-tool {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(11, 87, 208, 0.12);
+  border-radius: 20px;
+  background: rgba(11, 87, 208, 0.035);
+  align-content: start;
+}
+
+.manager-tool-heading {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.manager-tool-copy {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .manager-danger-zone {
@@ -1518,6 +1555,7 @@ img {
     grid-template-columns: 1fr;
   }
 
+  .manager-tool-grid,
   .model-form,
   .site-group-form {
     grid-template-columns: 1fr;
