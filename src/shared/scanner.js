@@ -73,6 +73,10 @@ async function resetBrowser() {
 }
 
 async function safeWait(page, state, timeoutMs) {
+  // Playwright treats timeout:0 as "wait forever", not "skip".
+  // Return immediately when the caller passes 0 so priority-probe settle
+  // passes don't hang waiting for networkidle on pages that never go idle.
+  if (!timeoutMs || timeoutMs <= 0) return;
   try {
     await page.waitForLoadState(state, { timeout: timeoutMs });
   } catch (_) {
@@ -81,6 +85,8 @@ async function safeWait(page, state, timeoutMs) {
 }
 
 async function safeWaitForFunction(page, expression, timeoutMs) {
+  // Same guard: timeout:0 in Playwright means infinite wait, not skip.
+  if (!timeoutMs || timeoutMs <= 0) return;
   try {
     await page.waitForFunction(expression, { timeout: timeoutMs });
   } catch (_) {
