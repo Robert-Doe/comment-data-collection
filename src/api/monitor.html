@@ -31,6 +31,7 @@
       font-size: 13px;
       line-height: 1.5;
     }
+    body.modal-open { overflow: hidden; }
     header {
       background: rgba(250, 242, 231, 0.86);
       backdrop-filter: blur(18px);
@@ -195,6 +196,197 @@
     .overview-chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; background: rgba(167, 107, 66, 0.08); border: 1px solid rgba(167, 107, 66, 0.16); min-width: 120px; }
     .overview-chip em { font-style: normal; font-size: 10px; color: var(--muted); }
     .overview-chip strong { font-size: 11px; color: var(--text); word-break: break-word; }
+    .menu-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px;
+      margin-bottom: 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(126, 92, 62, 0.12);
+      background: rgba(255, 248, 240, 0.82);
+    }
+    .menu-btn {
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(126, 92, 62, 0.14);
+      background: rgba(255, 250, 244, 0.92);
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .menu-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+    .menu-btn.on {
+      background: linear-gradient(135deg, rgba(167, 107, 66, 0.96), rgba(197, 138, 94, 0.92));
+      color: #fffaf4;
+      border-color: transparent;
+      box-shadow: 0 14px 28px rgba(167, 107, 66, 0.18);
+    }
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .chart-card {
+      background: rgba(255, 248, 240, 0.88);
+      border: 1px solid rgba(126, 92, 62, 0.12);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .chart-title {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 600;
+    }
+    .chart-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .chart-shell {
+      display: grid;
+      grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+    }
+    .chart-shell.stack { grid-template-columns: 1fr; }
+    .pie-chart { width: 100%; max-width: 220px; margin: 0 auto; display: block; }
+    .pie-center { font-size: 12px; font-weight: 700; fill: var(--text); text-anchor: middle; }
+    .pie-center-sub { font-size: 8px; fill: var(--muted); text-anchor: middle; }
+    .chart-legend { display: flex; flex-direction: column; gap: 6px; }
+    .legend-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 7px 8px;
+      border-radius: 12px;
+      background: rgba(255, 250, 244, 0.82);
+      border: 1px solid rgba(126, 92, 62, 0.08);
+    }
+    .legend-left { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+    .legend-label { font-size: 11px; color: var(--text); font-weight: 700; word-break: break-word; }
+    .legend-meta { font-size: 10px; color: var(--muted); margin-top: 2px; word-break: break-word; }
+    .sparkline { width: 100%; height: 200px; display: block; }
+    .sparkline-grid { stroke: rgba(126, 92, 62, 0.1); stroke-width: 1; }
+    .sparkline-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .sparkline-dot { stroke-width: 2; fill: #fffaf4; }
+    .sparkline-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .sparkline-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255, 250, 244, 0.86);
+      border: 1px solid rgba(126, 92, 62, 0.08);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .sparkline-key span { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
+    .feature-list { display: flex; flex-direction: column; gap: 8px; }
+    .feature-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .feature-row .stack-track { height: 10px; }
+    .feature-meta { font-size: 10px; color: var(--muted); }
+    .callout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .callout {
+      background: rgba(255, 250, 244, 0.9);
+      border-radius: 16px;
+      border: 1px solid rgba(126, 92, 62, 0.12);
+      padding: 12px;
+      line-height: 1.55;
+    }
+    .callout.good { border-color: rgba(47, 125, 87, 0.18); background: rgba(47, 125, 87, 0.08); }
+    .callout.warn { border-color: rgba(184, 137, 46, 0.18); background: rgba(184, 137, 46, 0.08); }
+    .callout.info { border-color: rgba(167, 107, 66, 0.16); background: rgba(167, 107, 66, 0.08); }
+    .callout-title { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .callout-body { font-size: 11px; color: var(--muted); }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(43, 30, 18, 0.45);
+      backdrop-filter: blur(16px);
+      z-index: 200;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-shell {
+      width: min(1200px, 100%);
+      max-height: calc(100vh - 36px);
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid rgba(126, 92, 62, 0.16);
+      background: linear-gradient(180deg, rgba(255, 248, 240, 0.98), rgba(246, 233, 217, 0.98));
+      box-shadow: 0 40px 110px rgba(84, 58, 35, 0.32);
+      display: flex;
+      flex-direction: column;
+      animation: modalPop 0.18s ease;
+    }
+    @keyframes modalPop {
+      from { transform: translateY(8px) scale(0.985); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 18px 20px 0;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; color: var(--text); }
+    .modal-subtitle { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .modal-close {
+      flex-shrink: 0;
+      border: 1px solid rgba(126, 92, 62, 0.14);
+      background: rgba(255, 250, 244, 0.92);
+      color: var(--text);
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .modal-close:hover { border-color: var(--accent); color: var(--accent); }
+    .modal-body {
+      overflow: auto;
+      padding: 16px 20px 20px;
+    }
+    .prediction-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 12px; }
+    .prediction-list { display: flex; flex-direction: column; gap: 8px; }
+    .prediction-item {
+      background: rgba(255, 250, 244, 0.9);
+      border: 1px solid rgba(126, 92, 62, 0.1);
+      border-radius: 16px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    .prediction-item.on { border-color: var(--accent); box-shadow: 0 14px 34px rgba(167, 107, 66, 0.14); }
+    .prediction-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .prediction-title { font-size: 12px; font-weight: 700; color: var(--text); word-break: break-word; }
+    .prediction-sub { margin-top: 4px; font-size: 11px; color: var(--muted); word-break: break-word; line-height: 1.45; }
+    .prediction-prob { font-size: 18px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .prediction-detail {
+      background: rgba(255, 250, 244, 0.9);
+      border-radius: 18px;
+      border: 1px solid rgba(126, 92, 62, 0.1);
+      padding: 12px;
+    }
+    .prediction-detail .detail-pre { max-height: 220px; }
+    @media (max-width: 1080px) {
+      .chart-shell, .prediction-grid { grid-template-columns: 1fr; }
+    }
     .result-list { display: flex; flex-direction: column; gap: 8px; }
     .result-group { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: start; }
     .result-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); padding-top: 8px; }
@@ -346,7 +538,9 @@
       </div>
       <div class="hgrid" style="margin-top:8px">
         <div class="hi"><div class="hl">Items w/ Candidates</div><div class="hv ok" id="m-total">--</div></div>
-        <div class="hi"><div class="hl">Labeled Items</div><div class="hv" id="m-labeled">--</div></div>
+        <div class="hi"><div class="hl">Labeled Rows</div><div class="hv" id="m-labeled">--</div></div>
+        <div class="hi"><div class="hl">Imbalance</div><div class="hv" id="m-balance">--</div></div>
+        <div class="hi"><div class="hl">Latest F1</div><div class="hv" id="m-f1">--</div></div>
       </div>
     </div>
   </aside>
@@ -355,6 +549,11 @@
     <div class="card">
       <div class="card-title">Overview</div>
       <div id="overview-grid"><div class="note">Loading dashboard snapshot...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Model Intelligence</div>
+      <div id="model-workbench"><div class="note">Loading model intelligence...</div></div>
     </div>
 
     <div class="card">
@@ -437,6 +636,21 @@
   </div>
 </div>
 
+<div id="insight-modal" class="modal-backdrop" aria-hidden="true" onclick="closeInsightModal()">
+  <div class="modal-shell" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="insight-modal-title">Model Details</div>
+        <div class="modal-subtitle" id="insight-modal-subtitle">Select a view to inspect the model, label balance, or job-level predictions.</div>
+      </div>
+      <button class="modal-close" type="button" onclick="closeInsightModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="insight-modal-body">
+      <div class="note">Open a model or prediction snapshot to inspect it here.</div>
+    </div>
+  </div>
+</div>
+
 <script>
 var API = window.location.origin;
 var evs = [], lv = 'all', lastTs = null, MAX = 500;
@@ -448,6 +662,11 @@ var selectedInspectorJobId = '';
 var selectedInspectorItemId = '';
 var selectedRequestId = '';
 var selectedQueryId = '';
+var latestModelOverview = null;
+var latestModelInsights = null;
+var selectedModelTab = 'balance';
+var activeModalState = null;
+var selectedPredictionItemId = '';
 var currentSearch = { query: '', jobId: '', scope: 'all', itemId: '' };
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -616,12 +835,692 @@ function renderStackList(items, emptyText) {
   return '<div class="stack-list">'+list.map(function(item) {
     var value = Number(item && item.value) || 0;
     var pct = maxValue ? Math.max(4, Math.round((value / maxValue) * 100)) : 4;
+    var fillStyle = 'width:'+pct+'%'+(item && item.color ? ';background:'+item.color : '');
     return '<div class="stack-item'+(item && item.on ? ' on' : '')+'">'
       +'<div class="stack-row"><span class="stack-label">'+esc(item && item.label ? item.label : '--')+'</span><span class="stack-meta">'+esc(item && item.meta ? item.meta : value)+'</span></div>'
-      +'<div class="stack-track"><div class="stack-fill" style="width:'+pct+'%"></div></div>'
+      +'<div class="stack-track"><div class="stack-fill" style="'+fillStyle+'"></div></div>'
       +(item && item.sub ? '<div class="stack-meta" style="margin-top:4px">'+esc(item.sub)+'</div>' : '')
       +'</div>';
   }).join('')+'</div>';
+}
+var chartPalette = ['#2f7d57', '#c58a5e', '#b8892e', '#b85a47', '#8d6f4d', '#6c7d53', '#6d8195', '#c46d5b'];
+function colorForIndex(index) {
+  return chartPalette[Math.abs(Number(index) || 0) % chartPalette.length];
+}
+function clampValue(value, minValue, maxValue) {
+  return Math.min(maxValue, Math.max(minValue, Number(value) || 0));
+}
+function formatRatio(value) {
+  var numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '--';
+  }
+  return numeric >= 10 ? numeric.toFixed(0) + 'x' : numeric.toFixed(1) + 'x';
+}
+function piePoint(cx, cy, radius, angle) {
+  var radians = (angle - 90) * Math.PI / 180;
+  return {
+    x: cx + (radius * Math.cos(radians)),
+    y: cy + (radius * Math.sin(radians)),
+  };
+}
+function piePath(cx, cy, radius, startAngle, endAngle) {
+  var start = piePoint(cx, cy, radius, endAngle);
+  var end = piePoint(cx, cy, radius, startAngle);
+  var largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+  return [
+    'M', cx, cy,
+    'L', start.x.toFixed(3), start.y.toFixed(3),
+    'A', radius, radius, 0, largeArc, 0, end.x.toFixed(3), end.y.toFixed(3),
+    'Z',
+  ].join(' ');
+}
+function renderPieChart(items, options) {
+  var slices = Array.isArray(items) ? items.filter(function(item) {
+    return Number(item && item.value) > 0;
+  }) : [];
+  var total = slices.reduce(function(sum, item) {
+    return sum + (Number(item && item.value) || 0);
+  }, 0);
+  if (!total) {
+    return '<div class="query-empty">'+esc(options && options.emptyText ? options.emptyText : 'No chart data yet.')+'</div>';
+  }
+
+  var cx = 120;
+  var cy = 120;
+  var radius = 88;
+  var startAngle = -90;
+  var paths = slices.map(function(item, index) {
+    var value = Number(item && item.value) || 0;
+    var angle = (value / total) * 360;
+    var endAngle = startAngle + angle;
+    var color = item && item.color ? item.color : colorForIndex(index);
+    var path = piePath(cx, cy, radius, startAngle, endAngle);
+    startAngle = endAngle;
+    return '<path d="'+esc(path)+'" fill="'+esc(color)+'"></path>';
+  }).join('');
+
+  var innerRadius = options && options.donut === false ? 0 : 54;
+  var centerLabel = options && options.centerLabel ? options.centerLabel : total + ' total';
+  var centerSub = options && options.centerSub ? options.centerSub : '';
+  var legend = slices.map(function(item, index) {
+    var value = Number(item && item.value) || 0;
+    var share = total ? Math.round((value / total) * 100) : 0;
+    var color = item && item.color ? item.color : colorForIndex(index);
+    return '<div class="legend-row">'
+      +'<div class="legend-left">'
+        +'<span class="legend-swatch" style="background:'+esc(color)+'"></span>'
+        +'<div><div class="legend-label">'+esc(item && item.label ? item.label : '--')+'</div><div class="legend-meta">'+esc(item && item.meta ? item.meta : value)+' | '+esc(share + '%')+'</div></div>'
+      +'</div>'
+      +(item && item.sub ? '<div class="legend-meta" style="text-align:right">'+esc(item.sub)+'</div>' : '')
+    +'</div>';
+  }).join('');
+
+  return '<div class="chart-shell">'
+    +'<svg class="pie-chart" viewBox="0 0 240 240" role="img" aria-label="Pie chart">'
+      +'<circle cx="'+cx+'" cy="'+cy+'" r="'+radius+'" fill="rgba(255,250,244,0.98)" stroke="rgba(126,92,62,0.10)" stroke-width="1"></circle>'
+      +paths
+      +(innerRadius ? '<circle cx="'+cx+'" cy="'+cy+'" r="'+innerRadius+'" fill="rgba(255,248,240,0.96)" stroke="rgba(126,92,62,0.08)" stroke-width="1"></circle>' : '')
+      +'<text x="'+cx+'" y="116" class="pie-center">'+esc(centerLabel)+'</text>'
+      +(centerSub ? '<text x="'+cx+'" y="133" class="pie-center-sub">'+esc(centerSub)+'</text>' : '')
+    +'</svg>'
+    +'<div class="chart-legend">'+legend+'</div>'
+  +'</div>';
+}
+function renderSparklineChart(points, options) {
+  var series = Array.isArray(points) ? points : [];
+  if (series.length < 2) {
+    return '<div class="query-empty">'+esc(options && options.emptyText ? options.emptyText : 'Need at least two runs to show progression.')+'</div>';
+  }
+
+  var metrics = Array.isArray(options && options.metrics) && options.metrics.length ? options.metrics : [
+    { key: 'f1', label: 'F1', color: '#a76b42' },
+    { key: 'roc_auc', label: 'ROC AUC', color: '#2f7d57' },
+    { key: 'pr_auc', label: 'PR AUC', color: '#b8892e' },
+  ];
+  var width = 720;
+  var height = 220;
+  var paddingX = 26;
+  var paddingY = 22;
+  var chartWidth = width - (paddingX * 2);
+  var chartHeight = height - (paddingY * 2);
+  var yMax = 1;
+  metrics.forEach(function(metric) {
+    series.forEach(function(point) {
+      yMax = Math.max(yMax, Number(point && point[metric.key]) || 0);
+    });
+  });
+  yMax = Math.max(1, yMax);
+  var yTicks = [0, 0.25, 0.5, 0.75, 1];
+  var grid = yTicks.map(function(tick) {
+    var y = paddingY + (chartHeight - (tick * chartHeight));
+    return '<line class="sparkline-grid" x1="'+paddingX+'" y1="'+y.toFixed(2)+'" x2="'+(width - paddingX)+'" y2="'+y.toFixed(2)+'"></line>'
+      +'<text x="4" y="'+(y + 4).toFixed(2)+'" fill="#7b6555" font-size="10">'+esc(Math.round(tick * 100) + '%')+'</text>';
+  }).join('');
+  var paths = metrics.map(function(metric, metricIndex) {
+    var pointsAttr = series.map(function(point, index) {
+      var x = paddingX + (series.length === 1 ? chartWidth / 2 : (index / (series.length - 1)) * chartWidth);
+      var raw = Number(point && point[metric.key]);
+      var value = Number.isFinite(raw) ? clampValue(raw, 0, yMax) : null;
+      var y = paddingY + chartHeight - ((value == null ? 0 : (value / yMax)) * chartHeight);
+      return x.toFixed(2) + ',' + y.toFixed(2);
+    }).join(' ');
+    return '<polyline class="sparkline-line" points="'+esc(pointsAttr)+'" stroke="'+esc(metric.color || colorForIndex(metricIndex))+'"></polyline>'
+      +series.map(function(point, index) {
+        var x = paddingX + (series.length === 1 ? chartWidth / 2 : (index / (series.length - 1)) * chartWidth);
+        var raw = Number(point && point[metric.key]);
+        var value = Number.isFinite(raw) ? clampValue(raw, 0, yMax) : 0;
+        var y = paddingY + chartHeight - ((value / yMax) * chartHeight);
+        return '<circle class="sparkline-dot" cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="4.2" stroke="'+esc(metric.color || colorForIndex(metricIndex))+'"></circle>';
+      }).join('');
+  }).join('');
+
+  var legend = metrics.map(function(metric, metricIndex) {
+    var latestPoint = series[series.length - 1] || {};
+    var latestValue = Number(latestPoint[metric.key]);
+    return '<span class="sparkline-key"><span style="background:'+esc(metric.color || colorForIndex(metricIndex))+'"></span>'+esc(metric.label)+' '+esc(Number.isFinite(latestValue) ? latestValue.toFixed(2) : '--')+'</span>';
+  }).join('');
+
+  return '<div class="chart-shell stack">'
+    +'<svg class="sparkline" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Progression chart">'
+      +grid
+      +paths
+    +'</svg>'
+    +'<div class="sparkline-legend">'+legend+'</div>'
+    +'<div class="chart-note">'+esc((series[0] && series[0].label ? series[0].label : 'Start') + ' to ' + (series[series.length - 1] && series[series.length - 1].label ? series[series.length - 1].label : 'latest run'))+'</div>'
+  +'</div>';
+}
+function renderCallouts(items) {
+  var list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    return '<div class="query-empty">No guidance yet.</div>';
+  }
+
+  return '<div class="callout-grid">'+list.map(function(item) {
+    return '<div class="callout '+esc(item && item.tone ? item.tone : 'info')+'">'
+      +'<div class="callout-title">'+esc(item && item.title ? item.title : '--')+'</div>'
+      +'<div class="callout-body">'+esc(item && item.body ? item.body : '')+'</div>'
+    +'</div>';
+  }).join('')+'</div>';
+}
+function formatMetricSummary(metric) {
+  if (metric == null || metric === '') {
+    return '--';
+  }
+  var numeric = Number(metric);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : String(metric);
+}
+function renderModelWorkbench(data) {
+  var insights = data && data.insights ? data.insights : null;
+  var balance = insights && insights.dataset_balance ? insights.dataset_balance : null;
+  var progression = insights && insights.progression ? insights.progression : null;
+  var latest = insights && insights.latest_model ? insights.latest_model : null;
+  var featureInsights = insights && insights.feature_insights ? insights.feature_insights : null;
+  var guidance = insights && Array.isArray(insights.guidance) ? insights.guidance : [];
+  var latestTest = latest && latest.evaluation && latest.evaluation.test && latest.evaluation.test.candidate_metrics
+    ? latest.evaluation.test.candidate_metrics
+    : (latest && latest.evaluation && latest.evaluation.train && latest.evaluation.train.candidate_metrics
+      ? latest.evaluation.train.candidate_metrics
+      : null);
+  var selectedTab = selectedModelTab || 'balance';
+  var tabs = [
+    { key: 'balance', label: 'Balance' },
+    { key: 'progression', label: 'Progression' },
+    { key: 'features', label: 'Features' },
+    { key: 'guidance', label: 'Guidance' },
+  ];
+
+  var summary = renderMetricStrip([
+    { label: 'Candidates', value: balance ? balance.total_candidates : 0, sub: balance ? (balance.labeled_candidates + ' labeled | ' + balance.uncertain_count + ' uncertain') : 'No dataset yet' },
+    { label: 'Minority Share', value: balance ? (balance.minority_share ? Math.round(balance.minority_share * 100) + '%' : '--') : '--', sub: balance && balance.imbalance_ratio != null ? ('Imbalance ' + formatRatio(balance.imbalance_ratio)) : 'Need both classes' },
+    { label: 'Latest F1', value: latestTest ? formatMetricSummary(latestTest.f1) : '--', sub: latest ? (latest.algorithm || latest.variant_title || latest.id || '') : 'Train a model to see this' },
+    { label: 'Progression', value: progression && Array.isArray(progression.points) ? progression.points.length : 0, sub: progression && progression.trend ? ('F1 ' + progression.trend.f1_delta) : 'Recent model runs' },
+  ]);
+
+  var tabBar = '<div class="menu-bar">'+tabs.map(function(tab) {
+    return '<button class="menu-btn'+(selectedTab === tab.key ? ' on' : '')+'" type="button" onclick="setModelTab('+jsQuote(tab.key)+')">'+esc(tab.label)+'</button>';
+  }).join('')+'</div>';
+
+  var body = '';
+  if (selectedTab === 'balance') {
+    body = '<div class="chart-grid">'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Label balance</div>'
+        +(balance ? renderPieChart(balance.slices, {
+          centerLabel: balance.labeled_candidates + ' labeled',
+          centerSub: balance.total_candidates + ' candidates',
+        }) : '<div class="query-empty">No candidate labels found yet.</div>')
+      +'</div>'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Decision guidance</div>'
+        +(balance ? '<div class="overview-list">'
+          +'<div class="overview-row"><span>Positive</span><strong>'+esc(balance.positive_count)+'</strong></div>'
+          +'<div class="overview-row"><span>Negative</span><strong>'+esc(balance.negative_count)+'</strong></div>'
+          +'<div class="overview-row"><span>Uncertain</span><strong>'+esc(balance.uncertain_count)+'</strong></div>'
+          +'<div class="overview-row"><span>Unlabeled</span><strong>'+esc(balance.unlabeled_count)+'</strong></div>'
+          +'<div class="overview-row"><span>Imbalance</span><strong>'+esc(balance.imbalance_ratio != null ? formatRatio(balance.imbalance_ratio) : '--')+'</strong></div>'
+          +'<div class="overview-row"><span>Label coverage</span><strong>'+esc(Math.round((balance.labeled_share || 0) * 100))+'%</strong></div>'
+          +'</div>'
+          +'<div class="chart-note">SMOTE and KNN style methods are most useful once the minority class has enough clean neighbors. If labels are still sparse or noisy, add more review data first.</div>'
+          : '<div class="query-empty">No labels available yet.</div>')
+      +'</div>'
+    +'</div>';
+  } else if (selectedTab === 'progression') {
+    body = '<div class="chart-card">'
+      +'<div class="chart-title">Model progression</div>'
+      +(progression && Array.isArray(progression.points) && progression.points.length ? renderSparklineChart(progression.points, {
+        metrics: [
+          { key: 'f1', label: 'F1', color: '#a76b42' },
+          { key: 'roc_auc', label: 'ROC AUC', color: '#2f7d57' },
+          { key: 'pr_auc', label: 'PR AUC', color: '#b8892e' },
+        ],
+      }) : '<div class="query-empty">Train more models to see progression.</div>')
+      +'<div class="chart-note">These lines show how the latest saved model runs are moving over time. Use them to confirm that new labels are helping, not just changing the threshold.</div>'
+    +'</div>'
+    +'<div class="chart-grid" style="margin-top:10px">'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Latest run</div>'
+        +(latest ? '<div class="overview-list">'
+          +'<div class="overview-row"><span>Model</span><strong>'+esc(latest.variant_title || latest.variant_id || '--')+'</strong></div>'
+          +'<div class="overview-row"><span>Algorithm</span><strong>'+esc(latest.algorithm || '--')+'</strong></div>'
+          +'<div class="overview-row"><span>Created</span><strong>'+esc(fmtTs(latest.created_at || ''))+'</strong></div>'
+          +'<div class="overview-row"><span>Test Precision</span><strong>'+esc(latestTest ? formatMetricSummary(latestTest.precision) : '--')+'</strong></div>'
+          +'<div class="overview-row"><span>Test Recall</span><strong>'+esc(latestTest ? formatMetricSummary(latestTest.recall) : '--')+'</strong></div>'
+          +'<div class="overview-row"><span>Test ROC AUC</span><strong>'+esc(latestTest && latestTest.roc_auc != null ? formatMetricSummary(latestTest.roc_auc) : '--')+'</strong></div>'
+          +'</div>'
+          : '<div class="query-empty">No model has been trained yet.</div>')
+      +'</div>'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Run delta</div>'
+        +(progression && progression.trend ? '<div class="overview-list">'
+          +'<div class="overview-row"><span>F1 change</span><strong>'+esc(progression.trend.f1_delta)+'</strong></div>'
+          +'<div class="overview-row"><span>Precision change</span><strong>'+esc(progression.trend.precision_delta)+'</strong></div>'
+          +'<div class="overview-row"><span>Recall change</span><strong>'+esc(progression.trend.recall_delta)+'</strong></div>'
+          +'<div class="overview-row"><span>ROC AUC change</span><strong>'+esc(progression.trend.roc_auc_delta)+'</strong></div>'
+          +'<div class="overview-row"><span>PR AUC change</span><strong>'+esc(progression.trend.pr_auc_delta)+'</strong></div>'
+          +'</div>'
+          : '<div class="query-empty">Train at least two models to compare progression.</div>')
+      +'</div>'
+    +'</div>';
+  } else if (selectedTab === 'features') {
+    body = '<div class="chart-grid">'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Feature families</div>'
+        +(featureInsights && Array.isArray(featureInsights.family_importance) && featureInsights.family_importance.length
+          ? renderStackList(featureInsights.family_importance.slice(0, 8).map(function(item, index) {
+            return {
+              label: item.family || item.title || '--',
+              value: item.total_absolute_weight || 0,
+              color: colorForIndex(index),
+              meta: item.total_absolute_weight != null ? formatMetricSummary(item.total_absolute_weight) : '--',
+              sub: item.top_feature || '',
+            };
+          }), 'No feature family information yet.')
+          : '<div class="query-empty">Feature families will appear after a model is trained.</div>')
+        +'<div class="chart-note">Higher bars mean the model leans on that family more heavily. If one family dominates too much, add more labels or broaden the feature set.</div>'
+      +'</div>'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Top contributors</div>'
+        +(featureInsights && featureInsights.feature_importances && featureInsights.feature_importances.length
+          ? '<div class="feature-list">'
+            +featureInsights.feature_importances.slice(0, 10).map(function(item, index) {
+              var topWeight = Math.max(1, Number(featureInsights.feature_importances[0] && featureInsights.feature_importances[0].absolute_weight) || 0);
+              var fillPct = Math.max(4, Math.round(((Number(item.absolute_weight) || 0) / topWeight) * 100));
+              return '<div class="feature-row">'
+                +'<div>'
+                  +'<div class="legend-label">'+esc(item.title || item.feature_key || '--')+'</div>'
+                  +'<div class="feature-meta">'+esc(item.family || '--')+'</div>'
+                +'</div>'
+                +'<div style="min-width: 120px; text-align:right"><div class="feature-meta">'+esc(formatMetricSummary(item.absolute_weight != null ? item.absolute_weight : item.weight))+'</div></div>'
+                +'<div class="stack-track" style="grid-column: 1 / -1"><div class="stack-fill" style="width:'+fillPct+'%;background:'+esc(colorForIndex(index))+'"></div></div>'
+              +'</div>';
+            }).join('')
+          +'</div>'
+          : '<div class="query-empty">No contributor data yet.</div>')
+      +'</div>'
+    +'</div>'
+    +'<div class="chart-grid" style="margin-top:10px">'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Positive weights</div>'
+        +(featureInsights && featureInsights.positive_weights && featureInsights.positive_weights.length
+          ? renderStackList(featureInsights.positive_weights.slice(0, 8).map(function(item) {
+            return {
+              label: item.title || item.feature_key || '--',
+              value: Math.abs(Number(item.weight) || 0),
+              color: '#2f7d57',
+              meta: formatMetricSummary(item.weight),
+              sub: item.family || '',
+            };
+          }), 'No positive weights yet.')
+          : '<div class="query-empty">No positive weights yet.</div>')
+      +'</div>'
+      +'<div class="chart-card">'
+        +'<div class="chart-title">Negative weights</div>'
+        +(featureInsights && featureInsights.negative_weights && featureInsights.negative_weights.length
+          ? renderStackList(featureInsights.negative_weights.slice(0, 8).map(function(item) {
+            return {
+              label: item.title || item.feature_key || '--',
+              value: Math.abs(Number(item.weight) || 0),
+              color: '#b85a47',
+              meta: formatMetricSummary(item.weight),
+              sub: item.family || '',
+            };
+          }), 'No negative weights yet.')
+          : '<div class="query-empty">No negative weights yet.</div>')
+      +'</div>'
+    +'</div>';
+  } else {
+    body = renderCallouts(guidance);
+  }
+
+  var actions = '<div class="result-actions" style="margin-bottom:10px">'
+    +(latest ? '<button class="mini" type="button" onclick="openLatestModelModal()">Open latest model</button>' : '<span class="mini">Train a model to unlock details</span>')
+    +(selectedInspectorJobId && latest && latest.id ? '<button class="mini" type="button" onclick="scoreJobWithLatestModel('+jsQuote(selectedInspectorJobId)+')">Score selected job</button>' : '')
+  +'</div>';
+
+  return summary + tabBar + actions + body;
+}
+function setModelTab(tab) {
+  var nextTab = String(tab || '').trim() || 'balance';
+  var allowed = {
+    balance: true,
+    progression: true,
+    features: true,
+    guidance: true,
+  };
+  selectedModelTab = allowed[nextTab] ? nextTab : 'balance';
+  var workbench = document.getElementById('model-workbench');
+  if (workbench) {
+    workbench.innerHTML = renderModelWorkbench(latestModelOverview || {});
+  }
+}
+function openInsightModal(title, subtitle, bodyHtml, stateData) {
+  activeModalState = {
+    title: title || 'Details',
+    subtitle: subtitle || '',
+    bodyHtml: bodyHtml || '',
+    stateData: stateData || null,
+    renderBody: stateData && typeof stateData.renderBody === 'function' ? stateData.renderBody : null,
+  };
+  var modal = document.getElementById('insight-modal');
+  if (modal) {
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  document.body.classList.add('modal-open');
+  renderInsightModal();
+}
+function closeInsightModal() {
+  activeModalState = null;
+  selectedPredictionItemId = '';
+  var modal = document.getElementById('insight-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('modal-open');
+}
+function renderInsightModal() {
+  var modal = document.getElementById('insight-modal');
+  if (!modal || !activeModalState) {
+    return;
+  }
+  var titleEl = document.getElementById('insight-modal-title');
+  var subtitleEl = document.getElementById('insight-modal-subtitle');
+  var bodyEl = document.getElementById('insight-modal-body');
+  if (titleEl) titleEl.textContent = activeModalState.title || 'Details';
+  if (subtitleEl) subtitleEl.textContent = activeModalState.subtitle || '';
+  var bodyHtml = activeModalState.renderBody
+    ? activeModalState.renderBody(activeModalState.stateData || {})
+    : activeModalState.bodyHtml;
+  if (bodyEl) bodyEl.innerHTML = bodyHtml || '<div class="note">No details available.</div>';
+}
+function openLatestModelModal() {
+  if (!latestModelInsights || !latestModelInsights.latest_model) {
+    showToast('Train a model first to view model details', true);
+    return;
+  }
+
+  var latest = latestModelInsights.latest_model;
+  var balance = latestModelInsights.dataset_balance || null;
+  var progression = latestModelInsights.progression || null;
+  var featureInsights = latestModelInsights.feature_insights || null;
+  var latestTest = latest.evaluation && latest.evaluation.test && latest.evaluation.test.candidate_metrics
+    ? latest.evaluation.test.candidate_metrics
+    : (latest.evaluation && latest.evaluation.train && latest.evaluation.train.candidate_metrics
+      ? latest.evaluation.train.candidate_metrics
+      : null);
+  var body = '<div class="chart-grid">'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Model snapshot</div>'
+      +'<div class="overview-list">'
+        +'<div class="overview-row"><span>Model</span><strong>'+esc(latest.variant_title || latest.variant_id || '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Algorithm</span><strong>'+esc(latest.algorithm || '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Created</span><strong>'+esc(fmtTs(latest.created_at || ''))+'</strong></div>'
+        +'<div class="overview-row"><span>Feature count</span><strong>'+esc(latest.feature_count || 0)+'</strong></div>'
+        +'<div class="overview-row"><span>Test precision</span><strong>'+esc(latestTest ? formatMetricSummary(latestTest.precision) : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Test recall</span><strong>'+esc(latestTest ? formatMetricSummary(latestTest.recall) : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Test F1</span><strong>'+esc(latestTest ? formatMetricSummary(latestTest.f1) : '--')+'</strong></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Label balance</div>'
+      +(balance ? renderPieChart(balance.slices, {
+        centerLabel: balance.labeled_candidates + ' labeled',
+        centerSub: balance.total_candidates + ' candidates',
+      }) : '<div class="query-empty">No label data.</div>')
+    +'</div>'
+  +'</div>'
+  +'<div class="chart-card" style="margin-top:10px">'
+    +'<div class="chart-title">Progression</div>'
+    +(progression && progression.points && progression.points.length ? renderSparklineChart(progression.points) : '<div class="query-empty">No progression yet.</div>')
+  +'</div>'
+  +'<div class="chart-grid" style="margin-top:10px">'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Family importance</div>'
+      +(featureInsights && featureInsights.family_importance && featureInsights.family_importance.length
+        ? renderStackList(featureInsights.family_importance.map(function(item, index) {
+          return {
+            label: item.family || '--',
+            value: Number(item.total_absolute_weight) || 0,
+            meta: formatMetricSummary(item.total_absolute_weight),
+            sub: item.top_feature || '',
+            color: colorForIndex(index),
+          };
+        }), 'No family importance data yet.')
+        : '<div class="query-empty">No family importance data yet.</div>')
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Recommendations</div>'
+      +renderCallouts(latestModelInsights.guidance || [])
+    +'</div>'
+  +'</div>'
+  +'<div class="detail-card" style="margin-top:10px">'
+    +'<div class="overview-label">Model JSON</div>'
+    +'<pre class="detail-pre">'+esc(safeJson({
+      model: latest,
+      dataset_balance: balance,
+      progression: progression,
+      feature_insights: featureInsights,
+    }))+'</pre>'
+  +'</div>';
+
+  openInsightModal(
+    'Latest Model',
+    (latest.variant_title || latest.variant_id || 'Model') + ' | ' + (latest.algorithm || 'algorithm') + (latestTest ? ' | F1 ' + formatMetricSummary(latestTest.f1) : ''),
+    body,
+  );
+}
+function buildScoredItemExplanation(item) {
+  if (!item) {
+    return '<div class="query-empty">Select an item to inspect its candidate probabilities and feature contributions.</div>';
+  }
+
+  var candidates = Array.isArray(item.candidates) ? item.candidates.slice() : [];
+  candidates.sort(function(left, right) {
+    return (Number(right.probability) || 0) - (Number(left.probability) || 0);
+  });
+  var topCandidate = item.top_candidate || candidates[0] || null;
+  var explanation = topCandidate && topCandidate.explanation ? topCandidate.explanation : null;
+  var positive = explanation && Array.isArray(explanation.top_positive_contributors) ? explanation.top_positive_contributors : [];
+  var negative = explanation && Array.isArray(explanation.top_negative_contributors) ? explanation.top_negative_contributors : [];
+
+  return '<div class="chart-grid">'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Top candidate</div>'
+      +'<div class="overview-list">'
+        +'<div class="overview-row"><span>Probability</span><strong>'+esc(topCandidate ? formatMetricSummary(topCandidate.probability) : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Predicted</span><strong>'+esc(topCandidate ? (topCandidate.predicted_label === 1 ? 'comment_region' : 'not_comment_region') : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Manual review</span><strong>'+esc(item.manual_review_suggested ? 'Suggested' : 'Not suggested')+'</strong></div>'
+        +'<div class="overview-row"><span>Review coverage</span><strong>'+esc(item.review_complete_binary ? 'Binary complete' : 'Partial')+'</strong></div>'
+      +'</div>'
+      +'<div class="chart-note">'+esc(item.final_url || item.normalized_url || item.hostname || '')+'</div>'
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Feature contributions</div>'
+      +(explanation ? '<div class="chart-grid">'
+        +'<div>'
+          +'<div class="overview-label">Positive</div>'
+          +(positive.length ? renderStackList(positive.map(function(entry) {
+            return {
+              label: entry.title || entry.feature_key || '--',
+              value: Math.abs(Number(entry.contribution) || 0),
+              meta: formatMetricSummary(entry.contribution),
+              sub: entry.family || '',
+              color: '#2f7d57',
+            };
+          }), 'No positive contributors.') : '<div class="query-empty">No positive contributors.</div>')
+        +'</div>'
+        +'<div>'
+          +'<div class="overview-label">Negative</div>'
+          +(negative.length ? renderStackList(negative.map(function(entry) {
+            return {
+              label: entry.title || entry.feature_key || '--',
+              value: Math.abs(Number(entry.contribution) || 0),
+              meta: formatMetricSummary(entry.contribution),
+              sub: entry.family || '',
+              color: '#b85a47',
+            };
+          }), 'No negative contributors.') : '<div class="query-empty">No negative contributors.</div>')
+        +'</div>'
+      +'</div>' : '<div class="query-empty">No explanation data available for this item.</div>')
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Candidate probabilities</div>'
+      +(candidates.length ? renderStackList(candidates.slice(0, 8).map(function(candidate) {
+        return {
+          label: candidate.candidate_key || ('Candidate ' + (candidate.candidate_rank || '?')),
+          value: Number(candidate.probability) || 0,
+          meta: (candidate.predicted_label === 1 ? 'positive' : 'negative') + ' | ' + formatMetricSummary(candidate.probability),
+          sub: candidate.confidence || candidate.ugc_type || '',
+          color: candidate.predicted_label === 1 ? '#2f7d57' : '#b85a47',
+        };
+      }), 'No candidate probabilities yet.') : '<div class="query-empty">No candidate probabilities yet.</div>')
+    +'</div>'
+  +'</div>';
+}
+function renderPredictionModalBody(state) {
+  if (state && state.loading) {
+    return '<div class="query-empty">Scoring the selected job...</div>';
+  }
+  var payload = state && state.payload ? state.payload : {};
+  var job = payload.job || state && state.job || null;
+  var model = state && state.model ? state.model : null;
+  var summary = payload.summary || {};
+  var items = Array.isArray(payload.items) ? payload.items.slice() : [];
+  items.sort(function(left, right) {
+    return (Number(right.top_candidate && right.top_candidate.probability) || 0) - (Number(left.top_candidate && left.top_candidate.probability) || 0);
+  });
+  if (!selectedPredictionItemId || !items.some(function(item) { return String(item.item_id) === String(selectedPredictionItemId); })) {
+    selectedPredictionItemId = items.length ? String(items[0].item_id || '') : '';
+  }
+  var selectedItem = items.find(function(item) {
+    return String(item.item_id) === String(selectedPredictionItemId);
+  }) || items[0] || null;
+  var pieSlices = [
+    { label: 'Predicted positive', value: summary.predicted_positive_item_count || 0, color: '#2f7d57', meta: (summary.predicted_positive_item_count || 0) + ' items' },
+    { label: 'Manual review', value: summary.manual_review_item_count || 0, color: '#b8892e', meta: (summary.manual_review_item_count || 0) + ' items' },
+    { label: 'Predicted negative', value: Math.max(0, (summary.item_count || 0) - (summary.predicted_positive_item_count || 0) - (summary.manual_review_item_count || 0)), color: '#b85a47', meta: 'remaining items' },
+  ];
+
+  return '<div class="chart-grid">'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Prediction mix</div>'
+      +renderPieChart(pieSlices, {
+        centerLabel: (summary.item_count || 0) + ' items',
+        centerSub: (summary.candidate_count || 0) + ' candidates',
+      })
+      +'<div class="chart-note">This lets you see whether the model is mostly confident, mostly cautious, or sending many jobs to manual review.</div>'
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Prediction summary</div>'
+      +'<div class="overview-list">'
+        +'<div class="overview-row"><span>Job</span><strong>'+esc(job && job.id ? job.id : state && state.jobId ? state.jobId : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Model</span><strong>'+esc(model && (model.variant_title || model.variant_id) ? (model.variant_title || model.variant_id) : '--')+'</strong></div>'
+        +'<div class="overview-row"><span>Items</span><strong>'+esc(summary.item_count || 0)+'</strong></div>'
+        +'<div class="overview-row"><span>Candidates</span><strong>'+esc(summary.candidate_count || 0)+'</strong></div>'
+        +'<div class="overview-row"><span>Predicted positive</span><strong>'+esc(summary.predicted_positive_item_count || 0)+'</strong></div>'
+        +'<div class="overview-row"><span>Manual review</span><strong>'+esc(summary.manual_review_item_count || 0)+'</strong></div>'
+        +'<div class="overview-row"><span>Mean top probability</span><strong>'+esc(summary.mean_top_probability != null ? formatMetricSummary(summary.mean_top_probability) : '--')+'</strong></div>'
+      +'</div>'
+      +'<div class="chart-note">Click any item on the left to see its top candidate and the features that pushed the model up or down.</div>'
+    +'</div>'
+  +'</div>'
+  +'<div class="prediction-grid" style="margin-top:10px">'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Items</div>'
+      +'<div class="prediction-list">'
+        +(items.length ? items.slice(0, 20).map(function(item) {
+          var top = item.top_candidate || null;
+          return '<div class="prediction-item'+(selectedPredictionItemId && String(selectedPredictionItemId) === String(item.item_id) ? ' on' : '')+'" onclick="selectPredictionItem('+jsQuote(item.item_id)+')">'
+            +'<div class="prediction-top">'
+              +'<div>'
+                +'<div class="prediction-title">Row '+esc(item.row_number || '?')+' | '+esc(item.hostname || item.normalized_url || item.final_url || '--')+'</div>'
+                +'<div class="prediction-sub">'+esc(item.final_url || item.normalized_url || item.hostname || '')+'</div>'
+              +'</div>'
+              +'<div class="prediction-prob">'+esc(top ? formatMetricSummary(top.probability) : '--')+'</div>'
+            +'</div>'
+            +'<div class="prediction-sub">'+esc(top ? (top.predicted_label === 1 ? 'Predicted comment_region' : 'Predicted not_comment_region') : 'No prediction')+' | '+esc(item.manual_review_suggested ? 'manual review suggested' : 'auto-ready')+'</div>'
+          +'</div>';
+        }).join('') : '<div class="query-empty">No items returned by the model.</div>')
+      +'</div>'
+    +'</div>'
+    +'<div class="chart-card">'
+      +'<div class="chart-title">Item detail</div>'
+      +buildScoredItemExplanation(selectedItem)
+    +'</div>'
+  +'</div>';
+}
+function selectPredictionItem(itemId) {
+  selectedPredictionItemId = String(itemId || '').trim();
+  renderInsightModal();
+}
+function scoreJobWithLatestModel(jobId) {
+  var latest = latestModelInsights && latestModelInsights.latest_model ? latestModelInsights.latest_model : null;
+  var normalizedJobId = String(jobId || '').trim();
+  if (!latest || !latest.id) {
+    showToast('Train a model first to score a job', true);
+    return Promise.resolve();
+  }
+  if (!normalizedJobId) {
+    showToast('Select a job first', true);
+    return Promise.resolve();
+  }
+
+  openInsightModal(
+    'Job Predictions',
+    'Scoring job ' + normalizedJobId + ' with ' + (latest.variant_title || latest.variant_id || 'latest model'),
+    '<div class="query-empty">Scoring the selected job...</div>',
+    {
+      kind: 'score',
+      renderBody: renderPredictionModalBody,
+      loading: true,
+      payload: null,
+      jobId: normalizedJobId,
+      job: null,
+      model: latest,
+    },
+  );
+
+  return fetch(API + '/api/modeling/score-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      modelId: latest.id,
+      jobId: normalizedJobId,
+      includeExplanations: true,
+    }),
+  }).then(function(response) {
+    return response.json().then(function(body) {
+      return { ok: response.ok, body: body };
+    });
+  }).then(function(result) {
+    var payload = result.body || {};
+    if (!result.ok || payload.error) {
+      openInsightModal('Job Predictions', 'Failed to score job ' + normalizedJobId, '<div class="query-empty" style="border-color: var(--red); color: #a14d3b">'+esc(payload.error || 'Failed to score job')+'</div>');
+      return null;
+    }
+
+    selectedPredictionItemId = '';
+    openInsightModal(
+      'Job Predictions',
+      'Scoring job ' + normalizedJobId + ' with ' + (latest.variant_title || latest.variant_id || 'latest model'),
+      '',
+      {
+        kind: 'score',
+        renderBody: renderPredictionModalBody,
+        loading: false,
+        payload: payload,
+        jobId: normalizedJobId,
+        job: payload.job || null,
+        model: latest,
+      },
+    );
+    return payload;
+  }).catch(function(error) {
+    openInsightModal('Job Predictions', 'Failed to score job ' + normalizedJobId, '<div class="query-empty" style="border-color: var(--red); color: #a14d3b">'+esc(error && error.message ? error.message : String(error))+'</div>');
+    return null;
+  });
 }
 function requestDisplayLabel(req) {
   if (!req) return '--';
@@ -1187,6 +2086,7 @@ function renderJobInspector(data) {
   var statusBuckets = {};
   var hostBuckets = {};
   var sourceBuckets = {};
+  var statusPalette = ['#2f7d57', '#c58a5e', '#b8892e', '#b85a47', '#8d6f4d', '#6c7d53'];
 
   items.forEach(function(item) {
     var statusKey = item.status || 'unknown';
@@ -1241,6 +2141,7 @@ function renderJobInspector(data) {
     +'<span class="mini">'+esc(job.source_column || 'No CSV column')+'</span>'
     +'<span class="mini">'+esc((job.total_urls || 0)+' URLs')+'</span>'
     +'<span class="mini">'+esc((counts[0][1] || 0)+' done')+'</span>'
+    +(latestModelInsights && latestModelInsights.latest_model && job && job.id ? '<button class="mini" type="button" onclick=\'scoreJobWithLatestModel('+jsQuote(job.id)+')\'>Score with latest model</button>' : '')
     +'</div>';
 
   var statusTrace = Object.keys(statusBuckets).sort(function(left, right) {
@@ -1254,27 +2155,39 @@ function renderJobInspector(data) {
   });
   var hostTrace = Object.keys(hostBuckets).sort(function(left, right) {
     return hostBuckets[right] - hostBuckets[left];
-  }).slice(0, 8).map(function(hostKey) {
+  }).slice(0, 8).map(function(hostKey, index) {
     return {
       label: hostKey,
       value: hostBuckets[hostKey],
       meta: hostBuckets[hostKey] + ' URLs',
+      color: colorForIndex(index),
     };
   });
   var sourceTrace = Object.keys(sourceBuckets).sort(function(left, right) {
     return sourceBuckets[right] - sourceBuckets[left];
-  }).map(function(sourceKey) {
+  }).map(function(sourceKey, index) {
     return {
       label: sourceKey,
       value: sourceBuckets[sourceKey],
       meta: sourceBuckets[sourceKey] + ' rows',
+      color: colorForIndex(index),
     };
   });
 
   return summary
     +controls
     +'<div class="detail-grid" style="margin-top:10px">'
-      +'<div class="detail-card"><div class="overview-label">Status Spread</div>'+renderStackList(statusTrace, 'No item statuses yet.')+'</div>'
+      +'<div class="detail-card"><div class="overview-label">Status Spread</div>'+renderPieChart(statusTrace.map(function(item, index) {
+        return {
+          label: item.label,
+          value: item.value,
+          meta: item.meta,
+          color: statusPalette[index % statusPalette.length],
+        };
+      }), {
+        centerLabel: items.length + ' rows',
+        centerSub: job.status || 'job rows',
+      })+'</div>'
       +'<div class="detail-card"><div class="overview-label">URL Hosts</div>'+renderStackList(hostTrace, 'No hosts found.')+'</div>'
       +'<div class="detail-card"><div class="overview-label">Analysis Source</div>'+renderStackList(sourceTrace, 'No source breakdown yet.')+'</div>'
     +'</div>'
@@ -1589,12 +2502,53 @@ function inspectJob(jobId, itemId, silent) {
 }
 
 function loadModelStats() {
-  fetch(API+'/api/modeling/overview').then(function(r){ return r.json(); }).then(function(d){
-    var labeled=d&&d.labeled_count!=null?d.labeled_count:'?';
-    var total=d&&d.total_count!=null?d.total_count:'?';
-    document.getElementById('m-labeled').textContent=labeled;
-    document.getElementById('m-labeled').className='hv '+(Number(labeled)>=20?'ok':'warn');
-    document.getElementById('m-total').textContent=total;
+  return fetch(API+'/api/modeling/overview', { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(d){
+    latestModelOverview = d || null;
+    latestModelInsights = d && d.insights ? d.insights : null;
+    var dataset = d && d.dataset ? d.dataset : {};
+    var balance = latestModelInsights && latestModelInsights.dataset_balance ? latestModelInsights.dataset_balance : null;
+    var latest = latestModelInsights && latestModelInsights.latest_model ? latestModelInsights.latest_model : null;
+    var latestTest = latest && latest.evaluation && latest.evaluation.test && latest.evaluation.test.candidate_metrics
+      ? latest.evaluation.test.candidate_metrics
+      : (latest && latest.evaluation && latest.evaluation.train && latest.evaluation.train.candidate_metrics
+        ? latest.evaluation.train.candidate_metrics
+        : null);
+
+    var labeled = dataset.labeled_candidate_count != null ? dataset.labeled_candidate_count : '?';
+    var total = dataset.candidate_count != null ? dataset.candidate_count : '?';
+    var balanceValue = balance && balance.imbalance_ratio != null
+      ? formatRatio(balance.imbalance_ratio)
+      : (balance && balance.is_single_class ? 'single' : '--');
+    var latestF1 = latestTest && latestTest.f1 != null ? formatMetricSummary(latestTest.f1) : '--';
+
+    var labeledEl = document.getElementById('m-labeled');
+    var totalEl = document.getElementById('m-total');
+    var balanceEl = document.getElementById('m-balance');
+    var f1El = document.getElementById('m-f1');
+    if (labeledEl) {
+      labeledEl.textContent = labeled;
+      labeledEl.className = 'hv '+(Number(labeled) >= 20 ? 'ok' : 'warn');
+    }
+    if (totalEl) {
+      totalEl.textContent = total;
+    }
+    if (balanceEl) {
+      balanceEl.textContent = balanceValue;
+      balanceEl.className = 'hv '+(balance && balance.imbalance_ratio != null && Number(balance.imbalance_ratio) >= 3 ? 'warn' : 'ok');
+    }
+    if (f1El) {
+      f1El.textContent = latestF1;
+      f1El.className = 'hv '+(latestTest && latestTest.f1 != null ? 'ok' : 'warn');
+    }
+
+    var workbench = document.getElementById('model-workbench');
+    if (workbench) {
+      workbench.innerHTML = renderModelWorkbench(d);
+    }
+
+    if (activeModalState && activeModalState.renderBody) {
+      renderInsightModal();
+    }
   }).catch(function(){});
 }
 

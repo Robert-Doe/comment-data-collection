@@ -25,41 +25,46 @@ function emitProgress(progress, patch) {
   }
 }
 
-function buildOverview(items, artifactRoot, options = {}) {
+async function buildOverview(items, artifactRoot, options = {}) {
   const progress = typeof options.progress === 'function' ? options.progress : null;
-  return listModelArtifacts(artifactRoot).then((models) => {
-    const dataset = extractCandidateDataset(items, {
-      progress: progress ? (patch) => emitProgress(progress, {
-        ...patch,
-        stage: 'overview',
-      }) : null,
-      progressInterval: options.progressInterval,
-    });
-    emitProgress(progress, {
+  const models = await listModelArtifacts(artifactRoot);
+  const dataset = extractCandidateDataset(items, {
+    progress: progress ? (patch) => emitProgress(progress, {
+      ...patch,
       stage: 'overview',
-      message: `Overview ready (${dataset.summary.item_count} item(s))`,
-      progress: {
-        current: dataset.summary.item_count,
-        total: dataset.summary.item_count || 1,
-        unit: 'items',
-        indeterminate: false,
-      },
-    });
-    return {
-      dataset: dataset.summary,
-      variants: listModelVariants().map((variant) => ({
-        ...variant,
-        feature_count: getFeatureCatalogForVariant(variant).length,
-      })),
-      feature_families: groupFeaturesByFamily(getFeatureCatalog()).map((family) => ({
-        key: family.key,
-        title: family.title,
-        description: family.description,
-        feature_count: family.features.length,
-      })),
-      models,
-    };
+    }) : null,
+    progressInterval: options.progressInterval,
   });
+  emitProgress(progress, {
+    stage: 'overview',
+    message: `Overview ready (${dataset.summary.item_count} item(s))`,
+    progress: {
+      current: dataset.summary.item_count,
+      total: dataset.summary.item_count || 1,
+      unit: 'items',
+      indeterminate: false,
+    },
+  });
+
+  const insights = await buildModelInsights(dataset.summary, models, artifactRoot, {
+    progressionLimit: options.progressionLimit,
+  });
+
+  return {
+    dataset: dataset.summary,
+    variants: listModelVariants().map((variant) => ({
+      ...variant,
+      feature_count: getFeatureCatalogForVariant(variant).length,
+    })),
+    feature_families: groupFeaturesByFamily(getFeatureCatalog()).map((family) => ({
+      key: family.key,
+      title: family.title,
+      description: family.description,
+      feature_count: family.features.length,
+    })),
+    models,
+    insights,
+  };
 }
 
 function splitRowsByDomain(rows, options = {}) {
@@ -353,6 +358,334 @@ function buildFeatureReliance(vectorizer, artifact, rows, options = {}) {
     negative_weights,
     family_importance: families,
     feature_importances,
+  };
+}
+
+function summarizeLatestModelArtifact(artifact) {
+  if (!artifact) {
+    return null;
+  }
+
+  const summary = summarizeArtifact(artifact);
+  const evaluation = artifact.evaluation || null;
+  const reliance = artifact.reliance || {};
+
+  return {
+    ...summary,
+    dataset_summary: artifact.dataset_summary || summary.dataset_summary || null,
+    split: artifact.split || null,
+    training_counts: artifact.training_counts || null,
+    evaluation: evaluation ? {
+      train: evaluation.train || null,
+      test: evaluation.test || null,
+    } : null,
+    reliance: {
+      family_importance: Array.isArray(reliance.family_importance)
+        ? reliance.family_importance.map((entry) => ({ ...entry }))
+        : [],
+      positive_weights: Array.isArray(reliance.positive_weights)
+        ? reliance.positive_weights.map((entry) => ({ ...entry }))
+        : [],
+      negative_weights: Array.isArray(reliance.negative_weights)
+        ? reliance.negative_weights.map((entry) => ({ ...entry }))
+        : [],
+      feature_importances: Array.isArray(reliance.feature_importances)
+        ? reliance.feature_importances.map((entry) => ({ ...entry }))
+        : [],
+    },
+  };
+}
+
+function buildLabelBalanceSummary(datasetSummary = {}) {
+  const positive = Math.max(0, Number(datasetSummary.positive_candidate_count) || 0);
+  const negative = Math.max(0, Number(datasetSummary.negative_candidate_count) || 0);
+  const uncertain = Math.max(0, Number(datasetSummary.uncertain_candidate_count) || 0);
+  const unlabeled = Math.max(0, Number(datasetSummary.unlabeled_candidate_count) || 0);
+  const totalCandidates = Math.max(0, Number(datasetSummary.candidate_count) || 0);
+  const labeledCandidates = positive + negative;
+  const minorityCount = Math.min(positive, negative);
+  const majorityCount = Math.max(positive, negative);
+  const positiveShare = labeledCandidates ? roundNumber(positive / labeledCandidates) : 0;
+  const negativeShare = labeledCandidates ? roundNumber(negative / labeledCandidates) : 0;
+  const labeledShare = totalCandidates ? roundNumber(labeledCandidates / totalCandidates) : 0;
+  const uncertainShare = totalCandidates ? roundNumber(uncertain / totalCandidates) : 0;
+  const unlabeledShare = totalCandidates ? roundNumber(unlabeled / totalCandidates) : 0;
+  const imbalanceRatio = minorityCount > 0 ? roundNumber(majorityCount / minorityCount) : null;
+
+  return {
+    total_candidates: totalCandidates,
+    labeled_candidates: labeledCandidates,
+    positive_count: positive,
+    negative_count: negative,
+    uncertain_count: uncertain,
+    unlabeled_count: unlabeled,
+    labeled_share: labeledShare,
+    uncertain_share: uncertainShare,
+    unlabeled_share: unlabeledShare,
+    positive_share: positiveShare,
+    negative_share: negativeShare,
+    imbalance_ratio: imbalanceRatio,
+    is_single_class: !positive || !negative,
+    minority_label: positive === negative
+      ? null
+      : (positive < negative ? 'comment_region' : 'not_comment_region'),
+    majority_label: positive === negative
+      ? null
+      : (positive > negative ? 'comment_region' : 'not_comment_region'),
+    minority_share: labeledCandidates ? roundNumber(minorityCount / labeledCandidates) : 0,
+    slices: [
+      {
+        key: 'positive',
+        label: 'comment_region',
+        value: positive,
+        color: '#2f7d57',
+        meta: `${positive} labeled`,
+      },
+      {
+        key: 'negative',
+        label: 'not_comment_region',
+        value: negative,
+        color: '#b85a47',
+        meta: `${negative} labeled`,
+      },
+      {
+        key: 'uncertain',
+        label: 'uncertain',
+        value: uncertain,
+        color: '#b8892e',
+        meta: `${uncertain} uncertain`,
+      },
+      {
+        key: 'unlabeled',
+        label: 'unlabeled',
+        value: unlabeled,
+        color: '#8d6f4d',
+        meta: `${unlabeled} unlabeled`,
+      },
+    ],
+  };
+}
+
+function buildModelProgression(models, options = {}) {
+  const limit = Math.max(1, Number(options.limit) || 8);
+  const selectedModels = Array.isArray(models)
+    ? models.slice(0, limit).slice().reverse()
+    : [];
+  const points = selectedModels.map((model, index) => {
+    const evaluation = model && model.evaluation ? model.evaluation : null;
+    const candidateMetrics = (evaluation && evaluation.test && evaluation.test.candidate_metrics)
+      || (evaluation && evaluation.train && evaluation.train.candidate_metrics)
+      || null;
+
+    return {
+      id: model && model.id ? model.id : null,
+      created_at: model && model.created_at ? model.created_at : null,
+      label: model && model.created_at
+        ? new Date(model.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : `Run ${index + 1}`,
+      variant_id: model && model.variant_id ? model.variant_id : null,
+      variant_title: model && model.variant_title ? model.variant_title : null,
+      algorithm: model && model.algorithm ? model.algorithm : null,
+      candidate_count: model && model.dataset_summary ? Number(model.dataset_summary.candidate_count) || 0 : 0,
+      labeled_count: model && model.dataset_summary ? Number(model.dataset_summary.labeled_candidate_count) || 0 : 0,
+      precision: candidateMetrics && candidateMetrics.precision != null ? candidateMetrics.precision : null,
+      recall: candidateMetrics && candidateMetrics.recall != null ? candidateMetrics.recall : null,
+      f1: candidateMetrics && candidateMetrics.f1 != null ? candidateMetrics.f1 : null,
+      roc_auc: candidateMetrics && candidateMetrics.roc_auc != null ? candidateMetrics.roc_auc : null,
+      pr_auc: candidateMetrics && candidateMetrics.pr_auc != null ? candidateMetrics.pr_auc : null,
+      threshold: candidateMetrics && candidateMetrics.threshold != null ? candidateMetrics.threshold : null,
+    };
+  });
+
+  const latest = points.length ? points[points.length - 1] : null;
+  const first = points.length ? points[0] : null;
+
+  function delta(metricKey) {
+    const latestValue = Number(latest && latest[metricKey]) || 0;
+    const firstValue = Number(first && first[metricKey]) || 0;
+    return roundNumber(latestValue - firstValue);
+  }
+
+  return {
+    points,
+    latest,
+    first,
+    trend: points.length > 1 ? {
+      f1_delta: delta('f1'),
+      precision_delta: delta('precision'),
+      recall_delta: delta('recall'),
+      roc_auc_delta: delta('roc_auc'),
+      pr_auc_delta: delta('pr_auc'),
+    } : null,
+  };
+}
+
+function buildModelGuidance(balanceSummary, latestModel, progression) {
+  const guidance = [];
+  const labeledCandidates = Number(balanceSummary && balanceSummary.labeled_candidates) || 0;
+  const imbalanceRatio = balanceSummary && Number.isFinite(Number(balanceSummary.imbalance_ratio))
+    ? Number(balanceSummary.imbalance_ratio)
+    : null;
+  const latestEvaluation = latestModel
+    && latestModel.evaluation
+    && ((latestModel.evaluation.test && latestModel.evaluation.test.candidate_metrics)
+      || (latestModel.evaluation.train && latestModel.evaluation.train.candidate_metrics))
+    || null;
+  const familyImportance = Array.isArray(latestModel && latestModel.reliance && latestModel.reliance.family_importance)
+    ? latestModel.reliance.family_importance
+    : [];
+  const totalFamilyWeight = familyImportance.reduce((sum, entry) => sum + (Number(entry.total_absolute_weight) || 0), 0);
+  const topFamilyWeight = familyImportance.length ? Number(familyImportance[0].total_absolute_weight) || 0 : 0;
+  const topFamilyShare = totalFamilyWeight > 0 ? roundNumber(topFamilyWeight / totalFamilyWeight) : 0;
+
+  if (!labeledCandidates) {
+    guidance.push({
+      tone: 'warn',
+      title: 'No binary labels yet',
+      body: 'Collect at least one positive and one negative candidate before training. The monitor can still show structure, but the model cannot learn a separator yet.',
+    });
+  } else if (labeledCandidates < 20) {
+    guidance.push({
+      tone: 'warn',
+      title: 'Label volume is still small',
+      body: 'You have fewer than 20 binary labels. Keep labeling before leaning on resampling or neighbor-based methods.',
+    });
+  }
+
+  if (imbalanceRatio && imbalanceRatio >= 3) {
+    guidance.push({
+      tone: 'warn',
+      title: 'Minority class is underrepresented',
+      body: `The class split is about ${imbalanceRatio}:1. Class weights, targeted labeling, or SMOTE-style oversampling can help once the minority class has enough clean examples.`,
+    });
+  }
+
+  if (balanceSummary && balanceSummary.uncertain_share >= 0.15) {
+    guidance.push({
+      tone: 'info',
+      title: 'Uncertain labels are high',
+      body: 'Review uncertain candidates before retraining. Ambiguous labels can confuse both KNN-style methods and tree-based models.',
+    });
+  }
+
+  if (latestEvaluation) {
+    const precision = Number(latestEvaluation.precision) || 0;
+    const recall = Number(latestEvaluation.recall) || 0;
+    const f1 = Number(latestEvaluation.f1) || 0;
+    const rocAuc = latestEvaluation.roc_auc;
+    const prAuc = latestEvaluation.pr_auc;
+
+    if (precision > recall + 0.15) {
+      guidance.push({
+        tone: 'info',
+        title: 'Model is conservative',
+        body: 'Precision is ahead of recall. Lowering the decision threshold or collecting more positive labels may improve recall.',
+      });
+    } else if (recall > precision + 0.15) {
+      guidance.push({
+        tone: 'info',
+        title: 'Model is broad',
+        body: 'Recall is ahead of precision. More negative labels or a stricter threshold can reduce false positives.',
+      });
+    }
+
+    if (f1 && latestModel && latestModel.evaluation && latestModel.evaluation.test && latestModel.evaluation.train) {
+      const trainF1 = Number(latestModel.evaluation.train.candidate_metrics && latestModel.evaluation.train.candidate_metrics.f1) || 0;
+      const testF1 = Number(latestModel.evaluation.test.candidate_metrics && latestModel.evaluation.test.candidate_metrics.f1) || 0;
+      if (trainF1 - testF1 > 0.12) {
+        guidance.push({
+          tone: 'warn',
+          title: 'Possible overfitting',
+          body: 'Train F1 is noticeably ahead of test F1. Review feature concentration, reduce noise, or add more labels before making stronger assumptions.',
+        });
+      }
+    }
+
+    if (rocAuc != null || prAuc != null) {
+      guidance.push({
+        tone: 'good',
+        title: 'Latest evaluation snapshot',
+        body: `Precision ${precision}, recall ${recall}, F1 ${f1}${rocAuc != null ? `, ROC AUC ${rocAuc}` : ''}${prAuc != null ? `, PR AUC ${prAuc}` : ''}.`,
+      });
+    }
+  }
+
+  if (topFamilyShare >= 0.6) {
+    guidance.push({
+      tone: 'warn',
+      title: 'Feature reliance is concentrated',
+      body: `The strongest feature family accounts for about ${(topFamilyShare * 100).toFixed(0)}% of the current absolute importance. That is workable, but it is worth watching for narrow shortcuts.`,
+    });
+  }
+
+  if (!guidance.length) {
+    guidance.push({
+      tone: 'good',
+      title: 'Training signal looks usable',
+      body: 'The current label mix is reasonable. Use the feature chart to confirm that the model is leaning on meaningful families instead of one brittle shortcut.',
+    });
+  }
+
+  guidance.push({
+    tone: 'info',
+    title: 'SMOTE and KNN, in practice',
+    body: 'SMOTE creates synthetic minority examples from nearby neighbors. KNN-style methods work best when feature scaling is sensible and the minority class has enough clean neighbors to describe a real local pattern.',
+  });
+
+  if (progression && Array.isArray(progression.points) && progression.points.length > 1 && progression.trend) {
+    guidance.push({
+      tone: 'info',
+      title: 'Model progression',
+      body: `Across the latest ${progression.points.length} run(s), F1 changed by ${progression.trend.f1_delta}, ROC AUC by ${progression.trend.roc_auc_delta}, and PR AUC by ${progression.trend.pr_auc_delta}.`,
+    });
+  }
+
+  return guidance;
+}
+
+async function buildModelInsights(datasetSummary, models, artifactRoot, options = {}) {
+  const balance = buildLabelBalanceSummary(datasetSummary);
+  const progression = buildModelProgression(models, {
+    limit: options.progressionLimit || 8,
+  });
+  const latestSummary = Array.isArray(models) && models.length ? models[0] : null;
+  let latestArtifact = null;
+  if (latestSummary) {
+    try {
+      latestArtifact = await loadModelArtifact(artifactRoot, latestSummary.id);
+    } catch (_) {
+      latestArtifact = null;
+    }
+  }
+  const latestModel = summarizeLatestModelArtifact(latestArtifact);
+  const featureInsights = latestModel && latestModel.reliance
+    ? {
+      family_importance: Array.isArray(latestModel.reliance.family_importance)
+        ? latestModel.reliance.family_importance.slice(0, 8)
+        : [],
+      positive_weights: Array.isArray(latestModel.reliance.positive_weights)
+        ? latestModel.reliance.positive_weights.slice(0, 10)
+        : [],
+      negative_weights: Array.isArray(latestModel.reliance.negative_weights)
+        ? latestModel.reliance.negative_weights.slice(0, 10)
+        : [],
+      feature_importances: Array.isArray(latestModel.reliance.feature_importances)
+        ? latestModel.reliance.feature_importances.slice(0, 15)
+        : [],
+    }
+    : {
+      family_importance: [],
+      positive_weights: [],
+      negative_weights: [],
+      feature_importances: [],
+    };
+
+  return {
+    dataset_balance: balance,
+    progression,
+    latest_model: latestModel,
+    feature_insights: featureInsights,
+    guidance: buildModelGuidance(balance, latestModel, progression),
   };
 }
 
