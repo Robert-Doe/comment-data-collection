@@ -1581,6 +1581,210 @@
     `;
   }
 
+  function normalizeScanBinaryLabel(label) {
+    const normalized = String(label || '').trim();
+    if (normalized === 'comment_region') return 1;
+    if (normalized === 'not_comment_region') return 0;
+    return null;
+  }
+
+  function normalizeScanSystemLabel(candidate) {
+    const label = candidateHeuristicLabel(candidate);
+    if (label === 'ugc') return 1;
+    if (label === 'not_ugc') return 0;
+    return null;
+  }
+
+  function summarizeScanCandidateLabels(candidates) {
+    return (Array.isArray(candidates) ? candidates : []).reduce((summary, candidate) => {
+      summary.total += 1;
+
+      const humanLabel = String(candidate && candidate.human_label || '').trim();
+      const actual = normalizeScanBinaryLabel(humanLabel);
+      if (actual === 1) {
+        summary.comment_region += 1;
+        summary.human_binary_reviewed += 1;
+      } else if (actual === 0) {
+        summary.not_comment_region += 1;
+        summary.human_binary_reviewed += 1;
+      } else if (humanLabel === 'uncertain') {
+        summary.uncertain += 1;
+        summary.human_reviewed += 1;
+      } else {
+        summary.unlabeled += 1;
+      }
+
+      const predicted = normalizeScanSystemLabel(candidate);
+      if (predicted === 1) summary.system_ugc += 1;
+      else if (predicted === 0) summary.system_not_ugc += 1;
+      else summary.system_uncertain += 1;
+
+      if (actual === null || predicted === null) {
+        return summary;
+      }
+
+      summary.compared += 1;
+      if (actual === 1 && predicted === 1) summary.true_positive += 1;
+      else if (actual === 0 && predicted === 0) summary.true_negative += 1;
+      else if (actual === 0 && predicted === 1) summary.false_positive += 1;
+      else if (actual === 1 && predicted === 0) summary.false_negative += 1;
+
+      return summary;
+    }, {
+      total: 0,
+      comment_region: 0,
+      not_comment_region: 0,
+      uncertain: 0,
+      unlabeled: 0,
+      human_reviewed: 0,
+      human_binary_reviewed: 0,
+      system_ugc: 0,
+      system_not_ugc: 0,
+      system_uncertain: 0,
+      compared: 0,
+      true_positive: 0,
+      true_negative: 0,
+      false_positive: 0,
+      false_negative: 0,
+    });
+  }
+
+  function renderScanProgressCard(candidates, summary, options = {}) {
+    const ordered = (Array.isArray(candidates) ? candidates : [])
+      .slice()
+      .sort((left, right) => Number(left.candidate_rank || 0) - Number(right.candidate_rank || 0));
+    if (!ordered.length) {
+      return `
+        <article class="analysis-card empty">
+          <p class="candidate-copy">No candidates were stored for this row yet.</p>
+        </article>
+      `;
+    }
+
+    const limit = Math.max(1, Number(options.limit) || 6);
+    const visible = ordered.slice(0, limit);
+    const maxScore = Math.max(1, ...visible.map((candidate) => Math.max(0, Number(candidate.score) || 0)));
+
+    return `
+      <article class="analysis-card">
+        <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Pattern Graph')}</p>
+        <h3>${escapeHtml(options.title || 'Candidate Score Progression')}</h3>
+        <p class="candidate-copy">${escapeHtml(options.copy || `Showing ${visible.length} of ${ordered.length} candidates in stored rank order.`)}</p>
+        <div class="analysis-bar-stack">
+          ${visible.map((candidate, index) => {
+            const score = Number(candidate.score) || 0;
+            const width = maxScore > 0 ? Math.max(0, Math.min(100, (Math.max(0, score) / maxScore) * 100)) : 0;
+            const humanText = humanLabelText(candidate.human_label) || 'human: unreviewed';
+            const heuristicLabel = candidateHeuristicLabel(candidate);
+            const heuristicText = heuristicLabelText(heuristicLabel);
+            const tone = humanLabelClass(candidate.human_label) || heuristicLabelClass(heuristicLabel) || '';
+            return `
+              <div class="analysis-bar-row">
+                <div class="analysis-bar-meta">
+                  <span class="candidate-pill">#${escapeHtml(candidate.candidate_rank || index + 1)}</span>
+                  <span class="candidate-pill ${humanLabelClass(candidate.human_label)}">${escapeHtml(humanText)}</span>
+                  <span class="candidate-pill ${heuristicLabelClass(heuristicLabel)}">${escapeHtml(heuristicText)}</span>
+                </div>
+                <div class="analysis-bar-track">
+                  <span class="analysis-bar-fill ${escapeHtml(tone)}" style="width:${width}%"></span>
+                </div>
+                <div class="analysis-bar-value">${escapeHtml(formatMetricValue(score))}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="summary tight-summary">
+          <div><strong>Reviewed:</strong> ${escapeHtml(summary.human_binary_reviewed + summary.uncertain)}</div>
+          <div><strong>Comment:</strong> ${escapeHtml(summary.comment_region)}</div>
+          <div><strong>Not Comment:</strong> ${escapeHtml(summary.not_comment_region)}</div>
+          <div><strong>Uncertain:</strong> ${escapeHtml(summary.uncertain)}</div>
+          <div><strong>Unlabeled:</strong> ${escapeHtml(summary.unlabeled)}</div>
+          <div><strong>System UGC:</strong> ${escapeHtml(summary.system_ugc)}</div>
+          <div><strong>System Not UGC:</strong> ${escapeHtml(summary.system_not_ugc)}</div>
+          <div><strong>System Uncertain:</strong> ${escapeHtml(summary.system_uncertain)}</div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderScanConfusionCard(summary, options = {}) {
+    const truePositive = Math.max(0, Number(summary && summary.true_positive) || 0);
+    const trueNegative = Math.max(0, Number(summary && summary.true_negative) || 0);
+    const falsePositive = Math.max(0, Number(summary && summary.false_positive) || 0);
+    const falseNegative = Math.max(0, Number(summary && summary.false_negative) || 0);
+    const compared = truePositive + trueNegative + falsePositive + falseNegative;
+    const precision = (truePositive + falsePositive) > 0
+      ? truePositive / (truePositive + falsePositive)
+      : 0;
+    const recall = (truePositive + falseNegative) > 0
+      ? truePositive / (truePositive + falseNegative)
+      : 0;
+    const f1 = (precision + recall) > 0
+      ? (2 * precision * recall) / (precision + recall)
+      : 0;
+    const accuracy = compared > 0
+      ? (truePositive + trueNegative) / compared
+      : 0;
+
+    if (!compared) {
+      return `
+        <article class="analysis-card empty">
+          <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Agreement')}</p>
+          <h3>${escapeHtml(options.title || 'Human vs System Confusion Matrix')}</h3>
+          <p class="candidate-copy">${escapeHtml(options.emptyText || 'No binary human labels are available yet. Label comment and not-comment rows to populate this matrix.')}</p>
+        </article>
+      `;
+    }
+
+    return `
+      <article class="analysis-card">
+        <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Agreement')}</p>
+        <h3>${escapeHtml(options.title || 'Human vs System Confusion Matrix')}</h3>
+        <div class="confusion-matrix">
+          <div class="confusion-matrix-corner"></div>
+          <div class="confusion-matrix-header">Predicted negative</div>
+          <div class="confusion-matrix-header">Predicted positive</div>
+          <div class="confusion-matrix-row-header">Actual negative</div>
+          <div class="confusion-matrix-cell true-negative">
+            <span>TN</span>
+            <strong>${escapeHtml(trueNegative)}</strong>
+          </div>
+          <div class="confusion-matrix-cell false-positive">
+            <span>FP</span>
+            <strong>${escapeHtml(falsePositive)}</strong>
+          </div>
+          <div class="confusion-matrix-row-header">Actual positive</div>
+          <div class="confusion-matrix-cell false-negative">
+            <span>FN</span>
+            <strong>${escapeHtml(falseNegative)}</strong>
+          </div>
+          <div class="confusion-matrix-cell true-positive">
+            <span>TP</span>
+            <strong>${escapeHtml(truePositive)}</strong>
+          </div>
+        </div>
+        <div class="summary tight-summary">
+          <div><strong>Compared:</strong> ${escapeHtml(compared)}</div>
+          <div><strong>Accuracy:</strong> ${escapeHtml(formatMetricValue(accuracy))}</div>
+          <div><strong>Precision:</strong> ${escapeHtml(formatMetricValue(precision))}</div>
+          <div><strong>Recall:</strong> ${escapeHtml(formatMetricValue(recall))}</div>
+          <div><strong>F1:</strong> ${escapeHtml(formatMetricValue(f1))}</div>
+          <div><strong>System uncertain:</strong> ${escapeHtml(summary.system_uncertain || 0)}</div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderScanInsightGrid(candidates, options = {}) {
+    const summary = summarizeScanCandidateLabels(candidates);
+    return `
+      <div class="analysis-grid">
+        ${renderScanProgressCard(candidates, summary, options)}
+        ${renderScanConfusionCard(summary, options)}
+      </div>
+    `;
+  }
+
   function truncateMetricText(value, maxLength) {
     const text = String(value || '').trim();
     if (!text) return '';
@@ -1904,6 +2108,12 @@
         <div><strong>Heuristic Detected:</strong> ${escapeHtml(heuristicSummary.detected ?? 0)}</div>
         <div><strong>Gate Passed:</strong> ${escapeHtml(heuristicSummary.gate_passed ?? 0)}</div>
       </div>
+      ${renderScanInsightGrid(candidates, {
+        eyebrow: 'Scan Pattern',
+        title: 'Candidate Score Progression',
+        copy: 'The chart shows the stored scan order, while the matrix compares human labels against the system cue for the same row.',
+        limit: 6,
+      })}
       ${hasGraphSnapshot ? '' : '<p class="candidate-copy"><strong>Graph export unavailable:</strong> this row does not have a stored HTML snapshot yet. Older automated rows need a rescan or manual upload before SVG/DOT can be generated.</p>'}
       ${scanResult.access_reason ? `<p class="candidate-copy"><strong>Access Reason:</strong> ${escapeHtml(scanResult.access_reason)}</p>` : ''}
       <p class="candidate-copy"><strong>Artifact note:</strong> the image below is an element-level crop resolved from the candidate's stored xpath/CSS path, not the raw page screenshot uploaded by the extension. The HTML panels show the candidate's stored markup so you can inspect the suspected DOM region even when the crop is misleading.</p>
@@ -1919,6 +2129,15 @@
       <div class="candidate-grid">${cards}</div>
     `;
     setCandidateExportState(item);
+  }
+
+  function getJobLabelerCandidates(state) {
+    return (Array.isArray(state && state.entries) ? state.entries : [])
+      .map((entry) => {
+        const resolved = jobLabelerCandidateForEntry(state, entry);
+        return resolved && resolved.candidate ? resolved.candidate : null;
+      })
+      .filter(Boolean);
   }
 
   function renderJobLabelerSummary(state) {
@@ -1992,6 +2211,12 @@
       jobLabelerReview.className = 'candidate-review';
       jobLabelerReview.innerHTML = `
         ${renderJobLabelerSummary(state)}
+        ${renderScanInsightGrid(getJobLabelerCandidates(state), {
+          eyebrow: 'Job Pattern',
+          title: 'Job-Wide Candidate Progression',
+          copy: 'This chart updates as you label the queue and shows where human labels agree or disagree with the system cue.',
+          limit: 6,
+        })}
         <div class="job-labeler-transition-card">
           <div class="job-labeler-transition-spinner" aria-hidden="true"></div>
           <p class="candidate-copy"><strong>${escapeHtml(jobLabelerTransition.message || 'Saving label...')}</strong></p>
@@ -2029,6 +2254,12 @@
     jobLabelerReview.className = 'candidate-review';
     jobLabelerReview.innerHTML = `
       ${renderJobLabelerSummary(state)}
+      ${renderScanInsightGrid(getJobLabelerCandidates(state), {
+        eyebrow: 'Job Pattern',
+        title: 'Job-Wide Candidate Progression',
+        copy: 'This chart updates as you label the queue and shows where human labels agree or disagree with the system cue.',
+        limit: 6,
+      })}
       ${loadingNote}
       <div class="candidate-toolbar job-labeler-toolbar">
         <span class="candidate-page-copy">Row ${escapeHtml(item.row_number || '')} • Candidate rank ${escapeHtml(candidate.candidate_rank || entry.candidateRank || '')}</span>
@@ -2593,6 +2824,13 @@
             ${renderScoreStat('Human label', candidate.human_label || 'none', 'warn')}
           </div>
         </section>
+
+        ${renderScanInsightGrid(candidates, {
+          eyebrow: 'Row Pattern',
+          title: 'Scoring Pattern Overview',
+          copy: 'This view shows how the candidate scores progress through the row and where human labels match the system cue.',
+          limit: 6,
+        })}
 
         <section class="score-grid">
           <article class="score-card score-card-wide">

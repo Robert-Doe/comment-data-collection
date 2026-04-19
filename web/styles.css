@@ -732,12 +732,176 @@ button[data-error="true"],
   color: var(--muted);
 }
 
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.analysis-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  min-width: 0;
+  align-content: start;
+}
+
+.analysis-card.empty {
+  color: var(--muted);
+}
+
+.analysis-card-wide {
+  grid-column: 1 / -1;
+}
+
+.analysis-bar-stack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.analysis-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 1.2fr) 72px;
+  gap: 8px 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.analysis-bar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.analysis-bar-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(40, 74, 63, 0.08);
+  overflow: hidden;
+}
+
+.analysis-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.analysis-bar-fill.good {
+  background: linear-gradient(90deg, rgba(29, 107, 87, 0.86), rgba(73, 150, 121, 0.92));
+}
+
+.analysis-bar-fill.bad {
+  background: linear-gradient(90deg, rgba(138, 45, 45, 0.78), rgba(179, 82, 69, 0.92));
+}
+
+.analysis-bar-fill.warn {
+  background: linear-gradient(90deg, rgba(164, 113, 31, 0.74), rgba(207, 153, 74, 0.94));
+}
+
+.analysis-bar-fill.plain {
+  background: linear-gradient(90deg, rgba(11, 87, 208, 0.78), rgba(76, 127, 217, 0.92));
+}
+
+.analysis-bar-fill.muted {
+  background: linear-gradient(90deg, rgba(139, 90, 16, 0.72), rgba(191, 145, 64, 0.92));
+}
+
+.analysis-bar-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.confusion-matrix {
+  display: grid;
+  grid-template-columns: minmax(110px, 120px) repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.confusion-matrix-corner {
+  min-height: 1px;
+}
+
+.confusion-matrix-header,
+.confusion-matrix-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(40, 74, 63, 0.06);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.confusion-matrix-row-header {
+  justify-content: flex-start;
+}
+
+.confusion-matrix-cell {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid rgba(49, 41, 28, 0.12);
+  border-radius: 16px;
+  background: rgba(248, 247, 239, 0.86);
+}
+
+.confusion-matrix-cell span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.confusion-matrix-cell strong {
+  color: var(--text);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  font-size: 1.46rem;
+  line-height: 1;
+}
+
+.confusion-matrix-cell.true-positive,
+.confusion-matrix-cell.true-negative {
+  border-color: rgba(29, 107, 87, 0.18);
+  background: rgba(223, 241, 234, 0.72);
+}
+
+.confusion-matrix-cell.false-positive,
+.confusion-matrix-cell.false-negative {
+  border-color: rgba(138, 45, 45, 0.16);
+  background: rgba(249, 234, 232, 0.72);
+}
+
 .imbalance-comparison-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .comparison-summary-card,
 .comparison-chart-card {
+  grid-column: 1 / -1;
+}
+
+.comparison-confusion-card,
+.score-job-confusion-card {
+  grid-column: 1 / -1;
+}
+
+.confusion-card {
   grid-column: 1 / -1;
 }
 
@@ -1779,6 +1943,23 @@ img {
   .score-grid,
   .score-card-wide {
     grid-template-columns: 1fr;
+  }
+
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-bar-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .analysis-bar-value {
+    text-align: left;
+  }
+
+  .confusion-matrix {
+    grid-template-columns: 88px repeat(2, minmax(0, 1fr));
   }
 
   .score-pill-grid {

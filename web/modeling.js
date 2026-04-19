@@ -25,6 +25,7 @@
   const scoreJobForm = document.getElementById('score-job-form');
   const scoreJobMessage = document.getElementById('score-job-message');
   const scoreJobSummary = document.getElementById('score-job-summary');
+  const scoreJobInsights = document.getElementById('score-job-insights');
   const scoreJobResults = document.getElementById('score-job-results');
   const recentJobsModel = document.getElementById('recent-jobs-model');
   const siteGroupForm = document.getElementById('site-group-form');
@@ -523,6 +524,20 @@
     return String(value);
   }
 
+  function formatHumanLabel(label) {
+    if (label === 'comment_region') return 'comment region';
+    if (label === 'not_comment_region') return 'not comment';
+    if (label === 'uncertain') return 'uncertain';
+    return '';
+  }
+
+  function formatPredictionLabel(candidate) {
+    if (!candidate) return '';
+    if (candidate.predicted_label === 1) return 'predicted positive';
+    if (candidate.predicted_label === 0) return 'predicted negative';
+    return '';
+  }
+
   function updateDatasetDownloadLink() {
     const jobIds = encodeURIComponent(trainJobIds.value.trim());
     downloadAllDataset.href = apiUrl(`/api/modeling/dataset.csv${jobIds ? `?jobIds=${jobIds}` : ''}`);
@@ -601,6 +616,161 @@
     `;
   }
 
+  function renderConfusionMatrixCard(confusion, options = {}) {
+    const truePositive = Math.max(0, Number(confusion && confusion.true_positive) || 0);
+    const trueNegative = Math.max(0, Number(confusion && confusion.true_negative) || 0);
+    const falsePositive = Math.max(0, Number(confusion && confusion.false_positive) || 0);
+    const falseNegative = Math.max(0, Number(confusion && confusion.false_negative) || 0);
+    const compared = truePositive + trueNegative + falsePositive + falseNegative;
+    const precision = (truePositive + falsePositive) > 0
+      ? truePositive / (truePositive + falsePositive)
+      : 0;
+    const recall = (truePositive + falseNegative) > 0
+      ? truePositive / (truePositive + falseNegative)
+      : 0;
+    const f1 = (precision + recall) > 0
+      ? (2 * precision * recall) / (precision + recall)
+      : 0;
+    const accuracy = compared > 0
+      ? (truePositive + trueNegative) / compared
+      : 0;
+    const skippedSource = options.skipped !== undefined ? options.skipped : confusion && confusion.skipped;
+    const skipped = Math.max(0, Number(skippedSource) || 0);
+
+    if (!compared) {
+      return `
+        <article class="model-card confusion-card empty">
+          <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Confusion Matrix')}</p>
+          <h3>${escapeHtml(options.title || 'Prediction Agreement')}</h3>
+          <p class="candidate-copy">${escapeHtml(options.emptyText || 'No binary labels are available yet. Train on labeled rows or score a job with human labels to populate this matrix.')}</p>
+        </article>
+      `;
+    }
+
+    return `
+      <article class="model-card confusion-card ${escapeHtml(options.cardClass || '')}">
+        <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Confusion Matrix')}</p>
+        <h3>${escapeHtml(options.title || 'Prediction Agreement')}</h3>
+        <div class="confusion-matrix">
+          <div class="confusion-matrix-corner"></div>
+          <div class="confusion-matrix-header">Predicted negative</div>
+          <div class="confusion-matrix-header">Predicted positive</div>
+          <div class="confusion-matrix-row-header">Actual negative</div>
+          <div class="confusion-matrix-cell true-negative">
+            <span>TN</span>
+            <strong>${escapeHtml(trueNegative)}</strong>
+          </div>
+          <div class="confusion-matrix-cell false-positive">
+            <span>FP</span>
+            <strong>${escapeHtml(falsePositive)}</strong>
+          </div>
+          <div class="confusion-matrix-row-header">Actual positive</div>
+          <div class="confusion-matrix-cell false-negative">
+            <span>FN</span>
+            <strong>${escapeHtml(falseNegative)}</strong>
+          </div>
+          <div class="confusion-matrix-cell true-positive">
+            <span>TP</span>
+            <strong>${escapeHtml(truePositive)}</strong>
+          </div>
+        </div>
+        <div class="summary tight-summary">
+          <div><strong>Compared:</strong> ${escapeHtml(compared)}</div>
+          <div><strong>Accuracy:</strong> ${escapeHtml(formatMetric(accuracy))}</div>
+          <div><strong>Precision:</strong> ${escapeHtml(formatMetric(precision))}</div>
+          <div><strong>Recall:</strong> ${escapeHtml(formatMetric(recall))}</div>
+          <div><strong>F1:</strong> ${escapeHtml(formatMetric(f1))}</div>
+          ${skipped ? `<div><strong>Skipped:</strong> ${escapeHtml(skipped)}</div>` : ''}
+        </div>
+      </article>
+    `;
+  }
+
+  function summarizeScoredCandidateConfusion(items) {
+    return (Array.isArray(items) ? items : []).reduce((summary, item) => {
+      (Array.isArray(item && item.candidates) ? item.candidates : []).forEach((candidate) => {
+        const actual = candidate.binary_label;
+        const predicted = candidate.predicted_label;
+        if ((actual !== 0 && actual !== 1) || (predicted !== 0 && predicted !== 1)) {
+          summary.skipped += 1;
+          return;
+        }
+
+        summary.compared += 1;
+        if (actual === 1 && predicted === 1) summary.true_positive += 1;
+        else if (actual === 0 && predicted === 0) summary.true_negative += 1;
+        else if (actual === 0 && predicted === 1) summary.false_positive += 1;
+        else if (actual === 1 && predicted === 0) summary.false_negative += 1;
+      });
+      return summary;
+    }, {
+      compared: 0,
+      true_positive: 0,
+      true_negative: 0,
+      false_positive: 0,
+      false_negative: 0,
+      skipped: 0,
+    });
+  }
+
+  function renderProbabilityTrendCard(items, options = {}) {
+    const ordered = (Array.isArray(items) ? items : [])
+      .slice()
+      .sort((left, right) => Number(left.row_number || 0) - Number(right.row_number || 0));
+    if (!ordered.length) {
+      return `
+        <article class="model-card empty">
+          <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Progress')}</p>
+          <h3>${escapeHtml(options.title || 'Probability Trend')}</h3>
+          <p class="candidate-copy">No scored items are available yet.</p>
+        </article>
+      `;
+    }
+
+    const limit = Math.max(1, Number(options.limit) || 8);
+    const visible = ordered.slice(0, limit);
+    const maxProbability = Math.max(1, ...visible.map((item) => {
+      const top = item && item.top_candidate ? Number(item.top_candidate.probability) : 0;
+      return Number.isFinite(top) ? Math.max(0, top) : 0;
+    }));
+    const topProbabilityValues = visible.map((item) => Number(item && item.top_candidate ? item.top_candidate.probability : 0) || 0);
+    const maxTopProbability = topProbabilityValues.length ? Math.max(...topProbabilityValues) : 0;
+
+    return `
+      <article class="model-card">
+        <p class="eyebrow subtle">${escapeHtml(options.eyebrow || 'Progress')}</p>
+        <h3>${escapeHtml(options.title || 'Probability Trend')}</h3>
+        <p class="candidate-copy">${escapeHtml(options.copy || `Showing ${visible.length} of ${ordered.length} scored items in row order.`)}</p>
+        <div class="analysis-bar-stack">
+          ${visible.map((item, index) => {
+            const top = item && item.top_candidate ? item.top_candidate : null;
+            const probability = top ? Number(top.probability) || 0 : 0;
+            const width = maxProbability > 0 ? Math.max(0, Math.min(100, (Math.max(0, probability) / maxProbability) * 100)) : 0;
+            const tone = item.manual_review_suggested ? 'warn' : (top && top.predicted_label === 1 ? 'good' : 'plain');
+            const label = formatHumanLabel(top && top.human_label) || formatPredictionLabel(top) || 'unlabeled';
+            return `
+              <div class="analysis-bar-row">
+                <div class="analysis-bar-meta">
+                  <span class="candidate-pill">#${escapeHtml(item.row_number || index + 1)}</span>
+                  <span class="candidate-pill ${tone}">${escapeHtml(label || 'unlabeled')}</span>
+                  ${item.manual_review_suggested ? '<span class="candidate-pill warn">manual review</span>' : ''}
+                </div>
+                <div class="analysis-bar-track"><span class="analysis-bar-fill ${escapeHtml(tone)}" style="width:${width}%"></span></div>
+                <div class="analysis-bar-value">${escapeHtml(formatMetric(probability))}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="summary tight-summary">
+          <div><strong>Items:</strong> ${escapeHtml(ordered.length)}</div>
+          <div><strong>Predicted Positives:</strong> ${escapeHtml((Array.isArray(items) ? items : []).filter((item) => item.top_candidate && item.top_candidate.probability >= 0.5).length)}</div>
+          <div><strong>Manual Review:</strong> ${escapeHtml((Array.isArray(items) ? items : []).filter((item) => item.manual_review_suggested).length)}</div>
+          <div><strong>Peak Probability:</strong> ${escapeHtml(formatMetric(maxTopProbability))}</div>
+        </div>
+      </article>
+    `;
+  }
+
   function renderImbalanceComparison(result) {
     if (!imbalanceResults) return;
     const runs = result && Array.isArray(result.runs) ? result.runs : [];
@@ -611,6 +781,13 @@
     }
 
     const focusStrategy = String(result.focus_strategy || '').trim();
+    const focusRun = runs.find((run) => run.strategy_id === focusStrategy) || runs[0] || null;
+    const focusEvaluation = focusRun && focusRun.summary && focusRun.summary.evaluation
+      ? (focusRun.summary.evaluation.test || focusRun.summary.evaluation.train || null)
+      : null;
+    const focusConfusion = focusEvaluation && focusEvaluation.candidate_metrics
+      ? focusEvaluation.candidate_metrics.confusion
+      : null;
     const leaderboard = result.leaderboard || {};
     const leaderboardRows = [
       leaderboard.precision ? `<div><strong>Precision:</strong> ${escapeHtml(leaderboard.precision.strategy.title || leaderboard.precision.strategy_id)} (${escapeHtml(formatMetric(leaderboard.precision.value))})</div>` : '',
@@ -630,6 +807,12 @@
         </div>
         <p class="candidate-copy">Each run uses the same labeled dataset and the same model family. Only the in-memory balancing strategy changes.</p>
       </article>
+      ${renderConfusionMatrixCard(focusConfusion, {
+        eyebrow: 'Focus Strategy',
+        title: `${(focusRun && focusRun.strategy && focusRun.strategy.title) || focusStrategy || 'Baseline'} Confusion Matrix`,
+        emptyText: 'The selected strategy does not have a binary confusion matrix yet.',
+        cardClass: 'comparison-confusion-card',
+      })}
       <article class="model-card comparison-chart-card">
         <p class="eyebrow subtle">F1 Graph</p>
         <h3>Strategy Score Bars</h3>
@@ -858,6 +1041,12 @@
     const preparedCounts = imbalance && imbalance.prepared_label_counts
       ? imbalance.prepared_label_counts
       : trainingCounts.effective_train_label_counts || originalCounts;
+    const evaluationConfusion = evaluation && evaluation.candidate_metrics
+      ? evaluation.candidate_metrics.confusion
+      : null;
+    const evaluationConfusionTitle = model.evaluation && model.evaluation.test
+      ? 'Test Confusion Matrix'
+      : 'Training Confusion Matrix';
     const familyImportance = model.reliance && Array.isArray(model.reliance.family_importance)
       ? model.reliance.family_importance.slice(0, 6)
       : [];
@@ -932,6 +1121,11 @@
         </div>
         <p class="candidate-copy">The rows stay in memory only. Stored labels and source data are not changed.</p>
       </article>
+      ${renderConfusionMatrixCard(evaluationConfusion, {
+        eyebrow: 'Training Evaluation',
+        title: evaluationConfusionTitle,
+        emptyText: 'No binary confusion matrix is available for this model yet.',
+      })}
       <article class="model-card">
         <p class="eyebrow subtle">Feature Reliance</p>
         <h3>Most Influential Families</h3>
@@ -1062,10 +1256,15 @@
   function renderScoredJob(result) {
     const summary = result && result.summary ? result.summary : null;
     const items = result && Array.isArray(result.items) ? result.items : [];
+    const scoredConfusion = summarizeScoredCandidateConfusion(items);
 
     if (!summary) {
       scoreJobSummary.className = 'summary empty';
       scoreJobSummary.textContent = 'Run a scored job to see item-level predictions.';
+      if (scoreJobInsights) {
+        scoreJobInsights.className = 'model-card-grid empty';
+        scoreJobInsights.textContent = '';
+      }
       scoreJobResults.className = 'table-shell empty';
       scoreJobResults.textContent = 'No scored job loaded.';
       return;
@@ -1081,6 +1280,24 @@
       `<div><strong>Model:</strong> ${escapeHtml(result.artifact ? result.artifact.id : '')}</div>`,
       `<div><strong>Algorithm:</strong> ${escapeHtml(result.artifact ? formatAlgorithmName(result.artifact.algorithm) : '')}</div>`,
     ].join('');
+
+    if (scoreJobInsights) {
+      scoreJobInsights.className = 'model-card-grid score-job-insights-grid';
+      scoreJobInsights.innerHTML = `
+        ${renderProbabilityTrendCard(items, {
+          eyebrow: 'Scored Pattern',
+          title: 'Top Probability Trend',
+          copy: 'The bars show the top candidate probability for each item in row order.',
+          limit: 8,
+        })}
+        ${renderConfusionMatrixCard(scoredConfusion, {
+          eyebrow: 'Scored Rows',
+          title: 'Predicted vs Human Labels',
+          emptyText: 'The scored rows do not have binary human labels yet.',
+          cardClass: 'score-job-confusion-card',
+        })}
+      `;
+    }
 
     if (!items.length) {
       scoreJobResults.className = 'table-shell empty';
