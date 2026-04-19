@@ -320,6 +320,12 @@ function createModelingRouter(dependencies) {
       const liveItemId = req.body && req.body.itemId ? String(req.body.itemId) : crypto.randomUUID();
       const body = req.body || {};
       const priorityProbe = body.priorityProbe !== undefined ? !!body.priorityProbe : false;
+      const liveProbeCandidateLimit = body.maxCandidates !== undefined && body.maxCandidates !== ''
+        ? Math.max(1, Number(body.maxCandidates) || 0)
+        : 100;
+      const liveProbeResultLimit = body.maxResults !== undefined && body.maxResults !== ''
+        ? Math.max(1, Number(body.maxResults) || 0)
+        : liveProbeCandidateLimit;
       const liveProbeTimeoutMs = body.timeoutMs !== undefined && body.timeoutMs !== ''
         ? body.timeoutMs
         : 300000;
@@ -347,8 +353,13 @@ function createModelingRouter(dependencies) {
         scanLabel: 'Live URL probe',
         priorityProbe,
         progress,
+        maxCandidates: liveProbeCandidateLimit,
+        maxResults: liveProbeResultLimit,
         captureScreenshots: req.body && req.body.captureScreenshots !== undefined ? !!req.body.captureScreenshots : true,
         captureHtmlSnapshots: req.body && req.body.captureHtmlSnapshots !== undefined ? !!req.body.captureHtmlSnapshots : true,
+        maxCandidateReviewArtifacts: req.body && req.body.maxCandidateReviewArtifacts !== undefined
+          ? Math.max(0, Number(req.body.maxCandidateReviewArtifacts) || 0)
+          : 15,
         artifactRoot: dependencies.artifactRoot,
         publicBaseUrl: req.body && req.body.publicBaseUrl ? req.body.publicBaseUrl : undefined,
         jobId: liveJobId,

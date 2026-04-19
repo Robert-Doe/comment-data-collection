@@ -59,7 +59,10 @@
   let liveProbeProgressPollHandle = null;
   let liveProbeProgressRequestToken = 0;
   let liveProbeProgressFetchInFlight = false;
+  let currentLiveProbeResult = null;
+  let currentLiveProbePage = 0;
   const overviewPollIntervalMs = 5000;
+  const liveProbeCandidatePageSize = 6;
   const initialOverviewScope = new URLSearchParams(window.location.search).get('jobIds')
     || new URLSearchParams(window.location.search).get('jobId')
     || (function () { try { return localStorage.getItem('ugc_selected_job_id') || ''; } catch (_) { return ''; } }())
@@ -406,23 +409,33 @@
     const screenshotLink = screenshotUrl
       ? `<p class="candidate-copy"><strong>Screenshot:</strong> <a href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noreferrer">Open screenshot</a></p>`
       : '';
+    const pageScreenshotUrl = resolveAssetUrl(candidate.item_screenshot_url || candidate.item_manual_uploaded_screenshot_url || '');
+    const pageScreenshotLink = pageScreenshotUrl
+      ? `<p class="candidate-copy"><strong>Page screenshot:</strong> <a href="${escapeHtml(pageScreenshotUrl)}" target="_blank" rel="noreferrer">Open page screenshot</a></p>`
+      : '';
     const content = markupSections.filter(Boolean).join('');
     const loadingCopy = candidate.candidate_markup_loading
       ? '<p class="candidate-copy"><strong>Markup:</strong> loading candidate HTML...</p>'
       : '';
+    const screenshotNote = candidate.candidate_screenshot_error
+      ? `<p class="candidate-copy"><strong>Screenshot note:</strong> ${escapeHtml(candidate.candidate_screenshot_error)}</p>`
+      : '';
+    const markupNote = candidate.candidate_markup_error
+      ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
+      : '';
 
-    if (!content && !screenshotLink && !candidate.candidate_markup_error && !candidate.candidate_markup_loading) {
+    if (!content && !screenshotLink && !pageScreenshotLink && !candidate.candidate_markup_error && !candidate.candidate_screenshot_error && !candidate.candidate_markup_loading) {
       return '';
     }
 
     return `
       <div class="candidate-markup-stack">
         ${loadingCopy}
+        ${pageScreenshotLink}
         ${screenshotLink}
         ${content}
-        ${candidate.candidate_markup_error
-          ? `<p class="candidate-copy"><strong>Markup note:</strong> ${escapeHtml(candidate.candidate_markup_error)}</p>`
-          : ''}
+        ${screenshotNote}
+        ${markupNote}
       </div>
     `;
   }
@@ -769,6 +782,22 @@
         </div>
       </article>
     `;
+  }
+
+  function resolveLiveProbeCandidateDetail(candidate) {
+    if (!candidate) return null;
+    const featureValues = candidate.feature_values && typeof candidate.feature_values === 'object'
+      ? candidate.feature_values
+      : {};
+    return {
+      ...featureValues,
+      candidate_screenshot_url: candidate.candidate_screenshot_url || featureValues.candidate_screenshot_url || '',
+      candidate_screenshot_error: candidate.candidate_screenshot_error || featureValues.candidate_screenshot_error || '',
+      item_screenshot_url: candidate.item_screenshot_url || featureValues.item_screenshot_url || '',
+      item_manual_uploaded_screenshot_url: candidate.item_manual_uploaded_screenshot_url || featureValues.item_manual_uploaded_screenshot_url || '',
+      candidate_markup_error: candidate.candidate_markup_error || featureValues.candidate_markup_error || '',
+      candidate_markup_loading: candidate.candidate_markup_loading || featureValues.candidate_markup_loading || false,
+    };
   }
 
   function renderImbalanceComparison(result) {
@@ -1416,16 +1445,20 @@
   }
 
   function renderLiveProbe(result) {
-    const summary = result && result.summary ? result.summary : null;
-    const items = result && Array.isArray(result.items) ? result.items : [];
-    const scan = result && result.scan ? result.scan : null;
-    const artifact = result && result.artifact ? result.artifact : null;
+    const nextResult = result || null;
+    const isNewResult = nextResult !== currentLiveProbeResult;
+    currentLiveProbeResult = nextResult;
+    const summary = nextResult && nextResult.summary ? nextResult.summary : null;
+    const items = nextResult && Array.isArray(nextResult.items) ? nextResult.items : [];
+    const scan = nextResult && nextResult.scan ? nextResult.scan : null;
+    const artifact = nextResult && nextResult.artifact ? nextResult.artifact : null;
     const item = items[0] || null;
-    const candidates = item && Array.isArray(item.candidates) ? item.candidates.slice(0, 15) : [];
+    const allCandidates = item && Array.isArray(item.candidates) ? item.candidates : [];
     const scanError = summary ? String(summary.scan_error || (scan && scan.error) || '') : '';
     const scanTimedOut = !!(scan && scan.timed_out) || /timed out/i.test(scanError);
 
     if (!summary) {
+      currentLiveProbePage = 0;
       liveProbeSummary.className = 'summary empty';
       liveProbeSummary.textContent = 'Run a live URL probe to see the page-level verdict.';
       liveProbeResults.className = 'table-shell empty';
@@ -1450,7 +1483,8 @@
       `<div><strong>Scan Error:</strong> ${escapeHtml(scanError || '')}</div>`,
     ].join('');
 
-    if (!candidates.length) {
+    if (!allCandidates.length) {
+      currentLiveProbePage = 0;
       liveProbeResults.className = 'table-shell empty';
       liveProbeResults.textContent = scanTimedOut
         ? 'The live scan timed out before it could score candidates.'
@@ -1460,8 +1494,26 @@
       return;
     }
 
+    const totalPages = Math.max(1, Math.ceil(allCandidates.length / liveProbeCandidatePageSize));
+    if (isNewResult) {
+      currentLiveProbePage = 0;
+    }
+    currentLiveProbePage = Math.max(0, Math.min(currentLiveProbePage, totalPages - 1));
+    const pageStart = currentLiveProbePage * liveProbeCandidatePageSize;
+    const candidates = allCandidates.slice(pageStart, pageStart + liveProbeCandidatePageSize);
+    const showingFrom = pageStart + 1;
+    const showingTo = Math.min(allCandidates.length, pageStart + candidates.length);
+
     liveProbeResults.className = 'table-shell';
     liveProbeResults.innerHTML = `
+      <div class="candidate-toolbar">
+        <span class="candidate-page-copy">Showing candidates ${escapeHtml(showingFrom)}-${escapeHtml(showingTo)} of ${escapeHtml(allCandidates.length)}</span>
+        <div class="candidate-pager">
+          <button class="secondary compact" type="button" data-live-probe-page="prev" ${currentLiveProbePage > 0 ? '' : 'disabled'}>Previous</button>
+          <span class="candidate-page-copy">Page ${escapeHtml(currentLiveProbePage + 1)} / ${escapeHtml(totalPages)}</span>
+          <button class="secondary compact" type="button" data-live-probe-page="next" ${(currentLiveProbePage + 1) < totalPages ? '' : 'disabled'}>Next</button>
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
@@ -1477,6 +1529,7 @@
         </thead>
         <tbody>
           ${candidates.map((candidate, index) => {
+            const detail = resolveLiveProbeCandidateDetail(candidate);
             const predictedLabel = candidate.predicted_label === 1
               ? 'positive'
               : (candidate.predicted_label === 0 ? 'negative' : 'uncertain');
@@ -1494,19 +1547,19 @@
             `).join('');
             return `
               <tr>
-                <td>${escapeHtml(index + 1)}</td>
+                <td>${escapeHtml(pageStart + index + 1)}</td>
                 <td>${escapeHtml(formatMetric(candidate.probability))}</td>
                 <td><span class="${candidate.predicted_label === 1 ? 'review-chip' : 'review-chip warn'}">${escapeHtml(candidate.human_label || predictedLabel)}</span></td>
-                <td>${escapeHtml(candidate.repeating_group_count || candidate.min_k_count || candidate.unit_count || 0)}</td>
-                <td>${escapeHtml(formatMetric(candidate.sibling_homogeneity_score || candidate.homogeneity || 0))}</td>
-                <td class="mono">${escapeHtml(candidate.tag_name || candidate._root_tag || candidate.tag || '')}</td>
-                <td>${escapeHtml((candidate.sample_text || '').slice(0, 140))}</td>
+                <td>${escapeHtml(detail.repeating_group_count || detail.min_k_count || detail.unit_count || 0)}</td>
+                <td>${escapeHtml(formatMetric(detail.sibling_homogeneity_score || detail.homogeneity || 0))}</td>
+                <td class="mono">${escapeHtml(detail.tag_name || detail._root_tag || detail.tag || '')}</td>
+                <td>${escapeHtml((detail.sample_text || '').slice(0, 140))}</td>
                 <td>
                   <details class="score-details" data-score-detail="probe-${escapeHtml(candidate.candidate_key || candidate.xpath || index)}">
                     <summary>Inspect</summary>
                     <div class="score-details-body">
                       <div class="feature-chip-list">${signalBits || '<span class="candidate-copy model-card-empty">No explanation signals available.</span>'}</div>
-                      ${renderCandidateMarkupDetails(candidate)}
+                      ${renderCandidateMarkupDetails(detail)}
                     </div>
                   </details>
                 </td>
@@ -1516,6 +1569,42 @@
         </tbody>
       </table>
     `;
+  }
+
+  if (liveProbeResults) {
+    liveProbeResults.addEventListener('click', (event) => {
+      const button = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('button[data-live-probe-page]')
+        : null;
+      if (!button || button.disabled || !currentLiveProbeResult) {
+        return;
+      }
+
+      const direction = String(button.getAttribute('data-live-probe-page') || '').trim();
+      if (!direction) {
+        return;
+      }
+
+      const items = currentLiveProbeResult && Array.isArray(currentLiveProbeResult.items)
+        ? currentLiveProbeResult.items
+        : [];
+      const item = items[0] || null;
+      const totalCandidates = item && Array.isArray(item.candidates) ? item.candidates.length : 0;
+      if (!totalCandidates) {
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(totalCandidates / liveProbeCandidatePageSize));
+      const nextPage = direction === 'next'
+        ? Math.min(totalPages - 1, currentLiveProbePage + 1)
+        : Math.max(0, currentLiveProbePage - 1);
+      if (nextPage === currentLiveProbePage) {
+        return;
+      }
+
+      currentLiveProbePage = nextPage;
+      renderLiveProbe(currentLiveProbeResult);
+    });
   }
 
   async function readSiteGroupText() {
