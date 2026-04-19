@@ -14,6 +14,7 @@ const {
   buildOverview,
   listTrainingAlgorithms,
   normalizeTrainingAlgorithm,
+  compareImbalanceStrategies,
   trainModel,
   getModelDetails,
   buildRuntimeModelBundle,
@@ -187,6 +188,7 @@ function createModelingRouter(dependencies) {
       const trained = await trainModel(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
+        imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
         split: req.body && req.body.split ? req.body.split : undefined,
         trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
         progress,
@@ -195,6 +197,44 @@ function createModelingRouter(dependencies) {
         ok: true,
         model: trained.artifact,
         summary: trained.summary,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/compare-imbalance', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) {
+        res.status(400).json({ error: 'Select a valid model variant' });
+        return;
+      }
+
+      const algorithm = normalizeTrainingAlgorithm(req.body && req.body.algorithm);
+      if (!algorithm) {
+        res.status(400).json({ error: 'Select a valid training algorithm' });
+        return;
+      }
+
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'training', message: 'Loading comparison dataset' });
+      const items = await loadModelingItems(jobIds, progress);
+      const comparison = await compareImbalanceStrategies(items, dependencies.artifactRoot, {
+        variantId,
+        algorithm,
+        imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
+        split: req.body && req.body.split ? req.body.split : undefined,
+        trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
+        strategies: req.body && req.body.strategies ? req.body.strategies : undefined,
+      });
+      res.json({
+        ok: true,
+        variantId,
+        algorithm,
+        jobIds,
+        ...comparison,
       });
     } catch (error) {
       next(error);

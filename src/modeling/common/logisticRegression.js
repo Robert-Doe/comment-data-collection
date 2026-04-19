@@ -36,7 +36,11 @@ function trainLogisticRegression(vectors, labels, options = {}) {
   const epsilon = 1e-8;
   const weights = new Array(dimension).fill(0);
   let bias = 0;
-  const classWeights = computeClassWeights(labels);
+  const useClassWeighting = options.classWeighting !== false;
+  const classWeights = useClassWeighting ? computeClassWeights(labels) : {
+    positive: 1,
+    negative: 1,
+  };
   const trace = [];
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
@@ -88,6 +92,7 @@ function trainLogisticRegression(vectors, labels, options = {}) {
       iterations,
       learningRate,
       l2,
+      classWeighting: useClassWeighting,
     },
   };
 }

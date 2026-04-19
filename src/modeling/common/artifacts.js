@@ -17,6 +17,8 @@ function summarizeArtifact(artifact) {
     algorithm: artifact.algorithm,
     created_at: artifact.created_at,
     feature_count: artifact.feature_count,
+    imbalance_strategy: artifact.imbalance_strategy || null,
+    training_counts: artifact.training_counts || null,
     evaluation: artifact.evaluation || null,
     dataset_summary: artifact.dataset_summary || null,
     file_path: artifact.file_path || '',

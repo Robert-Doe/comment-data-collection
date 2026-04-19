@@ -727,6 +727,197 @@ button[data-error="true"],
   color: var(--muted);
 }
 
+.workspace-hint {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+.imbalance-comparison-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.comparison-summary-card,
+.comparison-chart-card {
+  grid-column: 1 / -1;
+}
+
+.imbalance-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.imbalance-donut {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(248, 247, 239, 0.82);
+}
+
+.imbalance-donut.empty {
+  min-height: 180px;
+  align-content: center;
+  color: var(--muted);
+}
+
+.imbalance-donut-chart {
+  width: 160px;
+  height: 160px;
+}
+
+.imbalance-donut-value {
+  fill: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.imbalance-donut-label {
+  fill: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.imbalance-donut-legend {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.imbalance-donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.imbalance-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.imbalance-dot.good {
+  background: rgba(29, 107, 87, 0.96);
+}
+
+.imbalance-dot.bad {
+  background: rgba(138, 45, 45, 0.96);
+}
+
+.imbalance-donut-subtitle {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.metric-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 58px;
+  gap: 10px;
+  align-items: center;
+}
+
+.metric-row-label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.metric-row-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(40, 74, 63, 0.08);
+  overflow: hidden;
+}
+
+.metric-row-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.metric-row-fill.good {
+  background: linear-gradient(90deg, rgba(29, 107, 87, 0.86), rgba(73, 150, 121, 0.92));
+}
+
+.metric-row-fill.plain {
+  background: linear-gradient(90deg, rgba(11, 87, 208, 0.78), rgba(76, 127, 217, 0.92));
+}
+
+.metric-row-fill.muted {
+  background: linear-gradient(90deg, rgba(139, 90, 16, 0.72), rgba(191, 145, 64, 0.92));
+}
+
+.metric-row-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.comparison-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.comparison-chart-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 60px;
+  gap: 10px;
+  align-items: center;
+}
+
+.comparison-chart-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.comparison-chart-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(40, 74, 63, 0.08);
+  overflow: hidden;
+}
+
+.comparison-chart-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.comparison-chart-fill.good {
+  background: linear-gradient(90deg, rgba(29, 107, 87, 0.86), rgba(73, 150, 121, 0.92));
+}
+
+.comparison-chart-fill.plain {
+  background: linear-gradient(90deg, rgba(11, 87, 208, 0.78), rgba(76, 127, 217, 0.92));
+}
+
+.comparison-chart-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.model-card.is-focused {
+  border-color: rgba(29, 107, 87, 0.28);
+  box-shadow: 0 12px 28px rgba(29, 107, 87, 0.08);
+}
+
 .docs-section {
   display: grid;
   gap: 14px;
@@ -1394,6 +1585,10 @@ button[data-error="true"],
   gap: 12px;
   margin-bottom: 12px;
   color: var(--muted);
+}
+
+.event-pager {
+  margin-bottom: 10px;
 }
 
 .pager-actions {

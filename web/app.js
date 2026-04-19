@@ -91,6 +91,9 @@
   let selectedManualItemId = '';
   let activeWorkspaceTab = 'queue';
   let currentCandidatePage = 0;
+  let currentJobEvents = [];
+  let currentJobEventsPage = 0;
+  const jobEventsPageSize = 12;
   let currentItemsById = new Map();
   let managerFormJobId = '';
   let confirmResolver = null;
@@ -449,6 +452,8 @@
     currentJobId = '';
     currentOffset = 0;
     selectedManualItemId = '';
+    currentJobEvents = [];
+    currentJobEventsPage = 0;
     currentItemsById = new Map();
     managerFormJobId = '';
     stopPolling();
@@ -598,14 +603,29 @@
   }
 
   function renderJobEvents(events, options = {}) {
+    if (Array.isArray(events)) {
+      currentJobEvents = events.slice();
+    } else if (!Array.isArray(currentJobEvents)) {
+      currentJobEvents = [];
+    }
+
+    if (options.resetPage !== false) {
+      currentJobEventsPage = 0;
+    }
+
     const message = options.message || (currentJobId ? 'No events recorded yet for this job.' : 'Select a job to view recent events.');
-    if (!events || !events.length) {
+    if (!currentJobEvents.length) {
       jobEvents.className = options.isError ? 'event-list empty error' : 'event-list empty';
       jobEvents.textContent = message;
       return;
     }
 
-    const rows = events.map((event) => {
+    const totalPages = Math.max(1, Math.ceil(currentJobEvents.length / jobEventsPageSize));
+    currentJobEventsPage = Math.max(0, Math.min(currentJobEventsPage, totalPages - 1));
+    const startIndex = currentJobEventsPage * jobEventsPageSize;
+    const pageEvents = currentJobEvents.slice(startIndex, startIndex + jobEventsPageSize);
+
+    const rows = pageEvents.map((event) => {
       const level = String(event.level || 'info').toLowerCase();
       const scope = String(event.scope || 'job').replace(/_/g, ' ');
       const detailBits = [];
@@ -633,12 +653,23 @@
           </div>
           <div class="event-message">${escapeHtml(event.message || '')}</div>
           ${detailBits.length ? `<div class="event-meta">${escapeHtml(detailBits.join(' | '))}</div>` : ''}
-        </article>
-      `;
+      </article>
+    `;
     }).join('');
 
     jobEvents.className = 'event-list';
-    jobEvents.innerHTML = rows;
+    const pager = totalPages > 1
+      ? `
+        <div class="pager event-pager">
+          <span>Showing ${escapeHtml(startIndex + 1)}-${escapeHtml(Math.min(startIndex + jobEventsPageSize, currentJobEvents.length))} of ${escapeHtml(currentJobEvents.length)}</span>
+          <div class="pager-actions">
+            <button class="secondary compact" type="button" data-event-page="prev" title="Show the previous page of job events." ${currentJobEventsPage > 0 ? '' : 'disabled'}>Previous</button>
+            <button class="secondary compact" type="button" data-event-page="next" title="Show the next page of job events." ${(currentJobEventsPage + 1) < totalPages ? '' : 'disabled'}>Next</button>
+          </div>
+        </div>
+      `
+      : '';
+    jobEvents.innerHTML = `${pager}${rows}`;
   }
 
   function reviewChip(item) {
@@ -2934,7 +2965,7 @@
     }
 
     try {
-      const body = await fetchJson(`/api/jobs/${jobId}/events?limit=80`);
+      const body = await fetchJson(`/api/jobs/${jobId}/events?limit=120`);
       const events = Array.isArray(body && body.events) ? body.events : [];
       renderJobEvents(events);
       return events;
@@ -3737,6 +3768,19 @@
     selectManualItem(item, preferredReviewTab(item));
     setManualMessage('', false);
     setCandidateMessage('', false);
+  });
+
+  jobEvents.addEventListener('click', (event) => {
+    const pageButton = event.target.closest('[data-event-page]');
+    if (!pageButton || !currentJobEvents.length) return;
+    const action = pageButton.getAttribute('data-event-page');
+    const totalPages = Math.max(1, Math.ceil(currentJobEvents.length / jobEventsPageSize));
+    if (action === 'prev') {
+      currentJobEventsPage = Math.max(0, currentJobEventsPage - 1);
+    } else if (action === 'next') {
+      currentJobEventsPage = Math.min(totalPages - 1, currentJobEventsPage + 1);
+    }
+    renderJobEvents(currentJobEvents, { resetPage: false });
   });
 
   candidateReview.addEventListener('click', (event) => {

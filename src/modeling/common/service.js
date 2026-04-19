@@ -62,6 +62,7 @@ async function buildOverview(items, artifactRoot, options = {}) {
       description: family.description,
       feature_count: family.features.length,
     })),
+    imbalance_strategies: listImbalanceStrategies(),
     models,
     insights,
   };
@@ -185,6 +186,407 @@ function normalizeTrainingAlgorithm(value) {
     return 'logistic_regression';
   }
   return TRAINING_ALGORITHMS.some((entry) => entry.id === normalized) ? normalized : null;
+}
+
+const IMBALANCE_STRATEGIES = [
+  {
+    id: 'baseline',
+    title: 'Baseline',
+    description: 'Keep the original labeled training split unchanged. Use this as the control run for comparison.',
+  },
+  {
+    id: 'class_weighted',
+    title: 'Class Weighted',
+    description: 'Bias the fit toward the minority class without mutating stored data. Logistic regression uses true loss weighting; other trainers use a weighted bootstrap approximation.',
+  },
+  {
+    id: 'undersample',
+    title: 'Undersample Majority',
+    description: 'Trim the majority class in memory so both classes are balanced before training.',
+  },
+  {
+    id: 'oversample',
+    title: 'Oversample Minority',
+    description: 'Duplicate minority rows in memory until the classes are balanced.',
+  },
+  {
+    id: 'smote',
+    title: 'SMOTE-like',
+    description: 'Create synthetic minority rows by interpolating between nearby minority neighbors in feature space.',
+  },
+];
+
+function listImbalanceStrategies() {
+  return IMBALANCE_STRATEGIES.map((entry) => ({ ...entry }));
+}
+
+function normalizeImbalanceStrategy(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized) {
+    return 'baseline';
+  }
+
+  const aliases = {
+    none: 'baseline',
+    original: 'baseline',
+    base: 'baseline',
+    weighted: 'class_weighted',
+    classweight: 'class_weighted',
+    classweights: 'class_weighted',
+    classweighted: 'class_weighted',
+    downsample: 'undersample',
+    upsample: 'oversample',
+    smote_like: 'smote',
+    smotelike: 'smote',
+  };
+
+  const resolved = aliases[normalized] || normalized;
+  return IMBALANCE_STRATEGIES.some((entry) => entry.id === resolved) ? resolved : null;
+}
+
+function getImbalanceStrategyMeta(value) {
+  const normalized = normalizeImbalanceStrategy(value) || 'baseline';
+  return IMBALANCE_STRATEGIES.find((entry) => entry.id === normalized) || IMBALANCE_STRATEGIES[0];
+}
+
+function createSeededRng(seed) {
+  let state = hashString(seed) || 0x1a2b3c4d;
+  return function nextRandom() {
+    state += 0x6D2B79F5;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleWithRng(values, rng) {
+  const array = Array.isArray(values) ? values.slice() : [];
+  const random = typeof rng === 'function' ? rng : Math.random;
+  for (let index = array.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [array[index], array[swapIndex]] = [array[swapIndex], array[index]];
+  }
+  return array;
+}
+
+function cloneTrainingRow(row, overrides = {}) {
+  const featureValues = {
+    ...((row && row.feature_values && typeof row.feature_values === 'object') ? row.feature_values : {}),
+    ...((overrides.feature_values && typeof overrides.feature_values === 'object') ? overrides.feature_values : {}),
+  };
+  const clone = {
+    ...(row || {}),
+    ...overrides,
+    feature_values: featureValues,
+  };
+
+  if (row && row.candidate && typeof row.candidate === 'object') {
+    clone.candidate = { ...row.candidate };
+  }
+  if (row && row.item && typeof row.item === 'object') {
+    clone.item = { ...row.item };
+  }
+
+  return clone;
+}
+
+function euclideanDistance(left, right) {
+  const dimension = Math.max(Array.isArray(left) ? left.length : 0, Array.isArray(right) ? right.length : 0);
+  let total = 0;
+  for (let index = 0; index < dimension; index += 1) {
+    const delta = (Number(left && left[index]) || 0) - (Number(right && right[index]) || 0);
+    total += delta * delta;
+  }
+  return Math.sqrt(total);
+}
+
+function pickWeightedIndex(weights, rng) {
+  const random = typeof rng === 'function' ? rng : Math.random;
+  const values = Array.isArray(weights) ? weights.map((weight) => Math.max(0, Number(weight) || 0)) : [];
+  const totalWeight = values.reduce((sum, value) => sum + value, 0);
+  if (!values.length || totalWeight <= 0) {
+    return 0;
+  }
+
+  const target = random() * totalWeight;
+  let cumulative = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    cumulative += values[index];
+    if (target <= cumulative) {
+      return index;
+    }
+  }
+  return values.length - 1;
+}
+
+function pickSmoteNeighborIndex(baseIndex, vectors, rng, neighborCount) {
+  const baseVector = Array.isArray(vectors) && vectors[baseIndex] ? vectors[baseIndex] : [];
+  const candidates = [];
+
+  for (let index = 0; index < (Array.isArray(vectors) ? vectors.length : 0); index += 1) {
+    if (index === baseIndex) continue;
+    candidates.push({
+      index,
+      distance: euclideanDistance(baseVector, vectors[index]),
+    });
+  }
+
+  if (!candidates.length) {
+    return baseIndex;
+  }
+
+  candidates.sort((left, right) => left.distance - right.distance || left.index - right.index);
+  const limit = Math.max(1, Math.min(Math.floor(Number(neighborCount) || 1), candidates.length));
+  const ranked = candidates.slice(0, limit);
+  return ranked[Math.floor((typeof rng === 'function' ? rng() : Math.random()) * ranked.length)]?.index ?? candidates[0].index;
+}
+
+function buildSyntheticSmoteRow(baseRow, neighborRow, featureCatalog, alpha, syntheticIndex, options = {}) {
+  const featureValues = {
+    ...((baseRow && baseRow.feature_values && typeof baseRow.feature_values === 'object') ? baseRow.feature_values : {}),
+  };
+  const blend = Math.max(0, Math.min(1, Number(alpha) || 0));
+
+  (Array.isArray(featureCatalog) ? featureCatalog : []).forEach((feature) => {
+    const leftValue = baseRow && baseRow.feature_values ? baseRow.feature_values[feature.key] : undefined;
+    const rightValue = neighborRow && neighborRow.feature_values ? neighborRow.feature_values[feature.key] : undefined;
+
+    if (feature.type === 'number') {
+      const leftNumber = Number(leftValue) || 0;
+      const rightNumber = Number(rightValue) || 0;
+      featureValues[feature.key] = roundNumber(leftNumber + ((rightNumber - leftNumber) * blend));
+      return;
+    }
+
+    if (feature.type === 'boolean') {
+      featureValues[feature.key] = blend < 0.5 ? !!leftValue : !!rightValue;
+      return;
+    }
+
+    if (feature.type === 'categorical') {
+      featureValues[feature.key] = blend < 0.5
+        ? String(leftValue || '')
+        : String(rightValue || leftValue || '');
+    }
+  });
+
+  const baseId = String(baseRow && (baseRow.dataset_row_id || baseRow.item_id || baseRow.row_number) || 'synthetic');
+  const neighborId = String(neighborRow && (neighborRow.dataset_row_id || neighborRow.item_id || neighborRow.row_number) || 'neighbor');
+  return cloneTrainingRow(baseRow, {
+    dataset_row_id: `${baseId}::smote::${syntheticIndex}`,
+    item_id: `${String(baseRow && (baseRow.item_id || baseId) || 'item')}::smote`,
+    candidate_key: `${String(baseRow && (baseRow.candidate_key || baseId) || 'candidate')}::smote::${syntheticIndex}`,
+    row_number: Number(baseRow && baseRow.row_number) || (syntheticIndex + 1),
+    analysis_source: 'synthetic_smote',
+    synthetic_source: {
+      mode: 'smote',
+      source_row_id: baseId,
+      neighbor_row_id: neighborId,
+      alpha: roundNumber(blend, 4),
+      ...((options && options.syntheticSource) || {}),
+    },
+    feature_values: featureValues,
+  });
+}
+
+function buildWeightedBootstrapRows(rows, rng) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  if (!sourceRows.length) {
+    return [];
+  }
+
+  const counts = countBinaryLabels(sourceRows);
+  const positiveWeight = counts.positive > 0 ? sourceRows.length / (2 * counts.positive) : 1;
+  const negativeWeight = counts.negative > 0 ? sourceRows.length / (2 * counts.negative) : 1;
+  const weights = sourceRows.map((row) => (row.binary_label === 1 ? positiveWeight : negativeWeight));
+  const preparedRows = [];
+
+  for (let index = 0; index < sourceRows.length; index += 1) {
+    const chosenIndex = pickWeightedIndex(weights, rng);
+    const chosenRow = sourceRows[chosenIndex] || sourceRows[0];
+    preparedRows.push(cloneTrainingRow(chosenRow, {
+      dataset_row_id: `${String(chosenRow.dataset_row_id || chosenRow.item_id || chosenRow.row_number || 'row')}::weighted::${index}`,
+      item_id: `${String(chosenRow.item_id || chosenRow.dataset_row_id || 'item')}::weighted`,
+      row_number: index + 1,
+      analysis_source: 'weighted_bootstrap',
+      synthetic_source: {
+        mode: 'class_weighted',
+        source_row_id: String(chosenRow.dataset_row_id || chosenRow.item_id || chosenRow.row_number || ''),
+      },
+    }));
+  }
+
+  return preparedRows;
+}
+
+function summarizeImbalancePreparation(sourceRows, preparedRows, strategy, options = {}) {
+  const sourceCounts = countBinaryLabels(sourceRows);
+  const preparedCounts = countBinaryLabels(preparedRows);
+  const sourceLabeled = sourceCounts.positive + sourceCounts.negative;
+  const preparedLabeled = preparedCounts.positive + preparedCounts.negative;
+  const sourceMinority = Math.min(sourceCounts.positive, sourceCounts.negative);
+  const sourceMajority = Math.max(sourceCounts.positive, sourceCounts.negative);
+  const preparedMinority = Math.min(preparedCounts.positive, preparedCounts.negative);
+  const preparedMajority = Math.max(preparedCounts.positive, preparedCounts.negative);
+  const normalizedStrategy = normalizeImbalanceStrategy(strategy) || 'baseline';
+  const meta = getImbalanceStrategyMeta(normalizedStrategy);
+
+  return {
+    id: normalizedStrategy,
+    title: meta.title,
+    description: meta.description,
+    algorithm: options.algorithm || null,
+    class_weighting: !!options.classWeighting,
+    class_weighting_effective: !!options.classWeightingEffective,
+    fallback: options.fallback || null,
+    nearest_neighbors: options.nearestNeighbors || null,
+    original_row_count: Array.isArray(sourceRows) ? sourceRows.length : 0,
+    prepared_row_count: Array.isArray(preparedRows) ? preparedRows.length : 0,
+    original_label_counts: sourceCounts,
+    prepared_label_counts: preparedCounts,
+    original_labeled_count: sourceLabeled,
+    prepared_labeled_count: preparedLabeled,
+    original_imbalance_ratio: sourceMinority > 0 ? roundNumber(sourceMajority / sourceMinority) : null,
+    prepared_imbalance_ratio: preparedMinority > 0 ? roundNumber(preparedMajority / preparedMinority) : null,
+    synthetic_row_count: Math.max(0, (Array.isArray(preparedRows) ? preparedRows.length : 0) - (Array.isArray(sourceRows) ? sourceRows.length : 0)),
+    balancing_mode: normalizedStrategy === 'class_weighted' && !options.classWeightingEffective
+      ? 'weighted_bootstrap'
+      : normalizedStrategy,
+  };
+}
+
+function prepareImbalanceTrainingRows(rows, featureCatalog, vectorizer, strategy, options = {}) {
+  const sourceRows = (Array.isArray(rows) ? rows : []).filter((row) => row && (row.binary_label === 0 || row.binary_label === 1));
+  const normalizedStrategy = normalizeImbalanceStrategy(strategy) || 'baseline';
+  const algorithm = normalizeTrainingAlgorithm(options.algorithm);
+  const seed = [
+    options.seed || '',
+    normalizedStrategy,
+    algorithm || 'logistic_regression',
+    sourceRows.length,
+    countBinaryLabels(sourceRows).positive,
+    countBinaryLabels(sourceRows).negative,
+  ].join('|');
+  const rng = createSeededRng(seed);
+  const counts = countBinaryLabels(sourceRows);
+  const positiveRows = sourceRows.filter((row) => row.binary_label === 1);
+  const negativeRows = sourceRows.filter((row) => row.binary_label === 0);
+  const minorityLabel = counts.positive <= counts.negative ? 1 : 0;
+  const majorityLabel = minorityLabel === 1 ? 0 : 1;
+  const minorityRows = minorityLabel === 1 ? positiveRows : negativeRows;
+  const majorityRows = majorityLabel === 1 ? positiveRows : negativeRows;
+  let preparedRows = sourceRows.map((row) => cloneTrainingRow(row));
+  let classWeighting = false;
+  let classWeightingEffective = false;
+  let fallback = null;
+  let nearestNeighbors = null;
+
+  if (!sourceRows.length) {
+    return {
+      rows: [],
+      classWeighting: false,
+      summary: summarizeImbalancePreparation(sourceRows, [], normalizedStrategy, {
+        algorithm,
+      }),
+    };
+  }
+
+  if (normalizedStrategy === 'class_weighted') {
+    if (algorithm === 'logistic_regression') {
+      classWeighting = true;
+      classWeightingEffective = true;
+    } else if (sourceCounts.positive !== sourceCounts.negative) {
+      preparedRows = buildWeightedBootstrapRows(sourceRows, rng);
+    }
+  } else if (normalizedStrategy === 'undersample') {
+    if (minorityRows.length && majorityRows.length > minorityRows.length) {
+      const trimmedMajority = shuffleWithRng(majorityRows, rng).slice(0, minorityRows.length);
+      preparedRows = shuffleWithRng(
+        minorityRows.concat(trimmedMajority).map((row) => cloneTrainingRow(row)),
+        rng,
+      );
+    }
+  } else if (normalizedStrategy === 'oversample') {
+    if (minorityRows.length && majorityRows.length > minorityRows.length) {
+      preparedRows = sourceRows.map((row) => cloneTrainingRow(row));
+      let syntheticIndex = 0;
+      let minorityCount = minorityRows.length;
+      while (minorityCount < majorityRows.length) {
+        const sourceRow = minorityRows[Math.floor(rng() * minorityRows.length)] || minorityRows[0];
+        preparedRows.push(cloneTrainingRow(sourceRow, {
+          dataset_row_id: `${String(sourceRow.dataset_row_id || sourceRow.item_id || sourceRow.row_number || 'row')}::oversample::${syntheticIndex}`,
+          item_id: `${String(sourceRow.item_id || sourceRow.dataset_row_id || 'item')}::oversample`,
+          candidate_key: `${String(sourceRow.candidate_key || sourceRow.dataset_row_id || 'candidate')}::oversample::${syntheticIndex}`,
+          row_number: Number(sourceRow.row_number) || (syntheticIndex + 1),
+          analysis_source: 'synthetic_oversample',
+          synthetic_source: {
+            mode: 'oversample',
+            source_row_id: String(sourceRow.dataset_row_id || sourceRow.item_id || sourceRow.row_number || ''),
+          },
+        }));
+        minorityCount += 1;
+        syntheticIndex += 1;
+      }
+      preparedRows = shuffleWithRng(preparedRows, rng);
+    }
+  } else if (normalizedStrategy === 'smote') {
+    if (minorityRows.length >= 2 && majorityRows.length > minorityRows.length) {
+      const minorityVectors = transformRows(minorityRows, vectorizer);
+      preparedRows = sourceRows.map((row) => cloneTrainingRow(row));
+      let syntheticIndex = 0;
+      let minorityCount = minorityRows.length;
+      nearestNeighbors = Math.min(5, minorityRows.length - 1);
+      while (minorityCount < majorityRows.length) {
+        const baseIndex = Math.floor(rng() * minorityRows.length);
+        const neighborIndex = pickSmoteNeighborIndex(baseIndex, minorityVectors, rng, nearestNeighbors);
+        const baseRow = minorityRows[baseIndex] || minorityRows[0];
+        const neighborRow = minorityRows[neighborIndex] || minorityRows[(baseIndex + 1) % minorityRows.length] || baseRow;
+        preparedRows.push(buildSyntheticSmoteRow(baseRow, neighborRow, featureCatalog, rng(), syntheticIndex, {
+          syntheticSource: {
+            base_index: baseIndex,
+            neighbor_index: neighborIndex,
+          },
+        }));
+        minorityCount += 1;
+        syntheticIndex += 1;
+      }
+      preparedRows = shuffleWithRng(preparedRows, rng);
+    } else if (minorityRows.length && majorityRows.length > minorityRows.length) {
+      fallback = 'oversample';
+      preparedRows = sourceRows.map((row) => cloneTrainingRow(row));
+      let syntheticIndex = 0;
+      let minorityCount = minorityRows.length;
+      while (minorityCount < majorityRows.length) {
+        const sourceRow = minorityRows[Math.floor(rng() * minorityRows.length)] || minorityRows[0];
+        preparedRows.push(cloneTrainingRow(sourceRow, {
+          dataset_row_id: `${String(sourceRow.dataset_row_id || sourceRow.item_id || sourceRow.row_number || 'row')}::smote-fallback::${syntheticIndex}`,
+          item_id: `${String(sourceRow.item_id || sourceRow.dataset_row_id || 'item')}::smote-fallback`,
+          candidate_key: `${String(sourceRow.candidate_key || sourceRow.dataset_row_id || 'candidate')}::smote-fallback::${syntheticIndex}`,
+          row_number: Number(sourceRow.row_number) || (syntheticIndex + 1),
+          analysis_source: 'synthetic_smote_fallback',
+          synthetic_source: {
+            mode: 'smote_fallback_oversample',
+            source_row_id: String(sourceRow.dataset_row_id || sourceRow.item_id || sourceRow.row_number || ''),
+          },
+        }));
+        minorityCount += 1;
+        syntheticIndex += 1;
+      }
+      preparedRows = shuffleWithRng(preparedRows, rng);
+    }
+  }
+
+  return {
+    rows: preparedRows,
+    classWeighting,
+    summary: summarizeImbalancePreparation(sourceRows, preparedRows, normalizedStrategy, {
+      algorithm,
+      classWeighting,
+      classWeightingEffective,
+      fallback,
+      nearestNeighbors,
+    }),
+  };
 }
 
 function getArtifactAlgorithm(artifact) {
@@ -374,6 +776,7 @@ function summarizeLatestModelArtifact(artifact) {
     ...summary,
     dataset_summary: artifact.dataset_summary || summary.dataset_summary || null,
     split: artifact.split || null,
+    imbalance_strategy: artifact.imbalance_strategy || null,
     training_counts: artifact.training_counts || null,
     evaluation: evaluation ? {
       train: evaluation.train || null,
@@ -486,6 +889,10 @@ function buildModelProgression(models, options = {}) {
       variant_id: model && model.variant_id ? model.variant_id : null,
       variant_title: model && model.variant_title ? model.variant_title : null,
       algorithm: model && model.algorithm ? model.algorithm : null,
+      imbalance_strategy: model && model.imbalance_strategy ? {
+        id: model.imbalance_strategy.id || null,
+        title: model.imbalance_strategy.title || null,
+      } : null,
       candidate_count: model && model.dataset_summary ? Number(model.dataset_summary.candidate_count) || 0 : 0,
       labeled_count: model && model.dataset_summary ? Number(model.dataset_summary.labeled_candidate_count) || 0 : 0,
       precision: candidateMetrics && candidateMetrics.precision != null ? candidateMetrics.precision : null,
@@ -557,6 +964,14 @@ function buildModelGuidance(balanceSummary, latestModel, progression) {
       tone: 'warn',
       title: 'Minority class is underrepresented',
       body: `The class split is about ${imbalanceRatio}:1. Class weights, targeted labeling, or SMOTE-style oversampling can help once the minority class has enough clean examples.`,
+    });
+  }
+
+  if (latestModel && latestModel.imbalance_strategy && latestModel.imbalance_strategy.id === 'baseline' && imbalanceRatio && imbalanceRatio >= 3) {
+    guidance.push({
+      tone: 'info',
+      title: 'Run an imbalance comparison',
+      body: 'Baseline is useful as a control, but you now have in-memory class weighting, undersampling, oversampling, and SMOTE-like synthesis available for side-by-side comparison.',
     });
   }
 
@@ -927,12 +1342,28 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   ensureTrainableRows(split.trainRows, 'Training split');
 
   const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
-  const trainVectors = transformRows(split.trainRows, vectorizer);
-  const trainLabels = split.trainRows.map((row) => row.binary_label);
   const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm);
   if (!normalizedAlgorithm) {
     throw new Error('Select a valid training algorithm');
   }
+  const hasExplicitStrategy = String(trainingInput.imbalanceStrategy || '').trim().length > 0;
+  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+  if (hasExplicitStrategy && !normalizeImbalanceStrategy(trainingInput.imbalanceStrategy)) {
+    throw new Error('Select a valid imbalance strategy');
+  }
+  const trainingPreparation = prepareImbalanceTrainingRows(
+    split.trainRows,
+    dataset.featureCatalog,
+    vectorizer,
+    normalizedStrategy,
+    {
+      algorithm: normalizedAlgorithm,
+      seed: trainingInput.seed || `${variant.id}:${normalizedAlgorithm}:${normalizedStrategy}:${labeledRows.length}`,
+    },
+  );
+  const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : split.trainRows;
+  const trainVectors = transformRows(preparedTrainRows, vectorizer);
+  const trainLabels = preparedTrainRows.map((row) => row.binary_label);
 
   emitProgress(progress, {
     stage: 'training',
@@ -945,7 +1376,10 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     },
   });
 
-  const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, trainingInput.trainingOptions);
+  const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
+    ...(trainingInput.trainingOptions || {}),
+    classWeighting: trainingPreparation.classWeighting,
+  });
   const trainingArtifact = {
     algorithm: model.algorithm,
     model,
@@ -994,6 +1428,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     variant_title: variant.title,
     variant_description: variant.description,
     algorithm: trainingArtifact.algorithm,
+    imbalance_strategy: trainingPreparation.summary,
     created_at: new Date().toISOString(),
     feature_count: dataset.featureCatalog.length,
     feature_catalog: dataset.featureCatalog,
@@ -1003,8 +1438,10 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     training_counts: {
       total_labeled_rows: labeledRows.length,
       train_rows: split.trainRows.length,
+      effective_train_rows: preparedTrainRows.length,
       test_rows: split.testRows.length,
       train_label_counts: countBinaryLabels(split.trainRows),
+      effective_train_label_counts: countBinaryLabels(preparedTrainRows),
       test_label_counts: countBinaryLabels(split.testRows),
     },
     dataset_summary: dataset.summary,
@@ -1012,12 +1449,19 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     reliance,
   };
 
-  const artifactPath = await saveModelArtifact(artifactRoot, artifact);
-  artifact.file_path = artifactPath;
+  const persistArtifact = trainingInput.persistArtifact !== false;
+  if (persistArtifact) {
+    const artifactPath = await saveModelArtifact(artifactRoot, artifact);
+    artifact.file_path = artifactPath;
+  } else {
+    artifact.file_path = '';
+  }
 
   emitProgress(progress, {
     stage: 'training',
-    message: `Saved model artifact ${artifact.id}`,
+    message: persistArtifact
+      ? `Saved model artifact ${artifact.id}`
+      : `Prepared comparison run ${artifact.id}`,
     progress: {
       current: 1,
       total: 1,
@@ -1029,6 +1473,85 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   return {
     artifact,
     summary: summarizeArtifact(artifact),
+  };
+}
+
+async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {}) {
+  const requestedStrategies = Array.isArray(trainingInput.strategies)
+    ? trainingInput.strategies
+    : String(trainingInput.strategies || '')
+      .split(',')
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  const normalizedRequestedStrategies = requestedStrategies
+    .map((strategy) => normalizeImbalanceStrategy(strategy))
+    .filter(Boolean);
+  const compareStrategyIds = normalizedRequestedStrategies.length
+    ? normalizedRequestedStrategies
+    : listImbalanceStrategies().map((entry) => entry.id);
+  const focusStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+  const runs = [];
+
+  for (const strategyId of compareStrategyIds) {
+    const trained = await trainModel(items, artifactRoot, {
+      ...trainingInput,
+      imbalanceStrategy: strategyId,
+      persistArtifact: false,
+      progress: null,
+    });
+    const summary = trained && trained.summary ? trained.summary : summarizeArtifact(trained && trained.artifact);
+    runs.push({
+      strategy_id: strategyId,
+      strategy: getImbalanceStrategyMeta(strategyId),
+      summary,
+      evaluation: summary ? summary.evaluation || null : null,
+      training_counts: summary ? summary.training_counts || null : null,
+    });
+  }
+
+  const metricValue = (run, sectionName, metricName) => {
+    const evaluation = run && run.evaluation ? run.evaluation : null;
+    const chosenSet = evaluation && evaluation.test
+      ? evaluation.test
+      : evaluation && evaluation.train
+        ? evaluation.train
+        : null;
+    const section = chosenSet && chosenSet[sectionName] ? chosenSet[sectionName] : null;
+    const value = section && section[metricName] !== undefined ? section[metricName] : null;
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  };
+
+  const bestByMetric = (sectionName, metricName) => {
+    let bestRun = null;
+    let bestValue = -Infinity;
+    runs.forEach((run) => {
+      const value = metricValue(run, sectionName, metricName);
+      if (value === null) {
+        return;
+      }
+      if (value > bestValue) {
+        bestValue = value;
+        bestRun = run;
+      }
+    });
+
+    return bestRun ? {
+      strategy_id: bestRun.strategy_id,
+      strategy: bestRun.strategy,
+      value: roundNumber(bestValue, 4),
+    } : null;
+  };
+
+  return {
+    focus_strategy: focusStrategy,
+    strategies: listImbalanceStrategies(),
+    runs,
+    leaderboard: {
+      precision: bestByMetric('candidate_metrics', 'precision'),
+      recall: bestByMetric('candidate_metrics', 'recall'),
+      f1: bestByMetric('candidate_metrics', 'f1'),
+      top_1_accuracy: bestByMetric('ranking_metrics', 'top_1_accuracy'),
+    },
   };
 }
 
@@ -1354,7 +1877,10 @@ module.exports = {
   buildOverview,
   listTrainingAlgorithms,
   normalizeTrainingAlgorithm,
+  listImbalanceStrategies,
+  normalizeImbalanceStrategy,
   trainModel,
+  compareImbalanceStrategies,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

@@ -77,10 +77,10 @@
       </section>
 
       <section class="panel">
-        <div class="panel-header">
-          <h2>Job Status</h2>
-          <button id="refresh-jobs" class="secondary" type="button">Refresh</button>
-        </div>
+          <div class="panel-header">
+            <h2>Job Status</h2>
+            <button id="refresh-jobs" class="secondary" type="button" title="Reload the selected job and recent job list.">Refresh</button>
+          </div>
         <div id="job-summary" class="summary empty">No job selected.</div>
         <div class="job-events-shell">
           <div class="panel-header compact-header">
@@ -93,20 +93,21 @@
           <a id="download-report-xlsx" class="link-button disabled" href="#" download>Download Excel Report</a>
           <a id="download-summary-csv" class="link-button disabled" href="#" download>Download Summary CSV</a>
           <a id="download-features-csv" class="link-button disabled" href="#" download>Download Feature CSV</a>
-          <a id="download-candidates-csv" class="link-button disabled" href="#" download>Download Candidates CSV</a>
-          <a id="download-csv" class="link-button disabled" href="#" download>Download CSV</a>
-          <a id="download-json" class="link-button disabled" href="#" target="_blank" rel="noreferrer">View JSON</a>
+          <a id="download-candidates-csv" class="link-button disabled" href="#" download title="Download the candidate rows for the selected job.">Download Candidates CSV</a>
+          <a id="download-csv" class="link-button disabled" href="#" download title="Download the job rows as CSV.">Download CSV</a>
+          <a id="download-json" class="link-button disabled" href="#" target="_blank" rel="noreferrer" title="Open the selected job as JSON.">View JSON</a>
         </div>
         <div class="workspace-shell">
           <div class="tab-strip" role="tablist" aria-label="Review workspace">
-            <button class="tab-button active" type="button" role="tab" aria-selected="true" data-workspace-tab="queue">Rows</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manual">Manual</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates">Candidates</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="labeler">Labeler</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring">Scoring</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="merge">Merge</button>
-            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager">Manager</button>
+            <button class="tab-button active" type="button" role="tab" aria-selected="true" data-workspace-tab="queue" title="Open the job queue and page through rows.">Rows</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manual" title="Prepare a manual snapshot upload for the selected row.">Manual</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="candidates" title="Inspect candidate crops and label the visible region.">Candidates</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="labeler" title="Step through the entire job candidate queue one by one.">Labeler</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring" title="See why the selected row scored the way it did.">Scoring</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="merge" title="Combine two jobs into one new aggregate job.">Merge</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager" title="Resume, restart, replace, or delete the selected job.">Manager</button>
           </div>
+          <p class="workspace-hint candidate-copy">Rows opens the queue. Manual primes capture upload. Candidates reviews crops. Labeler walks every candidate in a job. Scoring explains a prediction. Merge combines jobs without changing the originals. Manager handles lifecycle and backups.</p>
           <div id="workspace-selection" class="workspace-selection empty">Select a row from the table to open the manual or candidate review workspace.</div>
           <section id="workspace-panel-queue" class="workspace-panel active" data-workspace-panel="queue">
             <div id="job-items" class="table-shell empty">Upload a CSV to begin.</div>
@@ -114,7 +115,7 @@
           <section id="workspace-panel-manual" class="workspace-panel" data-workspace-panel="manual">
             <div class="panel-header compact-header">
               <h3>Manual Review</h3>
-              <button id="manual-copy-config" class="secondary compact" type="button" disabled>Copy Fallback Config</button>
+              <button id="manual-copy-config" class="secondary compact" type="button" disabled title="Copy the fallback extension config for a manual capture flow.">Copy Fallback Config</button>
             </div>
             <p class="lede manual-lede">Use this when comments only appear after a click, login, CAPTCHA solve, or other human action. Clicking <strong>Manual</strong> now primes the extension for that row. Then open the row URL in a new tab, reveal the comments, make sure the comment panel is actually visible in the browser viewport, and let the extension auto-match the current page and upload the snapshot. The extension sends both the visible-tab screenshot and the page DOM/HTML state. The server then re-renders that stored snapshot, saves its own rendered screenshot, and regenerates candidate crops from it. If this job was already completed, click <strong>Refresh</strong> in this web app after the extension upload so the latest manual artifacts are pulled in. The fallback config button is only there if auto-match still fails.</p>
             <div id="manual-context" class="summary empty">Select a row from Job Status to prepare a manual capture.</div>
@@ -170,9 +171,9 @@
             <div class="panel-header compact-header">
               <h3>Job Labeler</h3>
               <div class="panel-actions">
-                <button id="job-labeler-reload" class="secondary compact" type="button">Reload Queue</button>
-                <button id="job-labeler-prev" class="secondary compact" type="button" disabled>Previous</button>
-                <button id="job-labeler-next" class="secondary compact" type="button" disabled>Next</button>
+                <button id="job-labeler-reload" class="secondary compact" type="button" title="Refresh the labeling queue for the selected job.">Reload Queue</button>
+                <button id="job-labeler-prev" class="secondary compact" type="button" disabled title="Move to the previous candidate.">Previous</button>
+                <button id="job-labeler-next" class="secondary compact" type="button" disabled title="Move to the next candidate.">Next</button>
               </div>
             </div>
             <p class="lede manual-lede">Review candidates from the entire selected job on one screen. Use the large screenshot, label buttons, and next controls instead of opening each row one by one. Keyboard shortcuts: left/right arrows for navigation, `1` for comment region, `2` for not comment, `3` for uncertain. Use the jump box to move the cursor to a specific candidate position and preload rows ahead without reloading from the beginning.</p>
@@ -244,9 +245,9 @@
             <div class="panel-header compact-header">
               <h3>Job Manager</h3>
               <div class="panel-actions">
-                <button id="manager-resume-job" class="secondary compact" type="button" disabled>Resume</button>
-                <button id="manager-restart-job" class="secondary compact" type="button" disabled>Restart</button>
-                <button id="manager-delete-job" class="secondary compact danger-button" type="button" disabled>Delete</button>
+                <button id="manager-resume-job" class="secondary compact" type="button" disabled title="Continue an unfinished job from the current runtime.">Resume</button>
+                <button id="manager-restart-job" class="secondary compact" type="button" disabled title="Restart the selected job from the beginning.">Restart</button>
+                <button id="manager-delete-job" class="secondary compact danger-button" type="button" disabled title="Delete the selected job only.">Delete</button>
               </div>
             </div>
             <p class="lede manual-lede">Manage the selected job directly from the UI. Resume unfinished work, restart the whole run, replace the current CSV with a new upload, or clear all saved jobs without going back to the terminal.</p>

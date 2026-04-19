@@ -68,13 +68,32 @@
               </select>
             </label>
             <label class="field">
+              <span>Imbalance Strategy</span>
+              <select id="train-imbalance-strategy" title="Balance the training rows in memory before fitting. Stored data is never changed.">
+                <option value="baseline" selected>Baseline</option>
+                <option value="class_weighted">Class Weighted</option>
+                <option value="undersample">Undersample Majority</option>
+                <option value="oversample">Oversample Minority</option>
+                <option value="smote">SMOTE-like</option>
+              </select>
+            </label>
+            <label class="field">
               <span>Dataset Export</span>
               <a id="download-all-dataset" class="link-button" href="#">Download Candidate Dataset CSV</a>
             </label>
+            <div class="field">
+              <span>Strategy Notes</span>
+              <div id="imbalance-strategy-note" class="summary empty">Select a strategy to see how it changes the in-memory training split.</div>
+            </div>
           </div>
+          <div class="panel-actions">
+            <button id="compare-imbalance" class="secondary" type="button" title="Train the same model across every imbalance strategy and compare the results.">Compare Strategies</button>
+          </div>
+          <p id="imbalance-message" class="message"></p>
           <div id="variant-cards" class="model-card-grid"></div>
           <p id="train-message" class="message"></p>
           <div id="train-result" class="model-card-grid"></div>
+          <div id="imbalance-results" class="model-card-grid"></div>
         </section>
 
         <section class="panel">

@@ -12,8 +12,13 @@
   const trainJobIds = document.getElementById('train-job-ids');
   const downloadAllDataset = document.getElementById('download-all-dataset');
   const trainAlgorithm = document.getElementById('train-algorithm');
+  const trainImbalanceStrategy = document.getElementById('train-imbalance-strategy');
   const trainMessage = document.getElementById('train-message');
   const trainResult = document.getElementById('train-result');
+  const imbalanceMessage = document.getElementById('imbalance-message');
+  const imbalanceStrategyNote = document.getElementById('imbalance-strategy-note');
+  const compareImbalanceButton = document.getElementById('compare-imbalance');
+  const imbalanceResults = document.getElementById('imbalance-results');
   const modelList = document.getElementById('model-list');
   const scoreModelId = document.getElementById('score-model-id');
   const scoreJobId = document.getElementById('score-job-id');
@@ -43,6 +48,8 @@
 
   let currentModels = [];
   let currentVariants = [];
+  let currentTrainingVariantId = '';
+  let currentImbalanceStrategies = [];
   let currentOverview = null;
   let currentOverviewScope = '';
   let overviewPollHandle = null;
@@ -68,6 +75,29 @@
     gradient_boosting: 'Gradient Boosting',
   };
 
+  const IMBALANCE_STRATEGY_FALLBACKS = {
+    baseline: {
+      title: 'Baseline',
+      description: 'Keep the original training split unchanged. Use this run as the control comparison.',
+    },
+    class_weighted: {
+      title: 'Class Weighted',
+      description: 'Bias the fit toward the minority class without mutating stored data.',
+    },
+    undersample: {
+      title: 'Undersample Majority',
+      description: 'Trim the majority class in memory until the classes are balanced.',
+    },
+    oversample: {
+      title: 'Oversample Minority',
+      description: 'Duplicate minority rows in memory until the classes are balanced.',
+    },
+    smote: {
+      title: 'SMOTE-like',
+      description: 'Create synthetic minority rows by interpolating between nearby neighbors.',
+    },
+  };
+
   function apiUrl(path) {
     return `${apiBase}${path}`;
   }
@@ -76,6 +106,15 @@
     const key = String(value || '').trim();
     if (!key) return 'Logistic Regression';
     return ALGORITHM_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
+  }
+
+  function getImbalanceStrategyMeta(value) {
+    const key = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    const fromOverview = currentImbalanceStrategies.find((entry) => entry && entry.id === key);
+    if (fromOverview) {
+      return fromOverview;
+    }
+    return IMBALANCE_STRATEGY_FALLBACKS[key] || IMBALANCE_STRATEGY_FALLBACKS.baseline;
   }
 
   function runtimeModelUrl(modelId) {
@@ -496,6 +535,166 @@
     });
   }
 
+  function updateImbalanceStrategyNote() {
+    if (!imbalanceStrategyNote || !trainImbalanceStrategy) return;
+    const meta = getImbalanceStrategyMeta(trainImbalanceStrategy.value);
+    imbalanceStrategyNote.className = 'summary';
+    imbalanceStrategyNote.innerHTML = `
+      <div><strong>${escapeHtml(meta.title || 'Baseline')}</strong></div>
+      <div>${escapeHtml(meta.description || 'This strategy keeps the training data unchanged.')}</div>
+    `;
+  }
+
+  function renderLabelBalanceDonut(counts, options = {}) {
+    const positive = Math.max(0, Number(counts && counts.positive) || 0);
+    const negative = Math.max(0, Number(counts && counts.negative) || 0);
+    const total = positive + negative;
+    const positiveRatio = total > 0 ? positive / total : 0;
+    const radius = 44;
+    const circumference = 2 * Math.PI * radius;
+    const positiveLength = Math.max(0, Math.min(circumference, circumference * positiveRatio));
+    const negativeLength = Math.max(0, circumference - positiveLength);
+    const centerTitle = options.centerTitle || String(total);
+    const centerLabel = options.centerLabel || 'labels';
+    const title = options.title || 'Label balance';
+    const subtitle = options.subtitle || '';
+    const positiveLabel = options.positiveLabel || 'Positive';
+    const negativeLabel = options.negativeLabel || 'Negative';
+    const positiveColor = options.positiveColor || 'rgba(29, 107, 87, 0.92)';
+    const negativeColor = options.negativeColor || 'rgba(138, 45, 45, 0.92)';
+
+    if (!total) {
+      return `
+        <div class="imbalance-donut empty">
+          <div class="imbalance-donut-copy">No labeled rows available.</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="imbalance-donut">
+        <svg class="imbalance-donut-chart" viewBox="0 0 120 120" role="img" aria-label="${escapeHtml(`${title}: ${positiveLabel} ${positive}, ${negativeLabel} ${negative}`)}">
+          <circle cx="60" cy="60" r="${radius}" fill="none" stroke="${escapeHtml(negativeColor)}" stroke-width="18"></circle>
+          <circle cx="60" cy="60" r="${radius}" fill="none" stroke="${escapeHtml(positiveColor)}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${positiveLength} ${negativeLength}" transform="rotate(-90 60 60)"></circle>
+          <text x="60" y="56" text-anchor="middle" class="imbalance-donut-value">${escapeHtml(centerTitle)}</text>
+          <text x="60" y="73" text-anchor="middle" class="imbalance-donut-label">${escapeHtml(centerLabel)}</text>
+        </svg>
+        <div class="imbalance-donut-legend">
+          <div class="imbalance-donut-legend-item"><span class="imbalance-dot good"></span><span>${escapeHtml(positiveLabel)} ${escapeHtml(positive)}</span></div>
+          <div class="imbalance-donut-legend-item"><span class="imbalance-dot bad"></span><span>${escapeHtml(negativeLabel)} ${escapeHtml(negative)}</span></div>
+          ${subtitle ? `<div class="imbalance-donut-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMetricBar(label, value, tone = 'plain') {
+    const numeric = Number(value);
+    const width = Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric * 100)) : 0;
+    const display = Number.isFinite(numeric) ? formatMetric(numeric) : '';
+    return `
+      <div class="metric-row">
+        <div class="metric-row-label">${escapeHtml(label)}</div>
+        <div class="metric-row-track"><span class="metric-row-fill ${escapeHtml(tone)}" style="width:${width}%"></span></div>
+        <div class="metric-row-value">${escapeHtml(display)}</div>
+      </div>
+    `;
+  }
+
+  function renderImbalanceComparison(result) {
+    if (!imbalanceResults) return;
+    const runs = result && Array.isArray(result.runs) ? result.runs : [];
+    if (!runs.length) {
+      imbalanceResults.className = 'model-card-grid empty';
+      imbalanceResults.textContent = 'Run a comparison to see how imbalance strategies perform.';
+      return;
+    }
+
+    const focusStrategy = String(result.focus_strategy || '').trim();
+    const leaderboard = result.leaderboard || {};
+    const leaderboardRows = [
+      leaderboard.precision ? `<div><strong>Precision:</strong> ${escapeHtml(leaderboard.precision.strategy.title || leaderboard.precision.strategy_id)} (${escapeHtml(formatMetric(leaderboard.precision.value))})</div>` : '',
+      leaderboard.recall ? `<div><strong>Recall:</strong> ${escapeHtml(leaderboard.recall.strategy.title || leaderboard.recall.strategy_id)} (${escapeHtml(formatMetric(leaderboard.recall.value))})</div>` : '',
+      leaderboard.f1 ? `<div><strong>F1:</strong> ${escapeHtml(leaderboard.f1.strategy.title || leaderboard.f1.strategy_id)} (${escapeHtml(formatMetric(leaderboard.f1.value))})</div>` : '',
+      leaderboard.top_1_accuracy ? `<div><strong>Top-1:</strong> ${escapeHtml(leaderboard.top_1_accuracy.strategy.title || leaderboard.top_1_accuracy.strategy_id)} (${escapeHtml(formatMetric(leaderboard.top_1_accuracy.value))})</div>` : '',
+    ].filter(Boolean);
+
+    imbalanceResults.className = 'model-card-grid imbalance-comparison-grid';
+    imbalanceResults.innerHTML = `
+      <article class="model-card comparison-summary-card">
+        <p class="eyebrow subtle">Imbalance Comparison</p>
+        <h3>Metric Leaderboard</h3>
+        <div class="summary tight-summary">
+          ${leaderboardRows.join('')}
+          <div><strong>Focus:</strong> ${escapeHtml((getImbalanceStrategyMeta(focusStrategy) || {}).title || focusStrategy || 'Baseline')}</div>
+        </div>
+        <p class="candidate-copy">Each run uses the same labeled dataset and the same model family. Only the in-memory balancing strategy changes.</p>
+      </article>
+      <article class="model-card comparison-chart-card">
+        <p class="eyebrow subtle">F1 Graph</p>
+        <h3>Strategy Score Bars</h3>
+        <div class="comparison-chart">
+          ${runs.map((run) => {
+            const metrics = run.summary && run.summary.evaluation ? (run.summary.evaluation.test || run.summary.evaluation.train || null) : null;
+            const candidateMetrics = metrics && metrics.candidate_metrics ? metrics.candidate_metrics : null;
+            const f1 = candidateMetrics ? Number(candidateMetrics.f1) : NaN;
+            const tone = run.strategy_id === focusStrategy ? 'good' : 'plain';
+            return `
+              <div class="comparison-chart-row">
+                <div class="comparison-chart-label">${escapeHtml(run.strategy.title || run.strategy_id)}</div>
+                <div class="comparison-chart-track"><span class="comparison-chart-fill ${tone}" style="width:${Number.isFinite(f1) ? Math.max(0, Math.min(100, f1 * 100)) : 0}%"></span></div>
+                <div class="comparison-chart-value">${escapeHtml(Number.isFinite(f1) ? formatMetric(f1) : '')}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </article>
+      ${runs.map((run) => {
+        const summary = run.summary || {};
+        const counts = summary.training_counts || {};
+        const imbalance = summary.imbalance_strategy || {};
+        const evaluation = summary.evaluation && (summary.evaluation.test || summary.evaluation.train)
+          ? (summary.evaluation.test || summary.evaluation.train)
+          : null;
+        const candidateMetrics = evaluation && evaluation.candidate_metrics ? evaluation.candidate_metrics : null;
+        const rankingMetrics = evaluation && evaluation.ranking_metrics ? evaluation.ranking_metrics : null;
+        const isFocus = run.strategy_id === focusStrategy;
+        const originalCounts = imbalance.original_label_counts || counts.train_label_counts || {};
+        const preparedCounts = imbalance.prepared_label_counts || counts.effective_train_label_counts || originalCounts;
+        return `
+          <article class="model-card ${isFocus ? 'is-focused' : ''}">
+            <p class="eyebrow subtle">${escapeHtml(run.strategy.title || run.strategy_id)}</p>
+            <h3>${escapeHtml(run.strategy.title || run.strategy_id)}</h3>
+            <p class="candidate-copy">${escapeHtml(run.strategy.description || '')}</p>
+            ${renderLabelBalanceDonut(preparedCounts, {
+              centerTitle: `${preparedCounts.positive || 0}:${preparedCounts.negative || 0}`,
+              centerLabel: 'prepared',
+              title: run.strategy.title,
+              subtitle: imbalance.balancing_mode ? `Mode: ${imbalance.balancing_mode}` : '',
+            })}
+            <div class="summary tight-summary">
+              <div><strong>Original:</strong> ${escapeHtml(originalCounts.positive || 0)} / ${escapeHtml(originalCounts.negative || 0)}</div>
+              <div><strong>Prepared:</strong> ${escapeHtml(preparedCounts.positive || 0)} / ${escapeHtml(preparedCounts.negative || 0)}</div>
+              <div><strong>Rows:</strong> ${escapeHtml(imbalance.original_row_count || counts.train_rows || 0)} -> ${escapeHtml(imbalance.prepared_row_count || counts.effective_train_rows || counts.train_rows || 0)}</div>
+              <div><strong>Fallback:</strong> ${escapeHtml(imbalance.fallback || 'none')}</div>
+              <div><strong>Class Weighting:</strong> ${imbalance.class_weighting || imbalance.class_weighting_effective ? 'yes' : 'no'}</div>
+              <div><strong>F1:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.f1) : '')}</div>
+              <div><strong>Recall:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.recall) : '')}</div>
+              <div><strong>Precision:</strong> ${escapeHtml(candidateMetrics ? formatMetric(candidateMetrics.precision) : '')}</div>
+              <div><strong>Top-1:</strong> ${escapeHtml(rankingMetrics ? formatMetric(rankingMetrics.top_1_accuracy) : '')}</div>
+            </div>
+            <div class="metric-stack">
+              ${renderMetricBar('F1', candidateMetrics ? Number(candidateMetrics.f1) : NaN, isFocus ? 'good' : 'plain')}
+              ${renderMetricBar('Recall', candidateMetrics ? Number(candidateMetrics.recall) : NaN, 'good')}
+              ${renderMetricBar('Precision', candidateMetrics ? Number(candidateMetrics.precision) : NaN, 'plain')}
+              ${renderMetricBar('Top-1', rankingMetrics ? Number(rankingMetrics.top_1_accuracy) : NaN, 'muted')}
+            </div>
+          </article>
+        `;
+      }).join('')}
+    `;
+  }
+
   function normalizeOverviewJobIds(value) {
     return Array.from(new Set(String(value || '')
       .split(/[,\s]+/)
@@ -512,6 +711,9 @@
   function renderOverview(overview) {
     currentOverview = overview;
     setOverviewMessage('', false);
+    currentImbalanceStrategies = Array.isArray(overview && overview.imbalance_strategies) && overview.imbalance_strategies.length
+      ? overview.imbalance_strategies.slice()
+      : currentImbalanceStrategies;
     const dataset = overview && overview.dataset ? overview.dataset : null;
     const models = overview && Array.isArray(overview.models) ? overview.models : [];
     const families = overview && Array.isArray(overview.feature_families) ? overview.feature_families : [];
@@ -586,6 +788,7 @@
       ...noteRows,
     ].join('');
 
+    updateImbalanceStrategyNote();
     syncOverviewPolling();
   }
 
@@ -634,6 +837,10 @@
     if (!model) {
       trainResult.className = 'model-card-grid empty';
       trainResult.textContent = '';
+      if (imbalanceResults) {
+        imbalanceResults.className = 'model-card-grid empty';
+        imbalanceResults.textContent = '';
+      }
       return;
     }
 
@@ -643,6 +850,14 @@
         ? model.evaluation.train
         : null;
     const algorithmLabel = formatAlgorithmName(model.algorithm);
+    const imbalance = model.imbalance_strategy || null;
+    const trainingCounts = model.training_counts || {};
+    const originalCounts = imbalance && imbalance.original_label_counts
+      ? imbalance.original_label_counts
+      : trainingCounts.train_label_counts || {};
+    const preparedCounts = imbalance && imbalance.prepared_label_counts
+      ? imbalance.prepared_label_counts
+      : trainingCounts.effective_train_label_counts || originalCounts;
     const familyImportance = model.reliance && Array.isArray(model.reliance.family_importance)
       ? model.reliance.family_importance.slice(0, 6)
       : [];
@@ -676,13 +891,46 @@
         <p>Saved as <code>${escapeHtml(model.id || '')}</code>. This is the artifact you can use for scoring jobs and probing site groups.</p>
         <div class="summary tight-summary">
           <div><strong>Algorithm:</strong> ${escapeHtml(algorithmLabel)}</div>
+          <div><strong>Imbalance:</strong> ${escapeHtml((imbalance && imbalance.title) || 'Baseline')}</div>
           <div><strong>Train Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.train_rows : '')}</div>
+          <div><strong>Effective Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.effective_train_rows : '')}</div>
           <div><strong>Test Rows:</strong> ${escapeHtml(model.training_counts ? model.training_counts.test_rows : '')}</div>
           <div><strong>Precision:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.precision) : '')}</div>
           <div><strong>Recall:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.recall) : '')}</div>
           <div><strong>F1:</strong> ${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.f1) : '')}</div>
           <div><strong>Top-1 Accuracy:</strong> ${escapeHtml(evaluation && evaluation.ranking_metrics ? formatMetric(evaluation.ranking_metrics.top_1_accuracy) : '')}</div>
         </div>
+      </article>
+      <article class="model-card">
+        <p class="eyebrow subtle">Imbalance Diagnostics</p>
+        <h3>${escapeHtml((imbalance && imbalance.title) || 'Baseline')}</h3>
+        <div class="imbalance-chart-grid">
+          ${renderLabelBalanceDonut(originalCounts, {
+            centerTitle: `${originalCounts.positive || 0}:${originalCounts.negative || 0}`,
+            centerLabel: 'original',
+            title: 'Original label balance',
+            subtitle: imbalance && imbalance.original_imbalance_ratio !== null && imbalance.original_imbalance_ratio !== undefined
+              ? `Ratio: ${formatMetric(imbalance.original_imbalance_ratio, 2)}`
+              : '',
+          })}
+          ${renderLabelBalanceDonut(preparedCounts, {
+            centerTitle: `${preparedCounts.positive || 0}:${preparedCounts.negative || 0}`,
+            centerLabel: 'prepared',
+            title: 'Prepared label balance',
+            subtitle: imbalance && imbalance.prepared_imbalance_ratio !== null && imbalance.prepared_imbalance_ratio !== undefined
+              ? `Ratio: ${formatMetric(imbalance.prepared_imbalance_ratio, 2)}`
+              : '',
+          })}
+        </div>
+        <div class="summary tight-summary">
+          <div><strong>Strategy:</strong> ${escapeHtml((imbalance && imbalance.description) || 'No resampling applied.')}</div>
+          <div><strong>Original Rows:</strong> ${escapeHtml(imbalance ? imbalance.original_row_count : trainingCounts.train_rows || '')}</div>
+          <div><strong>Prepared Rows:</strong> ${escapeHtml(imbalance ? imbalance.prepared_row_count : trainingCounts.effective_train_rows || '')}</div>
+          <div><strong>Synthetic Rows:</strong> ${escapeHtml(imbalance ? imbalance.synthetic_row_count : 0)}</div>
+          <div><strong>Fallback:</strong> ${escapeHtml((imbalance && imbalance.fallback) || 'none')}</div>
+          <div><strong>Class Weighting:</strong> ${imbalance && (imbalance.class_weighting || imbalance.class_weighting_effective) ? 'yes' : 'no'}</div>
+        </div>
+        <p class="candidate-copy">The rows stay in memory only. Stored labels and source data are not changed.</p>
       </article>
       <article class="model-card">
         <p class="eyebrow subtle">Feature Reliance</p>
@@ -1084,11 +1332,15 @@
 
   async function trainVariant(variantId) {
     const algorithm = trainAlgorithm ? trainAlgorithm.value : 'logistic_regression';
-    setMessage(trainMessage, `Training model using ${formatAlgorithmName(algorithm)}…`, false);
+    const imbalanceStrategy = trainImbalanceStrategy ? trainImbalanceStrategy.value : 'baseline';
+    const strategyMeta = getImbalanceStrategyMeta(imbalanceStrategy);
+    currentTrainingVariantId = variantId;
+    setMessage(trainMessage, `Training model using ${formatAlgorithmName(algorithm)} with ${strategyMeta.title}…`, false);
     const body = {
       variantId,
       jobIds: trainJobIds.value.trim(),
       algorithm,
+      imbalanceStrategy,
     };
     const result = await fetchJson('/api/modeling/train', {
       method: 'POST',
@@ -1100,6 +1352,32 @@
     setMessage(trainMessage, `Saved model ${result.summary ? result.summary.id : ''}.`, false);
     renderTrainResult(result.model || null);
     await refreshPage();
+  }
+
+  async function compareImbalanceStrategies() {
+    const variantId = currentTrainingVariantId || (currentVariants.length ? currentVariants[0].id : '');
+    if (!variantId) {
+      throw new Error('Load training variants first.');
+    }
+    const selectedVariant = currentVariants.find((variant) => variant.id === variantId) || currentVariants[0] || null;
+    const algorithm = trainAlgorithm ? trainAlgorithm.value : 'logistic_regression';
+    const imbalanceStrategy = trainImbalanceStrategy ? trainImbalanceStrategy.value : 'baseline';
+    const strategyMeta = getImbalanceStrategyMeta(imbalanceStrategy);
+    setMessage(imbalanceMessage, `Comparing imbalance strategies for ${selectedVariant ? selectedVariant.title : variantId} with ${formatAlgorithmName(algorithm)} from ${strategyMeta.title}…`, false);
+    const result = await fetchJson('/api/modeling/compare-imbalance', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        variantId,
+        jobIds: trainJobIds.value.trim(),
+        algorithm,
+        imbalanceStrategy,
+      }),
+    });
+    setMessage(imbalanceMessage, 'Comparison ready.', false);
+    renderImbalanceComparison(result);
   }
 
   refreshButton.addEventListener('click', () => {
@@ -1144,6 +1422,12 @@
     });
   }
 
+  if (trainImbalanceStrategy) {
+    trainImbalanceStrategy.addEventListener('change', () => {
+      updateImbalanceStrategyNote();
+    });
+  }
+
   variantCards.addEventListener('click', (event) => {
     const button = event.target.closest('[data-train-variant]');
     if (!button) return;
@@ -1153,6 +1437,16 @@
       setMessage(trainMessage, error.message || String(error), true);
     });
   });
+
+  if (compareImbalanceButton) {
+    compareImbalanceButton.addEventListener('click', () => {
+      runElementAction(compareImbalanceButton, async () => {
+        await compareImbalanceStrategies();
+      }).catch((error) => {
+        setMessage(imbalanceMessage, error.message || String(error), true);
+      });
+    });
+  }
 
   modelList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-use-model]');
@@ -1302,8 +1596,10 @@
   });
 
   renderTrainResult(null);
+  renderImbalanceComparison(null);
   renderScoredJob(null);
   renderLiveProbe(null);
+  updateImbalanceStrategyNote();
   updateDatasetDownloadLink();
   refreshPage().catch((error) => {
     setOverviewMessage(error.message || String(error), true);
