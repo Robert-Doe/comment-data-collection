@@ -67,8 +67,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ui
-      args:
-        API_BASE_URL: ${API_BASE_URL}
+    env_file:
+      - .env.digitalocean
     restart: unless-stopped
     depends_on:
       - api
