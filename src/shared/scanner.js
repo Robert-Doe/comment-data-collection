@@ -100,19 +100,47 @@ async function safeWaitForFunction(page, expression, timeoutMs) {
   }
 }
 
+const STEALTH_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+const STEALTH_VIEWPORTS = [
+  { width: 1366, height: 768 },
+  { width: 1440, height: 900 },
+  { width: 1536, height: 864 },
+  { width: 1920, height: 1080 },
+  { width: 1280, height: 800 },
+];
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function buildBrowserContextOptions(options = {}) {
   const contextOptions = {
     ignoreHTTPSErrors: true,
+    userAgent: options.userAgent || pickRandom(STEALTH_USER_AGENTS),
+    viewport: options.viewport || pickRandom(STEALTH_VIEWPORTS),
+    locale: options.locale || 'en-US',
+    timezoneId: options.timezoneId || 'America/New_York',
+    extraHTTPHeaders: options.extraHTTPHeaders || {
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
+    },
   };
 
-  if (options.userAgent) contextOptions.userAgent = options.userAgent;
-  if (options.viewport) contextOptions.viewport = options.viewport;
-  if (options.locale) contextOptions.locale = options.locale;
-  if (options.timezoneId) contextOptions.timezoneId = options.timezoneId;
   if (options.deviceScaleFactor) contextOptions.deviceScaleFactor = options.deviceScaleFactor;
   if (options.hasTouch !== undefined) contextOptions.hasTouch = options.hasTouch;
   if (options.isMobile !== undefined) contextOptions.isMobile = options.isMobile;
-  if (options.extraHTTPHeaders) contextOptions.extraHTTPHeaders = options.extraHTTPHeaders;
   if (options.storageState) contextOptions.storageState = options.storageState;
 
   return contextOptions;
@@ -1121,6 +1149,12 @@ async function createContext(options = {}) {
       const browser = await getBrowser();
       const context = await browser.newContext(buildBrowserContextOptions(options));
 
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        window.chrome = { runtime: {} };
+      });
       await context.addInitScript({ path: getFeaturePath() });
       if (options.blockStaticAssets !== false) {
         await context.route('**/*', (route) => {

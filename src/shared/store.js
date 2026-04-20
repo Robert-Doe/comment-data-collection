@@ -711,6 +711,87 @@ async function resumeJob(jobId, options = {}, databaseUrl) {
   }
 }
 
+async function resumeFailedItems(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) {
+    throw new Error('jobId is required');
+  }
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const existingJobResult = await client.query(
+      'SELECT * FROM jobs WHERE id = $1 FOR UPDATE',
+      [normalizedJobId],
+    );
+    const existingJob = existingJobResult.rows[0] || null;
+    if (!existingJob) {
+      throw new Error('Job not found');
+    }
+
+    const failedResult = await client.query(
+      `SELECT id FROM job_items WHERE job_id = $1 AND status = 'failed' ORDER BY row_number ASC`,
+      [normalizedJobId],
+    );
+    const failedIds = failedResult.rows.map((r) => r.id);
+    const resumedCount = failedIds.length;
+
+    if (!resumedCount) {
+      await client.query('COMMIT');
+      return { job: existingJob, resumedCount: 0 };
+    }
+
+    await client.query(
+      `UPDATE job_items
+       SET status = 'pending',
+           error_message = NULL,
+           attempts = 0,
+           started_at = NULL,
+           completed_at = NULL,
+           ugc_detected = NULL,
+           best_score = NULL,
+           best_confidence = NULL,
+           best_ugc_type = NULL,
+           best_xpath = NULL,
+           best_css_path = NULL,
+           candidates = NULL,
+           title = NULL,
+           final_url = NULL
+       WHERE id = ANY($1::text[])`,
+      [failedIds],
+    );
+
+    await client.query(
+      `UPDATE jobs
+       SET status = CASE
+             WHEN status IN ('completed', 'completed_with_errors', 'failed') THEN 'queued'
+             ELSE status
+           END,
+           error_message = NULL,
+           finished_at = NULL,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [normalizedJobId],
+    );
+
+    await client.query('COMMIT');
+    await recomputeJob(normalizedJobId, databaseUrl);
+
+    return {
+      job: await getJob(normalizedJobId, databaseUrl),
+      resumedCount,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function deleteJob(jobId, databaseUrl) {
   const normalizedJobId = String(jobId || '').trim();
   if (!normalizedJobId) {
@@ -1987,6 +2068,7 @@ module.exports = {
   replaceJobRecords,
   restartJob,
   resumeJob,
+  resumeFailedItems,
   deleteJob,
   clearAllJobs,
   listJobs,

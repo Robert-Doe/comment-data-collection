@@ -76,6 +76,7 @@
   const managerReplaceFile = document.getElementById('manager-replace-file');
   const managerMessage = document.getElementById('manager-message');
   const managerResumeButton = document.getElementById('manager-resume-job');
+  const managerResumeFailedButton = document.getElementById('manager-resume-failed-job');
   const managerRestartButton = document.getElementById('manager-restart-job');
   const managerDeleteButton = document.getElementById('manager-delete-job');
   const managerClearJobsButton = document.getElementById('manager-clear-jobs');
@@ -445,6 +446,11 @@
     return (Number(job.pending_count) || 0) > 0
       || (Number(job.queued_count) || 0) > 0
       || (Number(job.running_count) || 0) > 0;
+  }
+
+  function canResumeFailedJob(job) {
+    if (!job) return false;
+    return (Number(job.failed_count) || 0) > 0;
   }
 
   function resetCurrentJobSelection(options = {}) {
@@ -3101,6 +3107,7 @@
       managerReplaceFile.value = '';
       if (backupFileInput) backupFileInput.value = '';
       managerResumeButton.disabled = true;
+      managerResumeFailedButton.disabled = true;
       managerRestartButton.disabled = true;
       managerDeleteButton.disabled = true;
       if (replaceButton) {
@@ -3135,6 +3142,7 @@
     }
 
     managerResumeButton.disabled = !canResumeJob(job);
+    managerResumeFailedButton.disabled = !canResumeFailedJob(job);
     managerRestartButton.disabled = false;
     managerDeleteButton.disabled = false;
     if (replaceButton) {
@@ -3160,6 +3168,7 @@
             <button class="secondary compact" type="button" data-open-job="${escapeHtml(job.id)}">Open</button>
             <button class="secondary compact" type="button" data-manage-job="${escapeHtml(job.id)}">Manage</button>
             <button class="secondary compact" type="button" data-resume-job="${escapeHtml(job.id)}" ${canResumeJob(job) ? '' : 'disabled'}>Resume</button>
+            <button class="secondary compact" type="button" data-resume-failed-job="${escapeHtml(job.id)}" ${canResumeFailedJob(job) ? '' : 'disabled'}>Resume Failed</button>
             <button class="secondary compact" type="button" data-restart-job="${escapeHtml(job.id)}">Restart</button>
             <button class="secondary compact danger-button" type="button" data-delete-job="${escapeHtml(job.id)}">Delete</button>
           </div>
@@ -3388,6 +3397,25 @@
         : 'Resume requested. No unfinished rows needed replacement.';
       setManagerMessage(message, false);
       showToast(message, { tone: 'success' });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      setManagerMessage(message, true);
+      showToast(message, { tone: 'error' });
+    }
+  }
+
+  async function handleResumeFailedJob(jobId, triggerElement) {
+    if (!jobId) return;
+    try {
+      setManagerMessage('Re-queuing failed URLs...', false);
+      const body = await runElementAction(triggerElement, () => postJobAction(jobId, `/api/jobs/${jobId}/resume-failed`));
+      const resumedCount = Number(body && body.resumedCount) || 0;
+      const message = resumedCount
+        ? `Re-queued ${resumedCount} failed URL(s) for retry.`
+        : 'No failed URLs found to resume.';
+      setManagerMessage(message, false);
+      showToast(message, { tone: 'success' });
+      await refreshJob(jobId);
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       setManagerMessage(message, true);
@@ -3949,6 +3977,13 @@
       return;
     }
 
+    const resumeFailedButton = event.target.closest('[data-resume-failed-job]');
+    if (resumeFailedButton) {
+      const jobId = resumeFailedButton.getAttribute('data-resume-failed-job');
+      handleResumeFailedJob(jobId, resumeFailedButton).catch((error) => console.error(error));
+      return;
+    }
+
     const restartButton = event.target.closest('[data-restart-job]');
     if (restartButton) {
       const jobId = restartButton.getAttribute('data-restart-job');
@@ -4156,6 +4191,10 @@
 
   managerResumeButton.addEventListener('click', () => {
     handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));
+  });
+
+  managerResumeFailedButton.addEventListener('click', () => {
+    handleResumeFailedJob(currentJobId, managerResumeFailedButton).catch((error) => console.error(error));
   });
 
   managerRestartButton.addEventListener('click', () => {

@@ -46,6 +46,7 @@ const {
   replaceJobRecords,
   restartJob,
   resumeJob,
+  resumeFailedItems,
   deleteJob,
   clearAllJobs,
   clearJobArtifactPaths,
@@ -630,6 +631,44 @@ function createApp(config = getConfig()) {
         ok: true,
         job: updatedJob,
         replacedCount: resumed && resumed.replacedCount ? resumed.replacedCount : 0,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/resume-failed', async (req, res, next) => {
+    try {
+      const { job } = await listAllJobItemsForAction(req.params.jobId, config);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const result = await resumeFailedItems(req.params.jobId, {}, config.databaseUrl);
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        req.params.jobId,
+        queueFillCountForJob(result && result.job ? result.job : job, config),
+        config.databaseUrl,
+        queue,
+      );
+      const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'job_resume_failed',
+        eventKey: `job_resume_failed:${Date.now()}`,
+        message: result && result.resumedCount
+          ? `Re-queued ${result.resumedCount} previously failed URL(s).`
+          : 'Resume failed requested. No failed rows found.',
+        details: { resumed_count: result && result.resumedCount ? result.resumedCount : 0 },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({
+        ok: true,
+        job: updatedJob,
+        resumedCount: result && result.resumedCount ? result.resumedCount : 0,
       });
     } catch (error) {
       next(error);
