@@ -1897,6 +1897,7 @@ function exportDataset(items, variantId, options = {}) {
 
 module.exports = {
   buildOverview,
+  extractCandidateDataset,
   listTrainingAlgorithms,
   normalizeTrainingAlgorithm,
   listImbalanceStrategies,

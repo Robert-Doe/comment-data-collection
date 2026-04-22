@@ -12,6 +12,7 @@ const {
 const { listModelVariants, getModelVariant } = require('../variants');
 const {
   buildOverview,
+  extractCandidateDataset,
   listTrainingAlgorithms,
   normalizeTrainingAlgorithm,
   compareImbalanceStrategies,
@@ -26,6 +27,7 @@ const {
 const { parseJobIdList } = require('./utils');
 const { normalizeInputUrl } = require('../../shared/csv');
 const { loadInBatches } = require('../../shared/loadInBatches');
+const datasetCache = require('./datasetCache');
 
 function normalizeJobIds(value) {
   if (Array.isArray(value)) {
@@ -83,6 +85,29 @@ function createModelingRouter(dependencies) {
     });
   }
 
+  // Warm all variants for jobIds in background after overview loads.
+  // Deduplicates concurrent requests via the pending map; silently ignores errors.
+  function triggerBackgroundWarm(jobIds) {
+    const variants = listModelVariants();
+    const allCached = variants.every((v) => !!datasetCache.get(jobIds, v.id));
+    if (allCached) return;
+
+    setImmediate(() => {
+      loadModelingItems(jobIds, null, { modelingOnly: true })
+        .then((items) => {
+          for (const variant of variants) {
+            if (!datasetCache.get(jobIds, variant.id)) {
+              try {
+                const dataset = extractCandidateDataset(items, { variant: getModelVariant(variant.id) });
+                datasetCache.set(jobIds, variant.id, dataset);
+              } catch (_) { /* never interrupt */ }
+            }
+          }
+        })
+        .catch(() => { /* silently ignore warm errors */ });
+    });
+  }
+
   router.get('/overview', async (req, res, next) => {
     try {
       const jobIds = normalizeJobIds(req.query.jobIds || '');
@@ -100,6 +125,8 @@ function createModelingRouter(dependencies) {
         selected_job_ids: jobIds,
         selected_jobs: selectedJobs,
       });
+      // Warm the modeling dataset in background so train/compare are instant next time
+      triggerBackgroundWarm(jobIds);
     } catch (error) {
       next(error);
     }
@@ -171,6 +198,18 @@ function createModelingRouter(dependencies) {
     }
   });
 
+  // Expose cache state for debugging / monitoring
+  router.get('/cache-status', (_req, res) => {
+    res.json(datasetCache.stats());
+  });
+
+  // Manually kick off cache warming (called by frontend if needed)
+  router.post('/warm-cache', (req, res) => {
+    const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+    triggerBackgroundWarm(jobIds);
+    res.json({ ok: true, jobIds });
+  });
+
   router.post('/train', async (req, res, next) => {
     try {
       const variantId = String(req.body && req.body.variantId || '').trim();
@@ -187,20 +226,30 @@ function createModelingRouter(dependencies) {
 
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
       const progress = requestProgress(req);
-      progress && progress({ stage: 'training', message: 'Loading training dataset' });
-      const items = await loadModelingItems(jobIds, progress, { modelingOnly: true });
+
+      const cachedDataset = datasetCache.get(jobIds, variantId);
+      if (cachedDataset) {
+        progress && progress({ stage: 'training', message: 'Dataset ready (cached) \u2014 starting model fit' });
+      } else {
+        progress && progress({ stage: 'training', message: 'Loading training dataset' });
+      }
+
+      // Cache hit: skip DB entirely. trainModel ignores items when dataset is provided.
+      const items = cachedDataset ? null : await loadModelingItems(jobIds, progress, { modelingOnly: true });
       const trained = await trainModel(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
         imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
         split: req.body && req.body.split ? req.body.split : undefined,
         trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
+        dataset: cachedDataset || undefined,
         progress,
       });
       res.status(201).json({
         ok: true,
         model: trained.artifact,
         summary: trained.summary,
+        cache_hit: !!cachedDataset,
       });
     } catch (error) {
       next(error);
@@ -223,8 +272,16 @@ function createModelingRouter(dependencies) {
 
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
       const progress = requestProgress(req);
-      progress && progress({ stage: 'training', message: 'Loading comparison dataset' });
-      const items = await loadModelingItems(jobIds, progress, { modelingOnly: true });
+
+      const cachedDataset = datasetCache.get(jobIds, variantId);
+      if (cachedDataset) {
+        progress && progress({ stage: 'training', message: 'Dataset ready (cached) \u2014 comparing strategies' });
+      } else {
+        progress && progress({ stage: 'training', message: 'Loading comparison dataset' });
+      }
+
+      // Cache hit: skip DB entirely. compareImbalanceStrategies ignores items when dataset is provided.
+      const items = cachedDataset ? null : await loadModelingItems(jobIds, progress, { modelingOnly: true });
       const comparison = await compareImbalanceStrategies(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
@@ -232,12 +289,15 @@ function createModelingRouter(dependencies) {
         split: req.body && req.body.split ? req.body.split : undefined,
         trainingOptions: req.body && req.body.trainingOptions ? req.body.trainingOptions : undefined,
         strategies: req.body && req.body.strategies ? req.body.strategies : undefined,
+        dataset: cachedDataset || undefined,
+        progress,
       });
       res.json({
         ok: true,
         variantId,
         algorithm,
         jobIds,
+        cache_hit: !!cachedDataset,
         ...comparison,
       });
     } catch (error) {
