@@ -923,7 +923,10 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
          ugc_detected,
          screenshot_url,
          manual_uploaded_screenshot_url,
-         scan_result,
+         json_build_object(
+           'blocker_type', scan_result->>'blocker_type',
+           'frame_count', (scan_result->>'frame_count')::int
+         ) AS scan_result,
          candidates,
          candidate_reviews
        FROM job_items`
