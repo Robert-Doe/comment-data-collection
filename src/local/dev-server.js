@@ -832,6 +832,7 @@ function createLocalRuntime(options = {}) {
         : [];
       const requireCandidates = options.requireCandidates !== false;
       const summaryOnly = !!options.summaryOnly;
+      const modelingOnly = !!options.modelingOnly;
       const limit = Math.max(1, Number(options.limit) || 20000);
       const offset = Math.max(0, Number(options.offset) || 0);
       const items = state.items
@@ -844,6 +845,24 @@ function createLocalRuntime(options = {}) {
         })
         .slice(offset, offset + limit);
       if (!summaryOnly) {
+        if (modelingOnly) {
+          return items.map((item) => ({
+            id: item.id,
+            job_id: item.job_id,
+            row_number: item.row_number,
+            normalized_url: item.normalized_url,
+            final_url: item.final_url,
+            analysis_source: item.analysis_source,
+            manual_captured_at: item.manual_captured_at,
+            status: item.status,
+            ugc_detected: item.ugc_detected,
+            screenshot_url: item.screenshot_url,
+            manual_uploaded_screenshot_url: item.manual_uploaded_screenshot_url,
+            scan_result: item.scan_result,
+            candidates: item.candidates,
+            candidate_reviews: item.candidate_reviews,
+          }));
+        }
         return items;
       }
       return items.map((item) => ({

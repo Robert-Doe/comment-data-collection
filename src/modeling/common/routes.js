@@ -46,10 +46,12 @@ function createModelingRouter(dependencies) {
 
   async function loadModelingItems(jobIds, progress, options = {}) {
     const summaryOnly = !!options.summaryOnly;
+    const modelingOnly = !!options.modelingOnly;
     return loadInBatches(async ({ limit, offset }) => dependencies.listItemsForModeling({
       jobIds,
       requireCandidates: true,
       summaryOnly,
+      modelingOnly,
       limit,
       offset,
     }), {
@@ -186,7 +188,7 @@ function createModelingRouter(dependencies) {
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
       const progress = requestProgress(req);
       progress && progress({ stage: 'training', message: 'Loading training dataset' });
-      const items = await loadModelingItems(jobIds, progress);
+      const items = await loadModelingItems(jobIds, progress, { modelingOnly: true });
       const trained = await trainModel(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
@@ -222,7 +224,7 @@ function createModelingRouter(dependencies) {
       const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
       const progress = requestProgress(req);
       progress && progress({ stage: 'training', message: 'Loading comparison dataset' });
-      const items = await loadModelingItems(jobIds, progress);
+      const items = await loadModelingItems(jobIds, progress, { modelingOnly: true });
       const comparison = await compareImbalanceStrategies(items, dependencies.artifactRoot, {
         variantId,
         algorithm,
@@ -402,7 +404,7 @@ function createModelingRouter(dependencies) {
       const jobIds = normalizeJobIds(req.query.jobIds || '');
       const progress = requestProgress(req);
       progress && progress({ stage: 'exporting', message: 'Loading dataset for export' });
-      const items = await loadModelingItems(jobIds, progress);
+      const items = await loadModelingItems(jobIds, progress, { modelingOnly: true });
       const exported = exportDataset(items, variantId, {
         progress,
       });

@@ -910,7 +910,24 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
   const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const selectClause = options.summaryOnly
     ? 'SELECT id, job_id, row_number, normalized_url, final_url, candidates, candidate_reviews FROM job_items'
-    : 'SELECT * FROM job_items';
+    : options.modelingOnly
+      ? `SELECT
+         id,
+         job_id,
+         row_number,
+         normalized_url,
+         final_url,
+         analysis_source,
+         manual_captured_at,
+         status,
+         ugc_detected,
+         screenshot_url,
+         manual_uploaded_screenshot_url,
+         scan_result,
+         candidates,
+         candidate_reviews
+       FROM job_items`
+      : 'SELECT * FROM job_items';
   const result = await db.query(
     `${selectClause}
      ${whereClause}
