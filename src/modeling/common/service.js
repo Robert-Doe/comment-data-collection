@@ -1328,6 +1328,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     }) : null,
     progressInterval,
   });
+  items = null;
   const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
   if (labeledRows.length < 4) {
     throw new Error('Model training needs at least 4 human-reviewed binary candidate labels');
@@ -1507,10 +1508,11 @@ async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {
     ? normalizedRequestedStrategies
     : listImbalanceStrategies().map((entry) => entry.id);
   const focusStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+  items = null;
   const runs = [];
 
   for (const strategyId of compareStrategyIds) {
-    const trained = await trainModel(items, artifactRoot, {
+    const trained = await trainModel(null, artifactRoot, {
       ...trainingInput,
       dataset,
       imbalanceStrategy: strategyId,
