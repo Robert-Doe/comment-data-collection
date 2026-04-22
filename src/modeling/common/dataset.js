@@ -166,6 +166,77 @@ function summarizeRows(rows) {
   return summary;
 }
 
+function summarizeCandidateDataset(items, options = {}) {
+  const progress = typeof options.progress === 'function' ? options.progress : null;
+  const progressInterval = Math.max(1, Number(options.progressInterval) || 50);
+  const sourceItems = Array.isArray(items) ? items : [];
+  const totalItems = sourceItems.length;
+  const summary = {
+    item_count: 0,
+    candidate_count: 0,
+    labeled_candidate_count: 0,
+    positive_candidate_count: 0,
+    negative_candidate_count: 0,
+    uncertain_candidate_count: 0,
+    unlabeled_candidate_count: 0,
+    review_complete_binary_item_count: 0,
+    hostname_count: 0,
+  };
+  const itemsWithCandidates = new Set();
+  const binaryReviewedItems = new Set();
+  const hostnames = new Set();
+
+  sourceItems.forEach((item, index) => {
+    if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === totalItems)) {
+      progress({
+        stage: 'overview',
+        message: `Summarizing candidate rows ${index + 1}/${totalItems}`,
+        progress: {
+          current: index + 1,
+          total: totalItems,
+          unit: 'items',
+          indeterminate: totalItems === 0,
+        },
+      });
+    }
+
+    const reviewedCandidates = applyCandidateReviews(
+      item && item.candidates ? item.candidates : [],
+      item && item.candidate_reviews ? item.candidate_reviews : [],
+    );
+    if (!reviewedCandidates.length) {
+      return;
+    }
+
+    const itemId = String(item && item.id || '');
+    if (itemId) {
+      itemsWithCandidates.add(itemId);
+    }
+
+    const hostname = normalizeHostname(item && (item.final_url || item.normalized_url || ''));
+    if (hostname) {
+      hostnames.add(hostname);
+    }
+
+    const labelCounts = countLabels(reviewedCandidates);
+    summary.candidate_count += reviewedCandidates.length;
+    summary.labeled_candidate_count += labelCounts.positive + labelCounts.negative;
+    summary.positive_candidate_count += labelCounts.positive;
+    summary.negative_candidate_count += labelCounts.negative;
+    summary.uncertain_candidate_count += labelCounts.uncertain;
+    summary.unlabeled_candidate_count += labelCounts.unlabeled;
+
+    if (itemId && reviewedCandidates.length > 0 && (labelCounts.positive + labelCounts.negative) === reviewedCandidates.length) {
+      binaryReviewedItems.add(itemId);
+    }
+  });
+
+  summary.item_count = itemsWithCandidates.size;
+  summary.review_complete_binary_item_count = binaryReviewedItems.size;
+  summary.hostname_count = hostnames.size;
+  return summary;
+}
+
 function extractCandidateDataset(items, options = {}) {
   const variant = options.variant || null;
   const featureCatalog = Array.isArray(options.featureCatalog) && options.featureCatalog.length
@@ -317,5 +388,6 @@ function serializeDatasetCsv(rows, featureCatalog, options = {}) {
 module.exports = {
   toBinaryLabel,
   extractCandidateDataset,
+  summarizeCandidateDataset,
   serializeDatasetCsv,
 };

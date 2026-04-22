@@ -44,19 +44,21 @@ function createModelingRouter(dependencies) {
       : null;
   }
 
-  async function loadModelingItems(jobIds, progress) {
+  async function loadModelingItems(jobIds, progress, options = {}) {
+    const summaryOnly = !!options.summaryOnly;
     return loadInBatches(async ({ limit, offset }) => dependencies.listItemsForModeling({
       jobIds,
       requireCandidates: true,
+      summaryOnly,
       limit,
       offset,
     }), {
       batchSize: modelingBatchSize,
-      label: 'candidate rows',
+      label: summaryOnly ? 'candidate summaries' : 'candidate rows',
       startMessage: jobIds.length
-        ? `Loading candidate rows for ${jobIds.length} job(s)`
-        : 'Loading candidate rows',
-      doneMessage: 'Candidate rows loaded',
+        ? `Loading ${summaryOnly ? 'candidate summaries' : 'candidate rows'} for ${jobIds.length} job(s)`
+        : `Loading ${summaryOnly ? 'candidate summaries' : 'candidate rows'}`,
+      doneMessage: summaryOnly ? 'Candidate summaries loaded' : 'Candidate rows loaded',
       progress,
     });
   }
@@ -84,7 +86,7 @@ function createModelingRouter(dependencies) {
       const jobIds = normalizeJobIds(req.query.jobIds || '');
       const progress = requestProgress(req);
       progress && progress({ stage: 'overview', message: 'Loading overview dataset' });
-      const items = await loadModelingItems(jobIds, progress);
+      const items = await loadModelingItems(jobIds, progress, { summaryOnly: true });
       const overview = await buildOverview(items, dependencies.artifactRoot, {
         progress,
       });

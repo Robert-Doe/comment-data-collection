@@ -2,7 +2,11 @@
 
 const { parseCsvText } = require('../../shared/csv');
 const { getFeatureCatalog, getFeatureCatalogForVariant, groupFeaturesByFamily } = require('./featureCatalog');
-const { extractCandidateDataset, serializeDatasetCsv } = require('./dataset');
+const {
+  extractCandidateDataset,
+  serializeDatasetCsv,
+  summarizeCandidateDataset,
+} = require('./dataset');
 const { fitVectorizer, transformRow, transformRows } = require('./vectorizer');
 const { trainLogisticRegression, predictProbability } = require('./logisticRegression');
 const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree } = require('./decisionTree');
@@ -28,7 +32,7 @@ function emitProgress(progress, patch) {
 async function buildOverview(items, artifactRoot, options = {}) {
   const progress = typeof options.progress === 'function' ? options.progress : null;
   const models = await listModelArtifacts(artifactRoot);
-  const dataset = extractCandidateDataset(items, {
+  const dataset = summarizeCandidateDataset(items, {
     progress: progress ? (patch) => emitProgress(progress, {
       ...patch,
       stage: 'overview',
@@ -37,21 +41,21 @@ async function buildOverview(items, artifactRoot, options = {}) {
   });
   emitProgress(progress, {
     stage: 'overview',
-    message: `Overview ready (${dataset.summary.item_count} item(s))`,
+    message: `Overview ready (${dataset.item_count} item(s))`,
     progress: {
-      current: dataset.summary.item_count,
-      total: dataset.summary.item_count || 1,
+      current: dataset.item_count,
+      total: dataset.item_count || 1,
       unit: 'items',
       indeterminate: false,
     },
   });
 
-  const insights = await buildModelInsights(dataset.summary, models, artifactRoot, {
+  const insights = await buildModelInsights(dataset, models, artifactRoot, {
     progressionLimit: options.progressionLimit,
   });
 
   return {
-    dataset: dataset.summary,
+    dataset,
     variants: listModelVariants().map((variant) => ({
       ...variant,
       feature_count: getFeatureCatalogForVariant(variant).length,
@@ -1300,18 +1304,23 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   const progress = typeof trainingInput.progress === 'function' ? trainingInput.progress : null;
   const progressInterval = Math.max(1, Number(trainingInput.progressInterval) || 100);
 
-  emitProgress(progress, {
-    stage: 'training',
-    message: 'Extracting training dataset',
-    progress: {
-      current: 0,
-      total: Array.isArray(items) ? items.length : 0,
-      unit: 'items',
-      indeterminate: !Array.isArray(items) || items.length === 0,
-    },
-  });
+  const precomputedDataset = trainingInput.dataset && Array.isArray(trainingInput.dataset.rows)
+    ? trainingInput.dataset
+    : null;
+  if (!precomputedDataset) {
+    emitProgress(progress, {
+      stage: 'training',
+      message: 'Extracting training dataset',
+      progress: {
+        current: 0,
+        total: Array.isArray(items) ? items.length : 0,
+        unit: 'items',
+        indeterminate: !Array.isArray(items) || items.length === 0,
+      },
+    });
+  }
 
-  const dataset = extractCandidateDataset(items, {
+  const dataset = precomputedDataset || extractCandidateDataset(items, {
     variant,
     progress: progress ? (patch) => emitProgress(progress, {
       ...patch,
@@ -1477,6 +1486,14 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
 }
 
 async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  const dataset = trainingInput.dataset && Array.isArray(trainingInput.dataset.rows)
+    ? trainingInput.dataset
+    : extractCandidateDataset(items, {
+      variant,
+      progress: null,
+      progressInterval: trainingInput.progressInterval,
+    });
   const requestedStrategies = Array.isArray(trainingInput.strategies)
     ? trainingInput.strategies
     : String(trainingInput.strategies || '')
@@ -1495,6 +1512,7 @@ async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {
   for (const strategyId of compareStrategyIds) {
     const trained = await trainModel(items, artifactRoot, {
       ...trainingInput,
+      dataset,
       imbalanceStrategy: strategyId,
       persistArtifact: false,
       progress: null,

@@ -831,9 +831,10 @@ function createLocalRuntime(options = {}) {
         ? options.jobIds.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
       const requireCandidates = options.requireCandidates !== false;
+      const summaryOnly = !!options.summaryOnly;
       const limit = Math.max(1, Number(options.limit) || 20000);
       const offset = Math.max(0, Number(options.offset) || 0);
-      return state.items
+      const items = state.items
         .filter((item) => !jobIds.length || jobIds.includes(item.job_id))
         .filter((item) => !requireCandidates || (Array.isArray(item.candidates) && item.candidates.length > 0))
         .sort((left, right) => {
@@ -842,6 +843,18 @@ function createLocalRuntime(options = {}) {
           return rightCreated - leftCreated || left.row_number - right.row_number;
         })
         .slice(offset, offset + limit);
+      if (!summaryOnly) {
+        return items;
+      }
+      return items.map((item) => ({
+        id: item.id,
+        job_id: item.job_id,
+        row_number: item.row_number,
+        normalized_url: item.normalized_url,
+        final_url: item.final_url,
+        candidates: item.candidates,
+        candidate_reviews: item.candidate_reviews,
+      }));
     },
     getManualReviewTarget() {
       return state.manual_review_target || null;

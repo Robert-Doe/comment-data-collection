@@ -908,9 +908,11 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
   params.push(offset);
 
   const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const selectClause = options.summaryOnly
+    ? 'SELECT id, job_id, row_number, normalized_url, final_url, candidates, candidate_reviews FROM job_items'
+    : 'SELECT * FROM job_items';
   const result = await db.query(
-    `SELECT *
-     FROM job_items
+    `${selectClause}
      ${whereClause}
      ORDER BY created_at DESC, row_number ASC
      LIMIT $${params.length - 1}
