@@ -1342,7 +1342,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     },
   });
 
-  const dataset = extractCandidateDataset(items, {
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, {
     variant,
     progress: progress ? (patch) => emitProgress(progress, {
       ...patch,
