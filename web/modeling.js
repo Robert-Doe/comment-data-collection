@@ -1716,6 +1716,135 @@
         ${renderWeightList(negativeWeights, 'muted', 'No negative signals surfaced in the current rounded summary.')}
       </article>
     `;
+
+    if (Array.isArray(model.threshold_curve) && model.threshold_curve.length > 0) {
+      const tunerEl = buildThresholdTuner(model.threshold_curve, model.id);
+      if (tunerEl) trainResult.appendChild(tunerEl);
+    }
+  }
+
+  function buildThresholdTuner(curve, artifactId) {
+    if (!Array.isArray(curve) || curve.length < 3) return null;
+
+    const uid = String(artifactId || 'th').replace(/[^a-z0-9]/gi, '-').slice(0, 32);
+
+    let bestIdx = 50;
+    curve.forEach((p, i) => { if (p.f1 > curve[bestIdx].f1) bestIdx = i; });
+    const bestPt = curve[bestIdx];
+
+    const svgW = 300, svgH = 210;
+    const lx = 40, rx = svgW - 12, ty = 8, by = svgH - 30;
+    const cW = rx - lx, cH = by - ty;
+
+    const sorted = curve.slice().sort((a, b) => a.recall - b.recall);
+    const polyPts = sorted.map((p) =>
+      `${(lx + p.recall * cW).toFixed(1)},${(by - p.precision * cH).toFixed(1)}`
+    ).join(' ');
+
+    const ticks = [0, 0.25, 0.5, 0.75, 1];
+    const defIdx = 50;
+    const def = curve[defIdx];
+
+    const tickSvg = ticks.map((v) => `
+      <line x1="${lx}" y1="${(by - v * cH).toFixed(1)}" x2="${rx}" y2="${(by - v * cH).toFixed(1)}" stroke="var(--line)" stroke-width="${v === 0 ? 1 : 0.5}" stroke-dasharray="${v === 0 ? '' : '3 3'}"/>
+      <line x1="${(lx + v * cW).toFixed(1)}" y1="${ty}" x2="${(lx + v * cW).toFixed(1)}" y2="${by}" stroke="var(--line)" stroke-width="${v === 0 ? 1 : 0.5}" stroke-dasharray="${v === 0 ? '' : '3 3'}"/>
+      <text x="${lx - 4}" y="${(by - v * cH + 3.5).toFixed(0)}" text-anchor="end" font-size="8.5" fill="var(--muted)">${v.toFixed(2)}</text>
+      <text x="${(lx + v * cW).toFixed(0)}" y="${by + 13}" text-anchor="middle" font-size="8.5" fill="var(--muted)">${v.toFixed(2)}</text>
+    `).join('');
+
+    const article = document.createElement('article');
+    article.className = 'analysis-card analysis-card-wide threshold-tuner-card';
+    article.innerHTML = `
+      <p class="eyebrow subtle">Threshold Tuner</p>
+      <h3>Find Your Operating Point</h3>
+      <p class="candidate-copy threshold-tuner-desc">Drag the slider to explore how precision, recall and F1 change at each decision threshold. The moving dot tracks your position on the PR curve. The green dot marks the best F1.</p>
+      <div class="threshold-layout">
+        <div class="threshold-pr-side">
+          <svg class="threshold-pr-svg" viewBox="0 0 ${svgW} ${svgH}" aria-label="Precision–Recall Curve">
+            ${tickSvg}
+            <text x="${lx + cW / 2}" y="${by + 26}" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="600">Recall →</text>
+            <text x="9" y="${ty + cH / 2}" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="600" transform="rotate(-90 9 ${ty + cH / 2})">Precision</text>
+            <polyline points="${polyPts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+            <circle cx="${(lx + bestPt.recall * cW).toFixed(1)}" cy="${(by - bestPt.precision * cH).toFixed(1)}" r="6" fill="var(--success)" opacity="0.85"/>
+            <circle class="th-dot-${uid}" cx="${(lx + def.recall * cW).toFixed(1)}" cy="${(by - def.precision * cH).toFixed(1)}" r="7.5" fill="var(--accent)" stroke="#fff" stroke-width="2.5"/>
+          </svg>
+          <p class="candidate-copy" style="font-size:0.8rem;margin-top:6px"><span style="color:var(--success)">●</span> Best F1 <strong>${formatMetric(bestPt.f1)}</strong> at t&nbsp;=&nbsp;<strong>${bestPt.t.toFixed(2)}</strong></p>
+        </div>
+        <div class="threshold-ctrl-side">
+          <div class="threshold-stat-grid">
+            <div class="threshold-stat">
+              <span class="threshold-stat-label">Precision</span>
+              <strong class="th-prec-${uid}">${formatMetric(def.precision)}</strong>
+            </div>
+            <div class="threshold-stat">
+              <span class="threshold-stat-label">Recall</span>
+              <strong class="th-rec-${uid}">${formatMetric(def.recall)}</strong>
+            </div>
+            <div class="threshold-stat">
+              <span class="threshold-stat-label">F1</span>
+              <strong class="th-f1-${uid}">${formatMetric(def.f1)}</strong>
+            </div>
+            <div class="threshold-stat">
+              <span class="threshold-stat-label">Accuracy</span>
+              <strong class="th-acc-${uid}">${formatMetric(def.accuracy)}</strong>
+            </div>
+          </div>
+          <div class="threshold-mini-confusion">
+            <div class="threshold-mc-cell good"><span>TP</span><strong class="th-tp-${uid}">${def.tp}</strong></div>
+            <div class="threshold-mc-cell warn"><span>FP</span><strong class="th-fp-${uid}">${def.fp}</strong></div>
+            <div class="threshold-mc-cell warn"><span>FN</span><strong class="th-fn-${uid}">${def.fn}</strong></div>
+            <div class="threshold-mc-cell good"><span>TN</span><strong class="th-tn-${uid}">${def.tn}</strong></div>
+          </div>
+          <div class="threshold-best-f1-note">
+            Best F1 at threshold <strong>${bestPt.t.toFixed(2)}</strong>
+            <button class="secondary compact th-jump-${uid}" type="button">Jump there</button>
+          </div>
+        </div>
+      </div>
+      <div class="threshold-slider-wrap">
+        <div class="threshold-slider-header">
+          <span>Threshold</span>
+          <strong class="th-val-${uid}">${def.t.toFixed(2)}</strong>
+        </div>
+        <input type="range" class="threshold-slider th-range-${uid}" min="0" max="${curve.length - 1}" value="${defIdx}" step="1">
+        <div class="threshold-slider-ticks">
+          <span>0.00</span><span>0.25</span><span>0.50</span><span>0.75</span><span>1.00</span>
+        </div>
+      </div>
+    `;
+
+    const dot    = article.querySelector(`.th-dot-${uid}`);
+    const precEl = article.querySelector(`.th-prec-${uid}`);
+    const recEl  = article.querySelector(`.th-rec-${uid}`);
+    const f1El   = article.querySelector(`.th-f1-${uid}`);
+    const accEl  = article.querySelector(`.th-acc-${uid}`);
+    const valEl  = article.querySelector(`.th-val-${uid}`);
+    const tpEl   = article.querySelector(`.th-tp-${uid}`);
+    const fpEl   = article.querySelector(`.th-fp-${uid}`);
+    const fnEl   = article.querySelector(`.th-fn-${uid}`);
+    const tnEl   = article.querySelector(`.th-tn-${uid}`);
+    const slider = article.querySelector(`.th-range-${uid}`);
+    const jumpBtn = article.querySelector(`.th-jump-${uid}`);
+
+    const update = (idx) => {
+      const p = curve[Math.max(0, Math.min(idx, curve.length - 1))];
+      dot.setAttribute('cx', (lx + p.recall * cW).toFixed(1));
+      dot.setAttribute('cy', (by - p.precision * cH).toFixed(1));
+      precEl.textContent = formatMetric(p.precision);
+      recEl.textContent  = formatMetric(p.recall);
+      f1El.textContent   = formatMetric(p.f1);
+      accEl.textContent  = formatMetric(p.accuracy);
+      valEl.textContent  = p.t.toFixed(2);
+      tpEl.textContent   = p.tp;
+      fpEl.textContent   = p.fp;
+      fnEl.textContent   = p.fn;
+      tnEl.textContent   = p.tn;
+    };
+
+    slider.addEventListener('input', () => update(Number(slider.value)));
+    if (jumpBtn) jumpBtn.addEventListener('click', () => { slider.value = bestIdx; update(bestIdx); });
+
+    return article;
   }
 
   function repopulateModelSelects(models) {

@@ -2,11 +2,7 @@
 
 const { parseCsvText } = require('../../shared/csv');
 const { getFeatureCatalog, getFeatureCatalogForVariant, groupFeaturesByFamily } = require('./featureCatalog');
-const {
-  extractCandidateDataset,
-  serializeDatasetCsv,
-  summarizeCandidateDataset,
-} = require('./dataset');
+const { extractCandidateDataset, serializeDatasetCsv } = require('./dataset');
 const { fitVectorizer, transformRow, transformRows } = require('./vectorizer');
 const { trainLogisticRegression, predictProbability } = require('./logisticRegression');
 const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree } = require('./decisionTree');
@@ -32,7 +28,7 @@ function emitProgress(progress, patch) {
 async function buildOverview(items, artifactRoot, options = {}) {
   const progress = typeof options.progress === 'function' ? options.progress : null;
   const models = await listModelArtifacts(artifactRoot);
-  const dataset = summarizeCandidateDataset(items, {
+  const dataset = extractCandidateDataset(items, {
     progress: progress ? (patch) => emitProgress(progress, {
       ...patch,
       stage: 'overview',
@@ -41,21 +37,21 @@ async function buildOverview(items, artifactRoot, options = {}) {
   });
   emitProgress(progress, {
     stage: 'overview',
-    message: `Overview ready (${dataset.item_count} item(s))`,
+    message: `Overview ready (${dataset.summary.item_count} item(s))`,
     progress: {
-      current: dataset.item_count,
-      total: dataset.item_count || 1,
+      current: dataset.summary.item_count,
+      total: dataset.summary.item_count || 1,
       unit: 'items',
       indeterminate: false,
     },
   });
 
-  const insights = await buildModelInsights(dataset, models, artifactRoot, {
+  const insights = await buildModelInsights(dataset.summary, models, artifactRoot, {
     progressionLimit: options.progressionLimit,
   });
 
   return {
-    dataset,
+    dataset: dataset.summary,
     variants: listModelVariants().map((variant) => ({
       ...variant,
       feature_count: getFeatureCatalogForVariant(variant).length,
@@ -1296,6 +1292,37 @@ function buildRuntimeModelBundle(artifact, options = {}) {
   };
 }
 
+function computeThresholdCurve(scoredRows) {
+  if (!scoredRows || scoredRows.length === 0) return [];
+  const n = scoredRows.length;
+  const points = [];
+  for (let ti = 0; ti <= 100; ti++) {
+    const threshold = ti / 100;
+    let tp = 0, fp = 0, fn = 0, tn = 0;
+    for (const row of scoredRows) {
+      const pred = (row.probability || 0) >= threshold ? 1 : 0;
+      const actual = row.binary_label;
+      if (pred === 1 && actual === 1) tp++;
+      else if (pred === 1 && actual === 0) fp++;
+      else if (pred === 0 && actual === 1) fn++;
+      else tn++;
+    }
+    const precision = tp + fp > 0 ? tp / (tp + fp) : (ti === 0 ? 0 : 1);
+    const recall = tp + fn > 0 ? tp / (tp + fn) : 0;
+    const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+    const accuracy = (tp + tn) / n;
+    points.push({
+      t: threshold,
+      precision: Math.round(precision * 1000) / 1000,
+      recall: Math.round(recall * 1000) / 1000,
+      f1: Math.round(f1 * 1000) / 1000,
+      accuracy: Math.round(accuracy * 1000) / 1000,
+      tp, fp, fn, tn,
+    });
+  }
+  return points;
+}
+
 async function trainModel(items, artifactRoot, trainingInput = {}) {
   const variant = getModelVariant(trainingInput.variantId);
   if (!variant) {
@@ -1304,23 +1331,18 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   const progress = typeof trainingInput.progress === 'function' ? trainingInput.progress : null;
   const progressInterval = Math.max(1, Number(trainingInput.progressInterval) || 100);
 
-  const precomputedDataset = trainingInput.dataset && Array.isArray(trainingInput.dataset.rows)
-    ? trainingInput.dataset
-    : null;
-  if (!precomputedDataset) {
-    emitProgress(progress, {
-      stage: 'training',
-      message: 'Extracting training dataset',
-      progress: {
-        current: 0,
-        total: Array.isArray(items) ? items.length : 0,
-        unit: 'items',
-        indeterminate: !Array.isArray(items) || items.length === 0,
-      },
-    });
-  }
+  emitProgress(progress, {
+    stage: 'training',
+    message: 'Extracting training dataset',
+    progress: {
+      current: 0,
+      total: Array.isArray(items) ? items.length : 0,
+      unit: 'items',
+      indeterminate: !Array.isArray(items) || items.length === 0,
+    },
+  });
 
-  const dataset = precomputedDataset || extractCandidateDataset(items, {
+  const dataset = extractCandidateDataset(items, {
     variant,
     progress: progress ? (patch) => emitProgress(progress, {
       ...patch,
@@ -1328,7 +1350,6 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     }) : null,
     progressInterval,
   });
-  items = null;
   const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
   if (labeledRows.length < 4) {
     throw new Error('Model training needs at least 4 human-reviewed binary candidate labels');
@@ -1414,6 +1435,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     train: computeAllMetrics(scoredTrainRows, {}),
     test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
   };
+  const thresholdCurve = split.testRows.length >= 4 ? computeThresholdCurve(scoredTestRows) : [];
   emitProgress(progress, {
     stage: 'training',
     message: 'Computing feature reliance',
@@ -1456,6 +1478,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     },
     dataset_summary: dataset.summary,
     evaluation,
+    threshold_curve: thresholdCurve,
     reliance,
   };
 
@@ -1487,14 +1510,6 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
 }
 
 async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  const dataset = trainingInput.dataset && Array.isArray(trainingInput.dataset.rows)
-    ? trainingInput.dataset
-    : extractCandidateDataset(items, {
-      variant,
-      progress: null,
-      progressInterval: trainingInput.progressInterval,
-    });
   const requestedStrategies = Array.isArray(trainingInput.strategies)
     ? trainingInput.strategies
     : String(trainingInput.strategies || '')
@@ -1508,13 +1523,11 @@ async function compareImbalanceStrategies(items, artifactRoot, trainingInput = {
     ? normalizedRequestedStrategies
     : listImbalanceStrategies().map((entry) => entry.id);
   const focusStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
-  items = null;
   const runs = [];
 
   for (const strategyId of compareStrategyIds) {
-    const trained = await trainModel(null, artifactRoot, {
+    const trained = await trainModel(items, artifactRoot, {
       ...trainingInput,
-      dataset,
       imbalanceStrategy: strategyId,
       persistArtifact: false,
       progress: null,
@@ -1897,7 +1910,6 @@ function exportDataset(items, variantId, options = {}) {
 
 module.exports = {
   buildOverview,
-  extractCandidateDataset,
   listTrainingAlgorithms,
   normalizeTrainingAlgorithm,
   listImbalanceStrategies,
