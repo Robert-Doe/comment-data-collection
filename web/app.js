@@ -4457,7 +4457,7 @@
 
   async function pollReprocessItem(itemId, zone) {
     const submittedAt = Date.now();
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       try {
         const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
