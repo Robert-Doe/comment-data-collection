@@ -498,7 +498,7 @@
     });
 
     const headers = COLS.map((c) => {
-      const cls = sortKey === c.key ? `sort-${sortDir}` : '';
+      const cls = [sortKey === c.key ? `sort-${sortDir}` : '', c.numeric ? 'num' : ''].filter(Boolean).join(' ');
       return `<th data-sort="${esc(c.key)}" class="${cls}">${esc(c.label)}</th>`;
     }).join('');
 
