@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Domain Metrics — UGC Scanner</title>
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
+    <style>
+      /* ── Colour tokens ─────────────────────────────────────────────────────── */
+      :root {
+        --c-tp:  #16a34a; --c-tp-bg:  #dcfce7;
+        --c-tn:  #2563eb; --c-tn-bg:  #dbeafe;
+        --c-fp:  #d97706; --c-fp-bg:  #fef3c7;
+        --c-fn:  #dc2626; --c-fn-bg:  #fee2e2;
+        --c-good:   #16a34a;
+        --c-mid:    #ca8a04;
+        --c-poor:   #dc2626;
+        --c-neutral:#6b7280;
+      }
+
+      /* ── Config form ───────────────────────────────────────────────────────── */
+      .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .fetch-row { display: flex; gap: 8px; }
+      .fetch-row input { flex: 1; }
+      .threshold-row { display: flex; align-items: center; gap: 14px; }
+      .threshold-row input[type=range] { flex: 1; accent-color: var(--accent); }
+      .threshold-value { min-width: 44px; font-weight: 700; font-size: 18px; text-align: right; color: var(--accent); }
+
+      /* ── Stat cards ────────────────────────────────────────────────────────── */
+      .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+      .stat-card {
+        flex: 1 1 130px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 14px 20px;
+        position: relative;
+        overflow: hidden;
+      }
+      .stat-card::before {
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: var(--card-accent, var(--accent));
+        border-radius: 16px 16px 0 0;
+      }
+      .stat-card .s-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+      .stat-card .s-value { font-size: 26px; font-weight: 800; line-height: 1; }
+
+      /* ── Overall metrics block ─────────────────────────────────────────────── */
+      .overall-grid {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 32px;
+        align-items: start;
+      }
+      @media (max-width: 860px) { .overall-grid { grid-template-columns: 1fr; } }
+
+      .metric-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .metric-tile {
+        background: var(--panel-soft, #f8faff);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 16px;
+      }
+      .metric-tile .mt-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+      .metric-tile .mt-value { font-size: 22px; font-weight: 700; }
+      .metric-tile.good  .mt-value { color: var(--c-good); }
+      .metric-tile.mid   .mt-value { color: var(--c-mid);  }
+      .metric-tile.poor  .mt-value { color: var(--c-poor); }
+      .metric-tile.plain .mt-value { color: var(--text); }
+
+      .candidate-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .cs-item { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+      .cs-item .cs-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+      .cs-item .cs-val { font-size: 17px; font-weight: 600; }
+
+      /* ── Chart sections ────────────────────────────────────────────────────── */
+      .charts-row {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      @media (max-width: 760px) { .charts-row { grid-template-columns: 1fr; } }
+      .chart-box {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 20px 24px;
+      }
+      .chart-title { font-size: 14px; font-weight: 700; margin: 0 0 4px; }
+      .chart-subtitle { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+      .chart-svg { width: 100%; height: auto; display: block; }
+      .chart-area { width: 100%; }
+
+      /* ── Domain table ──────────────────────────────────────────────────────── */
+      .dm-table-wrap { overflow-x: auto; }
+      .dm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .dm-table th {
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+      }
+      .dm-table th:hover { color: var(--accent); }
+      .dm-table th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+      .dm-table th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+      .dm-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .dm-table tr:last-child td { border-bottom: none; }
+      .dm-table tr:hover td { background: var(--panel-soft); }
+      .dm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .dm-table td.host { font-family: monospace; font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* Mini bar inside table cell */
+      .mini-bar-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+      .mini-bar-track { width: 56px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+      .mini-bar-fill  { height: 100%; border-radius: 3px; transition: width .3s; }
+      .mini-bar-val { min-width: 38px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+      /* Status badges */
+      .badge { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+      .badge-assessed { background: #dcfce7; color: #15803d; }
+      .badge-pending  { background: #f3f4f6; color: #6b7280; }
+      .badge-unseen   { background: #eff6ff; color: #2563eb; }
+
+      /* ── SVG chart helpers ─────────────────────────────────────────────────── */
+      .chart-svg text { font-family: inherit; }
+      .axis-label { fill: var(--muted, #66758a); font-size: 11px; }
+      .grid-line  { stroke: var(--line, rgba(17,24,39,.1)); stroke-width: 1; }
+      .tick-label { fill: var(--muted, #66758a); font-size: 10px; }
+
+      /* ── Message / loading ─────────────────────────────────────────────────── */
+      .running-indicator { display: inline-flex; align-items: center; gap: 8px; }
+      .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+        <a class="site-nav-link" href="./demo.html">Demo Tour</a>
+        <a class="site-nav-link" href="./ml-guide.html">ML Guide</a>
+        <a class="site-nav-link" href="./public-job.html">Public Intake</a>
+        <a class="site-nav-link active" href="./domain-metrics.html">Domain Metrics</a>
+      </nav>
+
+      <section class="hero">
+        <p class="eyebrow">Model Evaluation</p>
+        <h1>Domain Confusion Matrix</h1>
+        <p class="lede">Score labeled candidates against a trained model and break down precision, recall, and F1 by website. Paste a domain list or fetch one from a URL — or leave blank to evaluate every domain in the labeled dataset.</p>
+      </section>
+
+      <!-- ── Configuration ─────────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-header"><h2>Configuration</h2></div>
+        <form id="confusion-form" class="model-form">
+
+          <div class="config-row">
+            <label class="field">
+              <span>Model</span>
+              <select id="conf-model-id">
+                <option value="">Loading models…</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Job Scope <small style="color:var(--muted);font-weight:400">(optional — blank = all labeled data)</small></span>
+              <input id="conf-job-ids" type="text" placeholder="job-1, job-2, …">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Domain List <small style="color:var(--muted);font-weight:400">(domains, URLs, or CSV — one per line; blank = all)</small></span>
+            <textarea id="conf-site-text" rows="5" placeholder="example.com&#10;reddit.com&#10;https://news.ycombinator.com/"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Fetch List from URL <small style="color:var(--muted);font-weight:400">(optional — plain-text or CSV; server must allow CORS)</small></span>
+            <div class="fetch-row">
+              <input id="conf-fetch-url" type="url" placeholder="https://example.com/top-sites.txt">
+              <button id="conf-fetch-btn" class="secondary" type="button">Fetch</button>
+            </div>
+          </label>
+          <p id="fetch-message" class="message"></p>
+
+          <label class="field">
+            <span>Decision Threshold</span>
+            <div class="threshold-row">
+              <input id="conf-threshold" type="range" min="0" max="1" step="0.01" value="0.5">
+              <span id="conf-threshold-display" class="threshold-value">0.50</span>
+            </div>
+          </label>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+            <button id="conf-submit" class="primary" type="submit">Run Analysis</button>
+            <button id="conf-clear" class="secondary" type="button">Clear Results</button>
+          </div>
+        </form>
+        <p id="conf-message" class="message" style="margin-top:12px"></p>
+      </section>
+
+      <!-- ── Overall results ───────────────────────────────────────────────── -->
+      <section class="panel" id="results-panel" style="display:none">
+        <div class="panel-header">
+          <h2>Overall Results</h2>
+          <span id="results-subtitle" class="subtle"></span>
+        </div>
+
+        <div id="stat-row" class="stat-row"></div>
+
+        <div class="overall-grid">
+          <!-- Confusion matrix SVG -->
+          <div>
+            <div class="chart-title" style="margin-bottom:12px">Confusion Matrix</div>
+            <div id="cm-svg-container"></div>
+          </div>
+
+          <!-- Accuracy arc + metric tiles -->
+          <div>
+            <div class="chart-title" style="margin-bottom:12px">Accuracy</div>
+            <div id="accuracy-arc-container" style="max-width:200px;margin:0 auto 20px"></div>
+            <div id="metric-tiles" class="metric-tiles"></div>
+          </div>
+
+          <!-- Candidate summary -->
+          <div>
+            <div class="chart-title" style="margin-bottom:12px">Candidate Counts</div>
+            <div id="candidate-summary" class="candidate-summary"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Charts ────────────────────────────────────────────────────────── -->
+      <section class="panel" id="charts-panel" style="display:none">
+        <div class="panel-header"><h2>Domain Performance Charts</h2></div>
+        <div class="charts-row">
+          <div class="chart-box">
+            <div class="chart-title">F1 Score by Domain</div>
+            <div class="chart-subtitle" id="f1-bar-subtitle">Assessed domains sorted by F1 — bars show precision (dark) and recall (light)</div>
+            <div id="f1-bar-chart" class="chart-area"></div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-title">Precision vs. Recall</div>
+            <div class="chart-subtitle">Each bubble is a domain — size = labeled candidate count, colour = F1 score</div>
+            <div id="pr-scatter-chart" class="chart-area"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Domain table ──────────────────────────────────────────────────── -->
+      <section class="panel" id="domain-table-panel" style="display:none">
+        <div class="panel-header">
+          <h2>Per-Domain Breakdown</h2>
+          <span id="domain-count-badge" class="subtle"></span>
+        </div>
+        <div class="dm-table-wrap">
+          <div id="domain-table-shell">Run analysis to see per-domain results.</div>
+        </div>
+      </section>
+    </main>
+    <script src="./domain-metrics.js"></script>
+  </body>
+</html>
