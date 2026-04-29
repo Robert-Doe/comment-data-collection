@@ -77,6 +77,8 @@ services:
       - "80"
     ports:
       - "${UI_PORT:-8080}:80"
+    volumes:
+      - ./web:/usr/share/nginx/html
 
   caddy:
     image: caddy:2-alpine
