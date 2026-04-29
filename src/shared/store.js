@@ -588,6 +588,65 @@ async function replaceJobRecords(jobId, options = {}, databaseUrl) {
   }
 }
 
+async function appendJobRecords(jobId, options = {}, databaseUrl) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) throw new Error('jobId is required');
+
+  const records = Array.isArray(options.records)
+    ? options.records.filter((r) => r && r.__normalized_url)
+    : [];
+  if (!records.length) throw new Error('At least one record is required');
+
+  const db = getPool(databaseUrl);
+  const client = await db.connect();
+  const batchSize = Math.max(1, Number(options.batchSize) || 250);
+
+  try {
+    await client.query('BEGIN');
+
+    const jobResult = await client.query('SELECT * FROM jobs WHERE id = $1 FOR UPDATE', [normalizedJobId]);
+    const job = jobResult.rows[0] || null;
+    if (!job) throw new Error('Job not found');
+
+    const maxRowResult = await client.query(
+      'SELECT COALESCE(MAX(row_number), 0) AS max_row FROM job_items WHERE job_id = $1',
+      [normalizedJobId],
+    );
+    const rowOffset = Number(maxRowResult.rows[0].max_row) || 0;
+
+    const offsetRecords = records.map((r, i) => ({ ...r, __row_number: rowOffset + i + 1 }));
+
+    for (let offset = 0; offset < offsetRecords.length; offset += batchSize) {
+      const chunk = offsetRecords.slice(offset, offset + batchSize);
+      const { values, placeholders } = buildInsertBatch(normalizedJobId, chunk);
+      await client.query(
+        `INSERT INTO job_items (id, job_id, row_number, input_url, normalized_url, status) VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    const updatedResult = await client.query(
+      `UPDATE jobs
+       SET total_urls = total_urls + $2,
+           pending_count = pending_count + $2,
+           status = CASE WHEN status IN ('completed', 'completed_with_errors', 'failed') THEN 'pending' ELSE status END,
+           finished_at = CASE WHEN status IN ('completed', 'completed_with_errors', 'failed') THEN NULL ELSE finished_at END,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [normalizedJobId, records.length],
+    );
+
+    await client.query('COMMIT');
+    return { job: updatedResult.rows[0] || null, insertedCount: records.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function restartJob(jobId, options = {}, databaseUrl) {
   const existingJob = await getJob(jobId, databaseUrl);
   if (!existingJob) {
@@ -2088,6 +2147,7 @@ module.exports = {
   restoreProjectBackup,
   combineJobs,
   replaceJobRecords,
+  appendJobRecords,
   restartJob,
   resumeJob,
   resumeFailedItems,

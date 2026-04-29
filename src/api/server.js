@@ -44,6 +44,7 @@ const {
   restoreProjectBackup,
   combineJobs,
   replaceJobRecords,
+  appendJobRecords,
   restartJob,
   resumeJob,
   resumeFailedItems,
@@ -811,6 +812,97 @@ function createApp(config = getConfig()) {
     }
   });
 
+  app.post('/api/jobs/:jobId/append', upload.single('file'), async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const uploadedText = req.file ? req.file.buffer.toString('utf8') : String(req.body.csvText || '');
+      if (!uploadedText.trim()) {
+        res.status(400).json({ error: 'Upload a CSV file or provide csvText' });
+        return;
+      }
+
+      const preferredColumn = req.body.urlColumn || '';
+      const parsed = parseCsvText(uploadedText, preferredColumn);
+      const records = parsed.records.filter((record) => record.__normalized_url);
+      if (!records.length) {
+        res.status(400).json({ error: 'No URLs found in the uploaded CSV' });
+        return;
+      }
+
+      const { insertedCount } = await appendJobRecords(req.params.jobId, {
+        records,
+        batchSize: config.ingestBatchSize,
+      }, config.databaseUrl);
+
+      const startImmediately = String(req.body.startImmediately || '').toLowerCase() === 'true';
+      let queuedCount = 0;
+      if (startImmediately) {
+        const updatedJob = await getJob(req.params.jobId, config.databaseUrl);
+        const queue = getSharedQueue(config.redisUrl);
+        const filled = await fillQueueForJob(
+          req.params.jobId,
+          Math.max(config.initialQueueFill, updatedJob.pending_count || 0),
+          config.databaseUrl,
+          queue,
+        );
+        queuedCount = filled.length;
+      }
+
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'rows_appended',
+        message: `Appended ${insertedCount} row(s).${startImmediately ? ` Queued ${queuedCount}.` : ''}`,
+        details: { inserted_count: insertedCount, queued_count: queuedCount },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({ ok: true, insertedCount, queuedCount });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/start', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+
+      const pendingCount = Math.max(0, Number(job.pending_count) || 0);
+      if (!pendingCount) {
+        res.json({ ok: true, queuedCount: 0 });
+        return;
+      }
+
+      const queue = getSharedQueue(config.redisUrl);
+      const filled = await fillQueueForJob(
+        req.params.jobId,
+        pendingCount,
+        config.databaseUrl,
+        queue,
+      );
+
+      await appendJobEvent({
+        jobId: req.params.jobId,
+        scope: 'job',
+        eventType: 'queue_started',
+        message: `Queued ${filled.length} pending row(s).`,
+        details: { queued_count: filled.length },
+      }, config.databaseUrl).catch(() => {});
+
+      res.json({ ok: true, queuedCount: filled.length });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.delete('/api/jobs/:jobId', async (req, res, next) => {
     try {
       const progress = req.requestProgress;
@@ -1026,9 +1118,11 @@ function createApp(config = getConfig()) {
           return;
         }
 
-        const { scanResult } = await analyzeManualCapture({
-          jobId: req.params.jobId,
-          itemId: req.params.itemId,
+        const submittedAt = new Date().toISOString();
+        const { jobId, itemId } = req.params;
+        const captureArgs = {
+          jobId,
+          itemId,
           rowNumber: item.row_number,
           html,
           rawHtml,
@@ -1039,7 +1133,8 @@ function createApp(config = getConfig()) {
           screenshotBuffer: screenshotFile ? screenshotFile.buffer : null,
           screenshotFilename: screenshotFile ? screenshotFile.originalname : '',
           screenshotContentType: screenshotFile ? screenshotFile.mimetype : '',
-        }, {
+        };
+        const captureOpts = {
           timeoutMs: config.scanTimeoutMs,
           postLoadDelayMs: 0,
           maxCandidates: config.maxCandidates,
@@ -1049,36 +1144,43 @@ function createApp(config = getConfig()) {
           artifactUrlBasePath: config.artifactUrlBasePath,
           publicBaseUrl: config.publicBaseUrl,
           candidateMode: job.candidate_mode || job.candidateMode || 'default',
-        });
+        };
 
-        if (scanResult.error) {
-          await markItemFailed(req.params.itemId, scanResult, config.databaseUrl);
-        } else {
-          await markItemCompleted(req.params.itemId, scanResult, config.databaseUrl);
-        }
-        await recomputeJob(req.params.jobId, config.databaseUrl);
-        await appendJobEvent({
-          jobId: req.params.jobId,
-          itemId: req.params.itemId,
-          rowNumber: item.row_number,
-          scope: 'manual_capture',
-          level: scanResult.error ? 'warn' : 'info',
-          eventType: scanResult.error ? 'manual_capture_failed' : 'manual_capture_processed',
-          message: scanResult.error
-            ? `Manual snapshot failed for row ${item.row_number}: ${scanResult.error}`
-            : `Manual snapshot processed for row ${item.row_number}.`,
-          details: {
-            analysis_source: scanResult.analysis_source || 'manual_snapshot',
-            manual_capture_url: scanResult.manual_capture_url || item.manual_capture_url || item.normalized_url || '',
-            ugc_detected: !!scanResult.ugc_detected,
-            candidate_count: Array.isArray(scanResult.candidates) ? scanResult.candidates.length : 0,
-          },
-        }, config.databaseUrl).catch(() => {});
+        // Return immediately so the extension can move on; analysis runs in background.
+        res.status(202).json({ ok: true, pending: true, jobId, itemId, submittedAt });
 
-        const updated = await getJobItem(req.params.jobId, req.params.itemId, config.databaseUrl);
-        res.json({
-          ok: true,
-          item: materializeItem(updated, req),
+        setImmediate(async () => {
+          try {
+            const { scanResult } = await analyzeManualCapture(captureArgs, captureOpts);
+            if (scanResult.error) {
+              await markItemFailed(itemId, scanResult, config.databaseUrl);
+            } else {
+              await markItemCompleted(itemId, scanResult, config.databaseUrl);
+            }
+            await recomputeJob(jobId, config.databaseUrl);
+            await appendJobEvent({
+              jobId,
+              itemId,
+              rowNumber: item.row_number,
+              scope: 'manual_capture',
+              level: scanResult.error ? 'warn' : 'info',
+              eventType: scanResult.error ? 'manual_capture_failed' : 'manual_capture_processed',
+              message: scanResult.error
+                ? `Manual snapshot failed for row ${item.row_number}: ${scanResult.error}`
+                : `Manual snapshot processed for row ${item.row_number}.`,
+              details: {
+                analysis_source: scanResult.analysis_source || 'manual_snapshot',
+                manual_capture_url: scanResult.manual_capture_url || item.manual_capture_url || item.normalized_url || '',
+                ugc_detected: !!scanResult.ugc_detected,
+                candidate_count: Array.isArray(scanResult.candidates) ? scanResult.candidates.length : 0,
+              },
+            }, config.databaseUrl).catch(() => {});
+          } catch (bgError) {
+            const message = bgError && bgError.message ? bgError.message : String(bgError);
+            console.error(`[manual-capture] background analysis failed for item ${itemId}: ${message}`);
+            await markItemFailed(itemId, { error: message }, config.databaseUrl).catch(() => {});
+            await recomputeJob(jobId, config.databaseUrl).catch(() => {});
+          }
         });
       } catch (error) {
         next(error);

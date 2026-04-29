@@ -44,6 +44,7 @@
   const jobLabelerPrevButton = document.getElementById('job-labeler-prev');
   const jobLabelerNextButton = document.getElementById('job-labeler-next');
   const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
+  const jobLabelerFilterUnlabeled = document.getElementById('job-labeler-filter-unlabeled');
   const scoringBreakdown = document.getElementById('scoring-breakdown');
   const viewSvgGraphLink = document.getElementById('view-svg-graph');
   const downloadSvgGraphLink = document.getElementById('download-svg-graph');
@@ -1009,6 +1010,22 @@
     return -1;
   }
 
+  function findPrevUnreviewedLabelerIndex(state, beforeIndex) {
+    if (!state || !state.entries.length) return -1;
+    const end = Math.min(beforeIndex - 1, state.entries.length - 1);
+    for (let index = end; index >= 0; index -= 1) {
+      const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
+      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  function isFilteringUnlabeled() {
+    return !!(jobLabelerFilterUnlabeled && jobLabelerFilterUnlabeled.checked);
+  }
+
   function setJobLabelerNavState(state) {
     const disabled = !state || !state.entries.length;
     const transitioning = !!(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId);
@@ -1017,11 +1034,19 @@
     const currentIndex = Math.max(0, Number(state && state.index) || 0);
     const lastIndex = Math.max(0, (state && state.entries ? state.entries.length : 0) - 1);
     const atEnd = currentIndex >= lastIndex;
-    jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
-    jobLabelerNextButton.disabled = disabled
-      || transitioning
-      || (!hasMore && atEnd)
-      || (loadingMore && atEnd);
+
+    if (!disabled && isFilteringUnlabeled()) {
+      const hasPrev = findPrevUnreviewedLabelerIndex(state, currentIndex) >= 0;
+      const hasNext = findNextUnreviewedLabelerIndex(state, currentIndex + 1) >= 0;
+      jobLabelerPrevButton.disabled = transitioning || !hasPrev;
+      jobLabelerNextButton.disabled = transitioning || (!hasNext && !hasMore && !loadingMore);
+    } else {
+      jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
+      jobLabelerNextButton.disabled = disabled
+        || transitioning
+        || (!hasMore && atEnd)
+        || (loadingMore && atEnd);
+    }
   }
 
   function stopJobLabelerTransition() {
@@ -1828,17 +1853,33 @@
       if (status === 'uncertain') uncertain += 1;
     });
 
+    const remaining = state.entries.length - reviewed;
+    const filterActive = isFilteringUnlabeled();
+    let positionText;
+    if (filterActive) {
+      // Count position within the unlabeled subset
+      let unlabeledPos = 0;
+      const currentIdx = state.index || 0;
+      for (let i = 0; i <= currentIdx && i < state.entries.length; i += 1) {
+        const { candidate: c } = jobLabelerCandidateForEntry(state, state.entries[i]);
+        if (!candidateReviewStatus(c) || candidateReviewStatus(c) === 'unreviewed') unlabeledPos += 1;
+      }
+      positionText = `${escapeHtml(unlabeledPos)} of ${escapeHtml(remaining)} unlabeled`;
+    } else {
+      positionText = `${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}`;
+    }
+
     return `
       <div class="summary">
         <div><strong>Rows With Candidates:</strong> ${escapeHtml(itemsWithCandidates.size)}</div>
         <div><strong>Total Candidates:</strong> ${escapeHtml(state.entries.length)}</div>
         ${loadingRows}
         <div><strong>Reviewed:</strong> ${escapeHtml(reviewed)}</div>
-        <div><strong>Remaining:</strong> ${escapeHtml(state.entries.length - reviewed)}</div>
+        <div><strong>Remaining:</strong> ${escapeHtml(remaining)}</div>
         <div><strong>Comment Region:</strong> ${escapeHtml(commentRegion)}</div>
         <div><strong>Not Comment:</strong> ${escapeHtml(notComment)}</div>
         <div><strong>Uncertain:</strong> ${escapeHtml(uncertain)}</div>
-        <div><strong>Current Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>
+        <div><strong>Position:</strong> ${positionText}${filterActive ? ' <em>(filter on)</em>' : ''}</div>
       </div>
     `;
   }
@@ -1999,16 +2040,34 @@
     const jobId = currentJobId;
     state.pendingAdvanceFromIndex = -1;
     const step = direction < 0 ? -1 : 1;
-    const targetIndex = Math.max(0, (state.index || 0) + step);
+    const currentIndex = Math.max(0, state.index || 0);
+
+    let targetIndex;
+    if (isFilteringUnlabeled()) {
+      targetIndex = step > 0
+        ? findNextUnreviewedLabelerIndex(state, currentIndex + 1)
+        : findPrevUnreviewedLabelerIndex(state, currentIndex);
+      if (targetIndex < 0 && step > 0 && state.hasMore) {
+        // No unreviewed found yet but more pages exist — load and try again
+        targetIndex = state.entries.length;
+      } else if (targetIndex < 0) {
+        return; // nowhere to go
+      }
+    } else {
+      targetIndex = Math.max(0, currentIndex + step);
+    }
+
     const nextIndex = Math.min(targetIndex, state.entries.length - 1);
     if (targetIndex >= state.entries.length && state.hasMore) {
       startJobLabelerTransition('Loading more candidates...');
       try {
         await ensureJobLabelerEntriesForIndex(jobId, state, targetIndex);
-        if (currentJobLabelerState() !== state || currentJobId !== jobId) {
-          return;
-        }
-        state.index = Math.min(targetIndex, state.entries.length - 1);
+        if (currentJobLabelerState() !== state || currentJobId !== jobId) return;
+        // After loading more, find the first unreviewed from the newly loaded batch
+        const resolved = isFilteringUnlabeled()
+          ? findNextUnreviewedLabelerIndex(state, currentIndex + 1)
+          : Math.min(targetIndex, state.entries.length - 1);
+        state.index = resolved >= 0 ? resolved : Math.min(targetIndex, state.entries.length - 1);
         setJobLabelerMessage('', false);
         stopJobLabelerTransition();
         renderJobLabelerReview();
@@ -3544,6 +3603,19 @@
   jobLabelerNextButton.addEventListener('click', () => {
     handleJobLabelerStep(1);
   });
+
+  if (jobLabelerFilterUnlabeled) {
+    jobLabelerFilterUnlabeled.addEventListener('change', () => {
+      const state = currentJobLabelerState();
+      if (!state) return;
+      // When turning the filter on, jump to the first unlabeled from the current position
+      if (jobLabelerFilterUnlabeled.checked) {
+        const first = findNextUnreviewedLabelerIndex(state, 0);
+        if (first >= 0) state.index = first;
+      }
+      renderJobLabelerReview();
+    });
+  }
 
   managerResumeButton.addEventListener('click', () => {
     handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));

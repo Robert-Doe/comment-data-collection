@@ -1,3 +1,4 @@
 window.__APP_CONFIG__ = {
-  "apiBaseUrl": ""
+  "apiBaseUrl": "",
+  "publicJobId": "public-backup"
 };

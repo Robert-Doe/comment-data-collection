@@ -157,3 +157,63 @@ button {
 .status.error {
   color: var(--danger);
 }
+
+.pending-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.pending-section h2 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.pending-row:last-child {
+  border-bottom: none;
+}
+
+.pending-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.pending-state {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.pill-pending {
+  background: #fff3cd;
+  color: #7a5800;
+}
+
+.pill-done {
+  background: #d4edda;
+  color: #155724;
+}
+
+.pill-error {
+  background: #f8d7da;
+  color: #721c24;
+}

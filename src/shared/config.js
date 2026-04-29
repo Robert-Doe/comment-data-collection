@@ -86,14 +86,14 @@ function getRuntimeProfile() {
   const memoryBound = totalMemoryMb > reservedMemoryMb
     ? Math.max(1, Math.floor((totalMemoryMb - reservedMemoryMb) / estimatedWorkerMemoryMb))
     : 1;
-  const reservedCpuCount = cpuCount > 1 ? 1 : 0;
+  const reservedCpuCount = cpuCount <= 2 ? 1 : 0;
   const workerCpuBudget = Math.max(1, cpuCount - reservedCpuCount);
 
   return {
     cpuCount,
     totalMemoryMb,
-    // Leave one CPU available for the API and live-probe path so the worker
-    // does not monopolize the host while long scans are running.
+    // On 1-2 CPU hosts, reserve one for the API. On 3+ CPUs the API has
+    // enough headroom without giving up a full core.
     maxRecommendedWorkerConcurrency: Math.max(1, Math.min(workerCpuBudget, memoryBound)),
   };
 }

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Public Job Queue - UGC Scanner</title>
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
+  </head>
+  <body class="public-page">
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link active" href="./public-job.html">Public Intake</a>
+      </nav>
+
+      <section class="hero public-hero">
+        <p class="eyebrow">Public Backup Queue</p>
+        <h1 id="page-title">Public Job Queue</h1>
+        <p class="lede" id="page-lede">Add URLs to the fixed public job, review the queued rows, and start scanning only when you want to process the staged pages.</p>
+        <div class="public-hero-actions">
+          <a id="open-scanner-link" class="link-button compact" href="./index.html">Open Scanner</a>
+          <a id="open-job-link" class="link-button compact disabled" href="#" aria-disabled="true" target="_blank" rel="noreferrer">View Job in Scanner</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Target Job</h2>
+          <button id="refresh-job" class="secondary" type="button">Refresh</button>
+        </div>
+        <div id="job-target" class="summary empty">Loading public job target...</div>
+        <p id="job-target-message" class="public-note">The target job comes from `PUBLIC_JOB_ID` in `config.js`, or from `?jobId=` in the URL if you are testing locally.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Add URLs</h2>
+          <button id="start-pending" class="secondary" type="button" disabled>Start Pending</button>
+        </div>
+        <div class="public-intake-grid">
+          <form id="single-url-form" class="public-form">
+            <h3>Manual URL</h3>
+            <label class="field">
+              <span>URL</span>
+              <input id="single-url-input" type="url" placeholder="https://example.com/page">
+            </label>
+            <div class="action-stack">
+              <button class="primary" type="submit">Add URL</button>
+              <button id="single-url-add-scan" class="secondary" type="button">Add + Scan</button>
+            </div>
+            <p class="public-note">This stages one page in the shared job. It does not create a new job.</p>
+          </form>
+
+          <form id="csv-form" class="public-form">
+            <h3>CSV or Paste</h3>
+            <label class="field">
+              <span>CSV File</span>
+              <input id="csv-file" type="file" accept=".csv,text/csv">
+            </label>
+            <label class="field">
+              <span>URL Column</span>
+              <input id="csv-url-column" type="text" placeholder="url">
+            </label>
+            <label class="field">
+              <span>Paste CSV Or URLs</span>
+              <textarea id="csv-text" rows="6" placeholder="url&#10;https://example.com/a&#10;https://example.com/b"></textarea>
+            </label>
+            <div class="action-stack">
+              <button class="primary" type="submit">Import CSV</button>
+              <button id="csv-add-scan" class="secondary" type="button">Import + Scan</button>
+            </div>
+            <p class="public-note">If no file is selected, pasted text is parsed the same way as the upload.</p>
+          </form>
+        </div>
+        <p id="intake-message" class="message"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Queued Pages</h2>
+          <button id="refresh-items" class="secondary" type="button">Refresh Items</button>
+        </div>
+        <div id="job-items" class="table-shell empty">Load the public job to see its URL list.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Job Status</h2>
+          <span id="job-status-badge" class="subtle">Waiting for job...</span>
+        </div>
+        <div id="job-summary" class="summary empty">No public job loaded yet.</div>
+        <div class="job-events-shell">
+          <div class="panel-header compact-header">
+            <h3>Job Events</h3>
+            <span class="subtle">Recent job, queue, and append events.</span>
+          </div>
+          <div id="job-events" class="event-list empty">Select a job to view the recent events.</div>
+        </div>
+      </section>
+    </main>
+    <script src="./public-job.js"></script>
+  </body>
+</html>

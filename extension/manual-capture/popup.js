@@ -13,11 +13,13 @@
   const captureUploadButton = document.getElementById('capture-upload');
 
   const STORAGE_KEY = 'ugc-manual-capture-config';
+  const PENDING_KEY = 'ugc-pending-captures';
   let currentTab = null;
   let currentMatch = null;
   let currentMatches = [];
   let currentManualTarget = null;
   let manualOverride = null;
+  const pollTimers = new Map(); // itemId → timer id
 
   function setStatus(text, isError) {
     statusEl.textContent = text || '';
@@ -44,6 +46,125 @@
     return new Promise((resolve) => {
       chrome.storage.local.set({ [STORAGE_KEY]: config }, resolve);
     });
+  }
+
+  function getPendingCaptures() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([PENDING_KEY], (result) => {
+        resolve(Array.isArray(result[PENDING_KEY]) ? result[PENDING_KEY] : []);
+      });
+    });
+  }
+
+  function savePendingCaptures(list) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [PENDING_KEY]: list }, resolve);
+    });
+  }
+
+  async function addPendingCapture(entry) {
+    const list = await getPendingCaptures();
+    const next = list.filter((e) => e.itemId !== entry.itemId);
+    next.push(entry);
+    await savePendingCaptures(next);
+    renderPendingCaptures(next);
+  }
+
+  async function removePendingCapture(itemId) {
+    const list = await getPendingCaptures();
+    const next = list.filter((e) => e.itemId !== itemId);
+    await savePendingCaptures(next);
+    renderPendingCaptures(next);
+  }
+
+  function renderPendingCaptures(list) {
+    const container = document.getElementById('pending-captures');
+    const section = document.getElementById('pending-section');
+    if (!container || !section) return;
+    const active = Array.isArray(list) ? list : [];
+    if (!active.length) {
+      section.classList.add('hidden');
+      container.innerHTML = '';
+      return;
+    }
+    section.classList.remove('hidden');
+    container.innerHTML = active.map((entry) => {
+      const label = entry.title ? entry.title : (entry.itemId || '');
+      const stateText = entry.state === 'done'
+        ? (entry.ugcDetected ? 'Done — UGC detected' : 'Done — no UGC')
+        : entry.state === 'error'
+          ? `Failed: ${entry.error || 'unknown error'}`
+          : 'Analyzing…';
+      const stateClass = entry.state === 'done' ? 'pill-done' : entry.state === 'error' ? 'pill-error' : 'pill-pending';
+      return `<div class="pending-row">
+        <span class="pending-label" title="${escapeAttr(entry.itemId || '')}">${escapeHtml(label)}</span>
+        <span class="pending-state ${stateClass}">${escapeHtml(stateText)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escapeAttr(str) {
+    return String(str || '').replace(/"/g, '&quot;');
+  }
+
+  async function pollPendingCapture(entry) {
+    if (pollTimers.has(entry.itemId)) return; // already polling
+    const INTERVAL = 3000;
+    const MAX_POLLS = 200; // 10 min ceiling
+    let count = 0;
+
+    async function tick() {
+      count += 1;
+      if (count > MAX_POLLS) {
+        await removePendingCapture(entry.itemId);
+        pollTimers.delete(entry.itemId);
+        return;
+      }
+      try {
+        const res = await fetch(`${entry.apiBaseUrl}/api/jobs/${encodeURIComponent(entry.jobId)}/items/${encodeURIComponent(entry.itemId)}`);
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const body = await res.json();
+        const item = body && body.item ? body.item : null;
+        if (item && item.updated_at && item.updated_at > entry.submittedAt) {
+          // Analysis finished (success or fail)
+          const ugcDetected = !!item.ugc_detected;
+          const failed = item.status === 'failed';
+          const updated = {
+            ...entry,
+            state: failed ? 'error' : 'done',
+            ugcDetected,
+            error: failed ? (item.error_message || 'analysis failed') : '',
+          };
+          const list = await getPendingCaptures();
+          const next = list.map((e) => (e.itemId === entry.itemId ? updated : e));
+          await savePendingCaptures(next);
+          renderPendingCaptures(next);
+
+          // Update the main matched-item display if it's the same item
+          if (currentMatch && currentMatch.id === entry.itemId) {
+            currentMatch = item;
+            const { currentManualTarget: target } = window.__ugcPopupState || {};
+            renderMatchSummary(item, target || currentManualTarget);
+          }
+
+          // Leave the row visible briefly so the user can read the result, then clean up
+          setTimeout(async () => {
+            await removePendingCapture(entry.itemId);
+            pollTimers.delete(entry.itemId);
+          }, 8000);
+          return;
+        }
+      } catch (_) {
+        // network hiccup — keep polling
+      }
+      pollTimers.set(entry.itemId, setTimeout(tick, INTERVAL));
+    }
+
+    pollTimers.set(entry.itemId, setTimeout(tick, INTERVAL));
   }
 
   function getActiveTab() {
@@ -452,7 +573,7 @@
       notes: notesInput.value.trim(),
     });
 
-    setStatus('Uploading snapshot to scanner...', false);
+    setStatus('Uploading snapshot…', false);
     const response = await fetch(`${apiBaseUrl}/api/jobs/${encodeURIComponent(targetItem.job_id)}/items/${encodeURIComponent(targetItem.id)}/manual-capture`, {
       method: 'POST',
       body: formData,
@@ -462,10 +583,26 @@
       throw new Error(body.error || `Upload failed: ${response.status}`);
     }
 
-    currentMatch = body.item || currentMatch;
-    renderMatchSummary(currentMatch, currentManualTarget);
-    const detected = body && body.item && body.item.ugc_detected ? 'yes' : 'no';
-    setStatus(`Snapshot uploaded. Mode: ${snapshot.snapshotMode}. UGC detected: ${detected}.`, false);
+    if (response.status === 202 && body.pending) {
+      // Server accepted the upload and is analysing in the background
+      const pendingEntry = {
+        jobId: body.jobId || targetItem.job_id,
+        itemId: body.itemId || targetItem.id,
+        submittedAt: body.submittedAt || new Date().toISOString(),
+        apiBaseUrl,
+        title: snapshot.title || targetItem.title || targetItem.normalized_url || '',
+        state: 'analyzing',
+      };
+      await addPendingCapture(pendingEntry);
+      pollPendingCapture(pendingEntry);
+      setStatus(`Uploaded (${snapshot.snapshotMode}). Analysing in background — you can close this popup.`, false);
+    } else {
+      // Older server returning the full result synchronously
+      currentMatch = body.item || currentMatch;
+      renderMatchSummary(currentMatch, currentManualTarget);
+      const detected = body.item && body.item.ugc_detected ? 'yes' : 'no';
+      setStatus(`Snapshot uploaded. Mode: ${snapshot.snapshotMode}. UGC detected: ${detected}.`, false);
+    }
   }
 
   applyConfigButton.addEventListener('click', () => {
@@ -511,6 +648,14 @@
       notesInput.value = stored.notes || '';
       captureUploadButton.disabled = true;
       await refreshMatch().catch(() => {});
+      // Resume polling for any captures that were still in-flight when the popup was last closed.
+      const pending = await getPendingCaptures().catch(() => []);
+      renderPendingCaptures(pending);
+      pending.forEach((entry) => {
+        if (entry.state === 'analyzing') {
+          pollPendingCapture(entry);
+        }
+      });
     })
     .catch((error) => {
       setStatus(error.message || String(error), true);
