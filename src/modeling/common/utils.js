@@ -6,12 +6,13 @@ function normalizeHostname(value) {
 
   try {
     const parsed = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
-    return String(parsed.hostname || '').toLowerCase();
+    return String(parsed.hostname || '').toLowerCase().replace(/^www\./, '');
   } catch (_) {
     return text
       .replace(/^https?:\/\//i, '')
       .replace(/\/.*$/, '')
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/^www\./, '');
   }
 }
 
