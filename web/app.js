@@ -4437,6 +4437,14 @@
     zone.className = 'reprocess-drop-zone reprocess-uploading';
     zone.textContent = 'Processing…';
     try {
+      // Snapshot updated_at before submitting so we can detect when the server
+      // actually processes this capture, independent of clock skew.
+      let previousUpdatedAt = null;
+      try {
+        const before = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
+        previousUpdatedAt = (before.item || before).updated_at || null;
+      } catch (_) {}
+
       const formData = new FormData();
       formData.append('snapshot', file);
       const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${itemId}/manual-capture`), {
@@ -4445,7 +4453,7 @@
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Upload failed');
-      await pollReprocessItem(itemId, zone);
+      await pollReprocessItem(itemId, zone, previousUpdatedAt);
     } catch (err) {
       const msg = (err && err.message) || 'Upload failed';
       reprocessItemStatuses.set(itemId, 'error');
@@ -4455,13 +4463,15 @@
     }
   }
 
-  async function pollReprocessItem(itemId, zone) {
-    const submittedAt = Date.now();
+  async function pollReprocessItem(itemId, zone, previousUpdatedAt) {
     for (let i = 0; i < 60; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       try {
         const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
         const item = data.item || data;
+        // Wait until updated_at actually changes — this is clock-skew-proof
+        const hasChanged = item.updated_at && item.updated_at !== previousUpdatedAt;
+        if (!hasChanged) continue;
         if (item.status === 'completed' || item.status === 'completed_with_errors') {
           reprocessItemStatuses.set(itemId, 'done');
           zone.className = 'reprocess-drop-zone reprocess-done';
@@ -4469,10 +4479,7 @@
           showToast(`Row ${item.row_number} reprocessed successfully.`, { tone: 'success' });
           return;
         }
-        // Only treat as re-failed once the server has actually updated the item
-        // (updated_at must be newer than our submission time)
-        const updatedAt = item.updated_at ? new Date(item.updated_at).getTime() : 0;
-        if (item.status === 'failed' && updatedAt > submittedAt) {
+        if (item.status === 'failed') {
           reprocessItemStatuses.set(itemId, 'error');
           zone.className = 'reprocess-drop-zone reprocess-error';
           zone.textContent = 'Error — try again';
