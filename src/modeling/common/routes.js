@@ -21,6 +21,7 @@ const {
   buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
+  computeDomainConfusion,
   scoreLiveUrlProbe,
   exportDataset,
 } = require('./service');
@@ -350,6 +351,29 @@ function createModelingRouter(dependencies) {
       progress && progress({ stage: 'scoring', message: 'Loading site groups dataset' });
       const items = await loadModelingItems(jobIds, progress);
       const result = await scoreSiteGroups(items, dependencies.artifactRoot, modelId, siteText, {
+        progress,
+      });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/domain-confusion', async (req, res, next) => {
+    try {
+      const modelId = String(req.body && req.body.modelId || '').trim();
+      const siteText = String(req.body && req.body.siteText || '');
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const threshold = req.body && req.body.threshold != null ? Number(req.body.threshold) : 0.5;
+      if (!modelId) {
+        res.status(400).json({ error: 'modelId is required' });
+        return;
+      }
+
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'scoring', message: 'Loading labeled candidates' });
+      const items = await loadModelingItems(jobIds, progress);
+      const result = await computeDomainConfusion(items, dependencies.artifactRoot, modelId, siteText, threshold, {
         progress,
       });
       res.json(result);

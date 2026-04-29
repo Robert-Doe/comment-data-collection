@@ -1733,6 +1733,63 @@ async function scoreSiteGroups(items, artifactRoot, artifactId, text, options = 
   };
 }
 
+async function computeDomainConfusion(items, artifactRoot, artifactId, siteText, threshold, options = {}) {
+  const artifact = await loadModelArtifact(artifactRoot, artifactId);
+  if (!artifact) {
+    throw new Error('Model artifact not found');
+  }
+
+  const normalizedThreshold = threshold != null && threshold !== '' ? Math.max(0, Math.min(1, Number(threshold))) : 0.5;
+  const requestedHosts = siteText && siteText.trim() ? parseSiteUpload(siteText) : null;
+
+  const dataset = extractCandidateDataset(Array.isArray(items) ? items : [], {
+    featureCatalog: artifact.feature_catalog,
+  });
+
+  const allRows = requestedHosts
+    ? dataset.rows.filter((row) => requestedHosts.includes(row.hostname))
+    : dataset.rows;
+
+  const scoredRows = scoreRows(allRows, artifact, { threshold: normalizedThreshold });
+  const labeledRows = scoredRows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+
+  const overallMetrics = labeledRows.length > 0
+    ? computeAllMetrics(labeledRows, { threshold: normalizedThreshold })
+    : null;
+
+  const allHostnames = requestedHosts
+    || Array.from(new Set(allRows.map((row) => row.hostname).filter(Boolean)));
+
+  const matchedHostnames = Array.from(new Set(allRows.map((row) => row.hostname).filter(Boolean)));
+
+  const domains = allHostnames.map((hostname) => {
+    const hostRows = scoredRows.filter((row) => row.hostname === hostname);
+    const hostLabeled = hostRows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+    return {
+      hostname,
+      total_candidates: hostRows.length,
+      labeled_candidates: hostLabeled.length,
+      metrics: hostLabeled.length > 0
+        ? computeAllMetrics(hostLabeled, { threshold: normalizedThreshold })
+        : null,
+    };
+  });
+
+  const assessedDomains = domains.filter((d) => d.labeled_candidates > 0);
+
+  return {
+    artifact: summarizeArtifact(artifact),
+    threshold: normalizedThreshold,
+    requested_domain_count: requestedHosts ? requestedHosts.length : null,
+    matched_domain_count: matchedHostnames.length,
+    assessed_domain_count: assessedDomains.length,
+    total_candidates: allRows.length,
+    labeled_candidates: labeledRows.length,
+    overall_metrics: overallMetrics,
+    domains,
+  };
+}
+
 async function scoreLiveUrlProbe(scanResult, artifactRoot, artifactId, options = {}) {
   const artifact = await loadModelArtifact(artifactRoot, artifactId);
   if (!artifact) {
@@ -1920,6 +1977,7 @@ module.exports = {
   buildRuntimeModelBundle,
   scoreJobItems,
   scoreSiteGroups,
+  computeDomainConfusion,
   scoreLiveUrlProbe,
   exportDataset,
 };
