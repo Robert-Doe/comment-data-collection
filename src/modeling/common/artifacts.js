@@ -100,10 +100,19 @@ async function loadModelArtifact(rootDirectory, artifactId) {
   return artifact;
 }
 
+async function deleteModelArtifact(rootDirectory, artifactId) {
+  const summaries = await listModelArtifacts(rootDirectory);
+  const match = summaries.find((entry) => entry.id === String(artifactId || '').trim());
+  if (!match || !match.file_path) return false;
+  await fs.unlink(match.file_path);
+  return true;
+}
+
 module.exports = {
   buildArtifactId,
   summarizeArtifact,
   saveModelArtifact,
   listModelArtifacts,
   loadModelArtifact,
+  deleteModelArtifact,
 };

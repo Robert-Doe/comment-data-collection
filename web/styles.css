@@ -302,13 +302,15 @@ button:active,
   border-color: rgba(11, 87, 208, 0.08);
 }
 
-.danger-button {
+.danger-button,
+.danger {
   background: rgba(179, 38, 30, 0.08);
   color: var(--danger);
   border-color: rgba(179, 38, 30, 0.14);
 }
 
-.danger-button:hover {
+.danger-button:hover,
+.danger:hover {
   background: rgba(179, 38, 30, 0.14);
 }
 

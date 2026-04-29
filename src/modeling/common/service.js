@@ -9,7 +9,7 @@ const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree }
 const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
 const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
 const { computeAllMetrics } = require('./metrics');
-const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact } = require('./artifacts');
+const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
 
@@ -1980,4 +1980,5 @@ module.exports = {
   computeDomainConfusion,
   scoreLiveUrlProbe,
   exportDataset,
+  deleteModelArtifact,
 };

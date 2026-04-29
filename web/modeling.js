@@ -1904,6 +1904,7 @@
                   <div class="action-stack">
                     <button class="secondary compact" type="button" data-use-model="${escapeHtml(model.id || '')}">Use</button>
                     <a class="link-button compact" href="${escapeHtml(runtimeModelUrl(model.id || ''))}">Runtime JSON</a>
+                    <button class="secondary compact danger" type="button" data-delete-model="${escapeHtml(model.id || '')}">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -2461,13 +2462,30 @@
   }
 
   modelList.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-use-model]');
-    if (!button) return;
-    const modelId = button.getAttribute('data-use-model');
-    if (!modelId) return;
-    scoreModelId.value = modelId;
-    siteGroupModelId.value = modelId;
-    liveProbeModelId.value = modelId;
+    const useButton = event.target.closest('[data-use-model]');
+    if (useButton) {
+      const modelId = useButton.getAttribute('data-use-model');
+      if (!modelId) return;
+      scoreModelId.value = modelId;
+      siteGroupModelId.value = modelId;
+      liveProbeModelId.value = modelId;
+      return;
+    }
+
+    const deleteButton = event.target.closest('[data-delete-model]');
+    if (deleteButton) {
+      const modelId = deleteButton.getAttribute('data-delete-model');
+      if (!modelId) return;
+      if (!confirm(`Delete model "${modelId}"? This cannot be undone.`)) return;
+      deleteButton.disabled = true;
+      fetch(apiUrl(`/api/modeling/models/${encodeURIComponent(modelId)}`), { method: 'DELETE' })
+        .then((res) => res.json())
+        .then(() => refreshOverview())
+        .catch((err) => {
+          deleteButton.disabled = false;
+          alert(`Delete failed: ${err.message || err}`);
+        });
+    }
   });
 
   recentJobsModel.addEventListener('click', (event) => {

@@ -24,6 +24,7 @@ const {
   computeDomainConfusion,
   scoreLiveUrlProbe,
   exportDataset,
+  deleteModelArtifact,
 } = require('./service');
 const { parseJobIdList } = require('./utils');
 const { normalizeInputUrl } = require('../../shared/csv');
@@ -173,6 +174,19 @@ function createModelingRouter(dependencies) {
         return;
       }
       res.json({ model: artifact });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete('/models/:artifactId', async (req, res, next) => {
+    try {
+      const deleted = await deleteModelArtifact(dependencies.artifactRoot, req.params.artifactId);
+      if (!deleted) {
+        res.status(404).json({ error: 'Model artifact not found' });
+        return;
+      }
+      res.json({ deleted: true });
     } catch (error) {
       next(error);
     }
