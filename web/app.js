@@ -57,6 +57,7 @@
   const jobLabelerPrevButton = document.getElementById('job-labeler-prev');
   const jobLabelerNextButton = document.getElementById('job-labeler-next');
   const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
+  const jobLabelerFilterUnlabeled = document.getElementById('job-labeler-filter-unlabeled');
   const jobLabelerJumpForm = document.getElementById('job-labeler-jump-form');
   const jobLabelerJumpPosition = document.getElementById('job-labeler-jump-position');
   const jobLabelerJumpButton = document.getElementById('job-labeler-jump-button');
@@ -1123,6 +1124,22 @@
     return -1;
   }
 
+  function findPrevUnreviewedLabelerIndex(state, beforeIndex) {
+    if (!state || !state.entries.length) return -1;
+    const end = Math.min(beforeIndex - 1, state.entries.length - 1);
+    for (let index = end; index >= 0; index -= 1) {
+      const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
+      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  function isFilteringUnlabeled() {
+    return !!(jobLabelerFilterUnlabeled && jobLabelerFilterUnlabeled.checked);
+  }
+
   function setJobLabelerNavState(state) {
     const disabled = !state || !state.entries.length;
     const transitioning = !!(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId);
@@ -1131,11 +1148,19 @@
     const currentIndex = Math.max(0, Number(state && state.index) || 0);
     const lastIndex = Math.max(0, (state && state.entries ? state.entries.length : 0) - 1);
     const atEnd = currentIndex >= lastIndex;
-    jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
-    jobLabelerNextButton.disabled = disabled
-      || transitioning
-      || (!hasMore && atEnd)
-      || (loadingMore && atEnd);
+
+    if (!disabled && isFilteringUnlabeled()) {
+      const hasPrev = findPrevUnreviewedLabelerIndex(state, currentIndex) >= 0;
+      const hasNext = findNextUnreviewedLabelerIndex(state, currentIndex + 1) >= 0;
+      jobLabelerPrevButton.disabled = transitioning || !hasPrev;
+      jobLabelerNextButton.disabled = transitioning || (!hasNext && !hasMore && !loadingMore);
+    } else {
+      jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
+      jobLabelerNextButton.disabled = disabled
+        || transitioning
+        || (!hasMore && atEnd)
+        || (loadingMore && atEnd);
+    }
     if (jobLabelerJumpPosition) {
       jobLabelerJumpPosition.disabled = disabled || transitioning || loadingMore;
     }
