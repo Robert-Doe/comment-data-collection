@@ -4393,7 +4393,10 @@
         <td>${escapeHtml(String(item.row_number))}</td>
         <td class="mono"><a href="${escapeHtml(item.normalized_url || '')}" target="_blank" rel="noreferrer">${escapeHtml(item.normalized_url || '')}</a></td>
         <td>${escapeHtml(item.error_message || '')}</td>
-        <td><div class="reprocess-drop-zone ${classMap[state] || ''}" data-drop-item="${escapeHtml(item.id)}">${labelMap[state] || labelMap.idle}</div></td>
+        <td><div class="reprocess-cell">
+          <div class="reprocess-drop-zone ${classMap[state] || ''}" data-drop-item="${escapeHtml(item.id)}">${labelMap[state] || labelMap.idle}</div>
+          <button class="secondary compact" type="button" data-paste-item="${escapeHtml(item.id)}" title="View source (Ctrl+U) → Ctrl+A → Ctrl+C → click Paste">Paste</button>
+        </div></td>
       </tr>`;
     }).join('');
     return `<table>
@@ -4429,7 +4432,28 @@
         };
         input.click();
       });
+
+      const pasteBtn = reprocessList.querySelector(`[data-paste-item="${itemId}"]`);
+      if (pasteBtn) {
+        pasteBtn.addEventListener('click', () => handleReprocessPaste(itemId, zone));
+      }
     });
+  }
+
+  async function handleReprocessPaste(itemId, zone) {
+    let html;
+    try {
+      html = await navigator.clipboard.readText();
+    } catch (e) {
+      showToast('Clipboard access denied — allow clipboard permission and try again.', { tone: 'error' });
+      return;
+    }
+    if (!html || !html.trim()) {
+      showToast('Clipboard is empty — open View Source (Ctrl+U), Ctrl+A, Ctrl+C first.', { tone: 'error' });
+      return;
+    }
+    const file = new File([html], 'pasted.html', { type: 'text/html' });
+    await handleReprocessDrop(itemId, file, zone);
   }
 
   async function handleReprocessDrop(itemId, file, zone) {
