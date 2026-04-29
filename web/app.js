@@ -1129,9 +1129,7 @@
     const end = Math.min(beforeIndex - 1, state.entries.length - 1);
     for (let index = end; index >= 0; index -= 1) {
       const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
-      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') {
-        return index;
-      }
+      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') return index;
     }
     return -1;
   }
@@ -1147,20 +1145,22 @@
     const loadingMore = !!(state && state.loadingMorePromise);
     const currentIndex = Math.max(0, Number(state && state.index) || 0);
     const lastIndex = Math.max(0, (state && state.entries ? state.entries.length : 0) - 1);
-    const atEnd = currentIndex >= lastIndex;
-
-    if (!disabled && isFilteringUnlabeled()) {
-      const hasPrev = findPrevUnreviewedLabelerIndex(state, currentIndex) >= 0;
-      const hasNext = findNextUnreviewedLabelerIndex(state, currentIndex + 1) >= 0;
-      jobLabelerPrevButton.disabled = transitioning || !hasPrev;
-      jobLabelerNextButton.disabled = transitioning || (!hasNext && !hasMore && !loadingMore);
+    const filtering = isFilteringUnlabeled();
+    let atEnd;
+    if (filtering) {
+      const nextUnreviewed = findNextUnreviewedLabelerIndex(state, currentIndex + 1);
+      atEnd = nextUnreviewed < 0 && !(hasMore);
     } else {
-      jobLabelerPrevButton.disabled = disabled || transitioning || currentIndex <= 0;
-      jobLabelerNextButton.disabled = disabled
-        || transitioning
-        || (!hasMore && atEnd)
-        || (loadingMore && atEnd);
+      atEnd = currentIndex >= lastIndex;
     }
+    const atStart = filtering
+      ? findPrevUnreviewedLabelerIndex(state, currentIndex) < 0
+      : currentIndex <= 0;
+    jobLabelerPrevButton.disabled = disabled || transitioning || atStart;
+    jobLabelerNextButton.disabled = disabled
+      || transitioning
+      || (!hasMore && atEnd)
+      || (loadingMore && atEnd);
     if (jobLabelerJumpPosition) {
       jobLabelerJumpPosition.disabled = disabled || transitioning || loadingMore;
     }
@@ -2192,17 +2192,29 @@
       if (status === 'uncertain') uncertain += 1;
     });
 
+    const totalUnreviewed = state.entries.length - reviewed;
+    let positionLine;
+    if (isFilteringUnlabeled()) {
+      const unreviewedUpToCursor = state.entries.slice(0, (state.index || 0) + 1).filter((entry) => {
+        const { candidate } = jobLabelerCandidateForEntry(state, entry);
+        return !candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed';
+      }).length;
+      positionLine = `<div><strong>Unlabeled Position:</strong> ${escapeHtml(unreviewedUpToCursor)} / ${escapeHtml(totalUnreviewed)}${state.hasMore ? '+' : ''}</div>`;
+    } else {
+      positionLine = `<div><strong>Cursor Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>`;
+    }
+
     return `
       <div class="summary">
         <div><strong>Rows With Candidates:</strong> ${escapeHtml(itemsWithCandidates.size)}</div>
         <div><strong>Total Candidates:</strong> ${escapeHtml(state.entries.length)}</div>
         ${loadingRows}
         <div><strong>Reviewed:</strong> ${escapeHtml(reviewed)}</div>
-        <div><strong>Remaining:</strong> ${escapeHtml(state.entries.length - reviewed)}</div>
+        <div><strong>Remaining:</strong> ${escapeHtml(totalUnreviewed)}</div>
         <div><strong>Comment Region:</strong> ${escapeHtml(commentRegion)}</div>
         <div><strong>Not Comment:</strong> ${escapeHtml(notComment)}</div>
         <div><strong>Uncertain:</strong> ${escapeHtml(uncertain)}</div>
-        <div><strong>Cursor Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>
+        ${positionLine}
       </div>
     `;
   }
@@ -2375,6 +2387,42 @@
     const jobId = currentJobId;
     state.pendingAdvanceFromIndex = -1;
     const step = direction < 0 ? -1 : 1;
+
+    if (isFilteringUnlabeled()) {
+      const currentIndex = state.index || 0;
+      const targetIndex = step > 0
+        ? findNextUnreviewedLabelerIndex(state, currentIndex + 1)
+        : findPrevUnreviewedLabelerIndex(state, currentIndex);
+
+      if (targetIndex >= 0) {
+        if (targetIndex === currentIndex) return;
+        state.index = targetIndex;
+        setJobLabelerMessage('', false);
+        renderJobLabelerReview();
+        maybePrefetchJobLabelerEntries(jobId);
+        return;
+      }
+
+      if (step > 0 && state.hasMore) {
+        const loadTarget = state.entries.length;
+        startJobLabelerTransition('Loading more candidates...');
+        try {
+          await ensureJobLabelerEntriesForIndex(jobId, state, loadTarget);
+          if (currentJobLabelerState() !== state || currentJobId !== jobId) return;
+          const nextAfterLoad = findNextUnreviewedLabelerIndex(state, loadTarget);
+          if (nextAfterLoad >= 0) state.index = nextAfterLoad;
+          setJobLabelerMessage('', false);
+          stopJobLabelerTransition();
+          renderJobLabelerReview();
+          maybePrefetchJobLabelerEntries(jobId);
+        } catch (error) {
+          stopJobLabelerTransition();
+          throw error;
+        }
+      }
+      return;
+    }
+
     const targetIndex = Math.max(0, (state.index || 0) + step);
     const nextIndex = Math.min(targetIndex, state.entries.length - 1);
     if (targetIndex >= state.entries.length && state.hasMore) {
@@ -4213,6 +4261,17 @@
   jobLabelerNextButton.addEventListener('click', () => {
     handleJobLabelerStep(1);
   });
+
+  if (jobLabelerFilterUnlabeled) {
+    jobLabelerFilterUnlabeled.addEventListener('change', () => {
+      const state = currentJobLabelerState();
+      if (state && jobLabelerFilterUnlabeled.checked) {
+        const firstUnreviewed = findNextUnreviewedLabelerIndex(state, 0);
+        if (firstUnreviewed >= 0) state.index = firstUnreviewed;
+      }
+      renderJobLabelerReview();
+    });
+  }
 
   managerResumeButton.addEventListener('click', () => {
     handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));
