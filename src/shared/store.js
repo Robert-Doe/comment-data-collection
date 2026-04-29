@@ -478,6 +478,30 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   return result.rows;
 }
 
+async function getJobItemsByStatus(jobId, status, optionsOrDatabaseUrl, maybeDatabaseUrl) {
+  const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
+    ? optionsOrDatabaseUrl
+    : {};
+  const databaseUrl = typeof optionsOrDatabaseUrl === 'string'
+    ? optionsOrDatabaseUrl
+    : maybeDatabaseUrl;
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT *
+     FROM job_items
+     WHERE job_id = $1 AND status = $2
+     ORDER BY row_number ASC
+     LIMIT $3 OFFSET $4`,
+    [
+      jobId,
+      String(status || ''),
+      Math.max(1, Number(options.limit) || 500),
+      Math.max(0, Number(options.offset) || 0),
+    ],
+  );
+  return result.rows;
+}
+
 async function replaceJobRecords(jobId, options = {}, databaseUrl) {
   const normalizedJobId = String(jobId || '').trim();
   if (!normalizedJobId) {
@@ -2162,6 +2186,7 @@ module.exports = {
   getJob,
   getJobItem,
   getJobItems,
+  getJobItemsByStatus,
   getDatabaseSummary,
   listItemsForModeling,
   listJobItemsByStatuses,

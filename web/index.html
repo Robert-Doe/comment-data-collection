@@ -109,6 +109,7 @@
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="scoring" title="See why the selected row scored the way it did.">Scoring</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="merge" title="Combine two jobs into one new aggregate job.">Merge</button>
             <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="manager" title="Resume, restart, replace, or delete the selected job.">Manager</button>
+            <button class="tab-button" type="button" role="tab" aria-selected="false" data-workspace-tab="reprocess" title="List failed URLs — visit each one, save with Ctrl+S, then drag the HTML file onto its row.">Reprocess</button>
           </div>
           <p class="workspace-hint candidate-copy">Rows opens the queue. Manual primes capture upload. Candidates reviews crops. Labeler walks every candidate in a job. Scoring explains a prediction. Merge combines jobs without changing the originals. Manager handles lifecycle and backups.</p>
           <div id="workspace-selection" class="workspace-selection empty">Select a row from the table to open the manual or candidate review workspace.</div>
@@ -313,6 +314,14 @@
               </div>
               <button id="manager-clear-jobs" class="secondary compact danger-button" type="button">Clear All Jobs</button>
             </div>
+          </section>
+          <section id="workspace-panel-reprocess" class="workspace-panel" data-workspace-panel="reprocess">
+            <div class="panel-header compact-header">
+              <h3>Reprocess Failed URLs</h3>
+              <button id="reprocess-reload" class="secondary compact" type="button">Reload</button>
+            </div>
+            <p class="workspace-hint">Visit each failed URL in a new tab, save the page with <strong>Ctrl+S</strong>, then drag the saved <code>.html</code> file onto its row. The server will re-scan it exactly like the extension would — no screenshot needed.</p>
+            <div id="reprocess-list" class="table-shell empty">Select a job to see failed URLs.</div>
           </section>
         </div>
       </section>

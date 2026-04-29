@@ -56,6 +56,7 @@ const {
   getJob,
   getJobItem,
   getJobItems,
+  getJobItemsByStatus,
   getDatabaseSummary,
   getDatabaseQuerySnapshot,
   appendJobEvent,
@@ -995,6 +996,25 @@ function createApp(config = getConfig()) {
           total: job.total_urls,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/jobs/:jobId/items', async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.jobId, config.databaseUrl);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found' });
+        return;
+      }
+      const status = String(req.query.status || '').trim();
+      const limit = Math.max(1, Number(req.query.limit) || 500);
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const items = status
+        ? await getJobItemsByStatus(req.params.jobId, status, { limit, offset }, config.databaseUrl)
+        : await getJobItems(req.params.jobId, { limit, offset }, config.databaseUrl);
+      res.json({ items: items.map((item) => materializeItem(item, req)) });
     } catch (error) {
       next(error);
     }

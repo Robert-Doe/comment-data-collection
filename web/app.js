@@ -86,6 +86,8 @@
   const confirmDescription = document.getElementById('confirm-description');
   const confirmAccept = document.getElementById('confirm-accept');
   const toastStack = document.getElementById('toast-stack');
+  const reprocessList = document.getElementById('reprocess-list');
+  const reprocessReloadButton = document.getElementById('reprocess-reload');
 
   let currentJobId = new URLSearchParams(window.location.search).get('jobId') || '';
   let currentJob = null;
@@ -118,6 +120,7 @@
   let pollIntervalMs = 0;
   let recentJobsPollHandle = null;
   let refreshJobToken = 0;
+  const reprocessItemStatuses = new Map();
   const candidateMarkupCache = new Map();
   const candidateMarkupPending = new Set();
   const scoreDetailOpenState = new Set();
@@ -533,6 +536,9 @@
     }
     if (activeWorkspaceTab === 'labeler') {
       renderJobLabelerReview();
+    }
+    if (activeWorkspaceTab === 'reprocess') {
+      renderReprocessPanel();
     }
   }
 
@@ -4351,6 +4357,137 @@
   window.addEventListener('beforeunload', () => {
     stopPolling();
     stopRecentJobsPolling();
+  });
+
+  async function renderReprocessPanel() {
+    if (!currentJobId) {
+      reprocessList.className = 'table-shell empty';
+      reprocessList.textContent = 'Select a job to see failed URLs.';
+      return;
+    }
+    reprocessList.className = 'table-shell loading';
+    reprocessList.textContent = 'Loading failed URLs…';
+    try {
+      const data = await fetchJson(apiUrl(`/api/jobs/${currentJobId}/items?status=failed&limit=500`));
+      const items = data.items || [];
+      if (!items.length) {
+        reprocessList.className = 'table-shell empty';
+        reprocessList.textContent = 'No failed URLs for this job.';
+        return;
+      }
+      reprocessList.className = 'table-shell';
+      reprocessList.innerHTML = buildReprocessTable(items);
+      attachReprocessDropZones();
+    } catch (err) {
+      reprocessList.className = 'table-shell empty';
+      reprocessList.textContent = 'Failed to load items.';
+    }
+  }
+
+  function buildReprocessTable(items) {
+    const rows = items.map((item) => {
+      const state = reprocessItemStatuses.get(item.id) || 'idle';
+      const labelMap = { idle: 'Drop .html here', uploading: 'Processing…', done: 'Done ✓', error: 'Error — try again' };
+      const classMap = { idle: '', uploading: 'reprocess-uploading', done: 'reprocess-done', error: 'reprocess-error' };
+      return `<tr data-reprocess-row="${escapeHtml(item.id)}">
+        <td>${escapeHtml(String(item.row_number))}</td>
+        <td class="mono"><a href="${escapeHtml(item.normalized_url || '')}" target="_blank" rel="noreferrer">${escapeHtml(item.normalized_url || '')}</a></td>
+        <td>${escapeHtml(item.error_message || '')}</td>
+        <td><div class="reprocess-drop-zone ${classMap[state] || ''}" data-drop-item="${escapeHtml(item.id)}">${labelMap[state] || labelMap.idle}</div></td>
+      </tr>`;
+    }).join('');
+    return `<table>
+      <thead><tr><th>Row</th><th>URL</th><th>Error</th><th>Reprocess</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  function attachReprocessDropZones() {
+    reprocessList.querySelectorAll('[data-drop-item]').forEach((zone) => {
+      const itemId = zone.getAttribute('data-drop-item');
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('reprocess-dragover');
+      });
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('reprocess-dragover');
+      });
+      zone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        zone.classList.remove('reprocess-dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) await handleReprocessDrop(itemId, file, zone);
+      });
+      zone.addEventListener('click', () => {
+        if (reprocessItemStatuses.get(itemId) === 'uploading') return;
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.html,.htm';
+        input.onchange = async () => {
+          if (input.files[0]) await handleReprocessDrop(itemId, input.files[0], zone);
+        };
+        input.click();
+      });
+    });
+  }
+
+  async function handleReprocessDrop(itemId, file, zone) {
+    reprocessItemStatuses.set(itemId, 'uploading');
+    zone.className = 'reprocess-drop-zone reprocess-uploading';
+    zone.textContent = 'Processing…';
+    try {
+      const formData = new FormData();
+      formData.append('snapshot', file);
+      const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/items/${itemId}/manual-capture`), {
+        method: 'POST',
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Upload failed');
+      await pollReprocessItem(itemId, zone);
+    } catch (err) {
+      const msg = (err && err.message) || 'Upload failed';
+      reprocessItemStatuses.set(itemId, 'error');
+      zone.className = 'reprocess-drop-zone reprocess-error';
+      zone.textContent = 'Error — try again';
+      showToast(msg, { tone: 'error' });
+    }
+  }
+
+  async function pollReprocessItem(itemId, zone) {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const data = await fetchJson(apiUrl(`/api/jobs/${currentJobId}/items/${itemId}`));
+        const item = data.item || data;
+        if (item.status === 'completed' || item.status === 'completed_with_errors') {
+          reprocessItemStatuses.set(itemId, 'done');
+          zone.className = 'reprocess-drop-zone reprocess-done';
+          zone.textContent = 'Done ✓';
+          showToast(`Row ${item.row_number} reprocessed successfully.`, { tone: 'success' });
+          return;
+        }
+        if (item.status === 'failed' && i > 0) {
+          reprocessItemStatuses.set(itemId, 'error');
+          zone.className = 'reprocess-drop-zone reprocess-error';
+          zone.textContent = 'Error — try again';
+          showToast(`Row ${item.row_number} failed to process.`, { tone: 'error' });
+          return;
+        }
+      } catch (_) {
+        // continue polling
+      }
+    }
+    reprocessItemStatuses.set(itemId, 'error');
+    zone.className = 'reprocess-drop-zone reprocess-error';
+    zone.textContent = 'Timed out — try again';
+    showToast('Reprocess timed out. Check the Rows tab for status.', { tone: 'error' });
+  }
+
+  reprocessReloadButton.addEventListener('click', () => {
+    reprocessItemStatuses.clear();
+    renderReprocessPanel();
   });
 
   setResourceDownloads();
