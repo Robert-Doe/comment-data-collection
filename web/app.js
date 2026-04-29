@@ -4368,7 +4368,7 @@
     reprocessList.className = 'table-shell loading';
     reprocessList.textContent = 'Loading failed URLs…';
     try {
-      const data = await fetchJson(apiUrl(`/api/jobs/${currentJobId}/items?status=failed&limit=500`));
+      const data = await fetchJson(`/api/jobs/${currentJobId}/items?status=failed&limit=500`);
       const items = data.items || [];
       if (!items.length) {
         reprocessList.className = 'table-shell empty';
@@ -4459,7 +4459,7 @@
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
       try {
-        const data = await fetchJson(apiUrl(`/api/jobs/${currentJobId}/items/${itemId}`));
+        const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
         const item = data.item || data;
         if (item.status === 'completed' || item.status === 'completed_with_errors') {
           reprocessItemStatuses.set(itemId, 'done');
