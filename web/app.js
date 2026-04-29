@@ -4456,8 +4456,9 @@
   }
 
   async function pollReprocessItem(itemId, zone) {
+    const submittedAt = Date.now();
     for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 3000));
       try {
         const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
         const item = data.item || data;
@@ -4468,7 +4469,10 @@
           showToast(`Row ${item.row_number} reprocessed successfully.`, { tone: 'success' });
           return;
         }
-        if (item.status === 'failed' && i > 0) {
+        // Only treat as re-failed once the server has actually updated the item
+        // (updated_at must be newer than our submission time)
+        const updatedAt = item.updated_at ? new Date(item.updated_at).getTime() : 0;
+        if (item.status === 'failed' && updatedAt > submittedAt) {
           reprocessItemStatuses.set(itemId, 'error');
           zone.className = 'reprocess-drop-zone reprocess-error';
           zone.textContent = 'Error — try again';
