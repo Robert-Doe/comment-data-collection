@@ -240,6 +240,55 @@ async function ensureSchema(databaseUrl) {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS crawler_sessions (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      seed_source TEXT NOT NULL DEFAULT 'manual',
+      seed_filename TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      max_depth INTEGER NOT NULL DEFAULT 3,
+      links_per_page INTEGER NOT NULL DEFAULT 20,
+      crawl_delay_ms INTEGER NOT NULL DEFAULT 1500,
+      concurrency INTEGER NOT NULL DEFAULT 5,
+      max_pages INTEGER NOT NULL DEFAULT 5000,
+      total_queued INTEGER NOT NULL DEFAULT 0,
+      total_crawled INTEGER NOT NULL DEFAULT 0,
+      total_relevant INTEGER NOT NULL DEFAULT 0,
+      total_failed INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS crawler_pages (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES crawler_sessions(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      normalized_url TEXT NOT NULL,
+      parent_page_id INTEGER REFERENCES crawler_pages(id),
+      depth INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      is_seed BOOLEAN NOT NULL DEFAULT FALSE,
+      is_relevant BOOLEAN,
+      relevance_score REAL NOT NULL DEFAULT 0,
+      matched_categories TEXT[] NOT NULL DEFAULT '{}',
+      title TEXT,
+      outbound_links_found INTEGER NOT NULL DEFAULT 0,
+      links_followed INTEGER NOT NULL DEFAULT 0,
+      http_status INTEGER,
+      error_message TEXT,
+      user_state TEXT,
+      crawled_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_crawler_pages_session_id ON crawler_pages(session_id);
+    CREATE INDEX IF NOT EXISTS idx_crawler_pages_session_status ON crawler_pages(session_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_crawler_pages_session_norm_url ON crawler_pages(session_id, normalized_url);
+  `);
+
+  await db.query(`
     ALTER TABLE jobs
     ADD COLUMN IF NOT EXISTS pending_count INTEGER NOT NULL DEFAULT 0;
 

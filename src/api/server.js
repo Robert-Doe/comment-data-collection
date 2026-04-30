@@ -82,6 +82,24 @@ const {
   getSharedQueue,
   removeQueueItems,
 } = require('../shared/queue');
+const {
+  getCrawlerSession,
+  listCrawlerSessions,
+  updateCrawlerPage,
+  listCrawlerPages,
+  getCrawlerPageCounts,
+  deleteCrawlerSession,
+} = require('../shared/crawlerStore');
+const {
+  startCrawlSession,
+  pauseCrawlSession,
+  resumeCrawlSession,
+  stopCrawlSession,
+  recoverRunningSessions,
+  isSessionActive,
+  normalizeCrawlerUrl,
+  UGC_CATEGORIES,
+} = require('../shared/crawlerService');
 const { fillQueueForJob } = require('../shared/jobQueue');
 const { sendStartedNotification } = require('../shared/notifications');
 
@@ -1893,6 +1911,182 @@ function createApp(config = getConfig()) {
     }
   });
 
+  // ── Crawler API ──────────────────────────────────────────────────────────────
+
+  app.get('/api/crawler/categories', (_req, res) => {
+    res.json({ categories: UGC_CATEGORIES.map((c) => ({ key: c.key, label: c.label })) });
+  });
+
+  app.get('/api/crawler/sessions', async (_req, res, next) => {
+    try {
+      const sessions = await listCrawlerSessions(config.databaseUrl);
+      res.json({ sessions: sessions.map((s) => ({ ...s, active: isSessionActive(s.id) })) });
+    } catch (err) { next(err); }
+  });
+
+  app.post('/api/crawler/sessions', upload.single('file'), async (req, res, next) => {
+    try {
+      const body = req.body || {};
+      const name = String(body.name || '').trim() || `Crawl ${new Date().toISOString().slice(0, 19)}`;
+      const maxDepth = Math.max(1, Math.min(5, Number(body.maxDepth) || 3));
+      const linksPerPage = Math.max(1, Math.min(50, Number(body.linksPerPage) || 20));
+      const crawlDelayMs = Math.max(0, Math.min(30000, Number(body.crawlDelayMs) || 1500));
+      const concurrency = Math.max(1, Math.min(20, Number(body.concurrency) || 5));
+      const maxPages = Math.max(10, Math.min(50000, Number(body.maxPages) || 5000));
+
+      let seedUrls = [];
+      let seedSource = 'manual';
+      let seedFilename = null;
+
+      if (req.file) {
+        // CSV upload — extract URLs from first column or 'domain'/'url' column
+        const text = req.file.buffer.toString('utf8');
+        seedFilename = req.file.originalname;
+        seedSource = 'csv';
+        const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        // Detect header
+        const header = lines[0].toLowerCase().split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+        const urlColIdx = header.findIndex((h) => h === 'url' || h === 'domain' || h === 'site');
+        const startLine = urlColIdx >= 0 ? 1 : 0;
+        const colIdx = urlColIdx >= 0 ? urlColIdx : 0;
+        for (const line of lines.slice(startLine)) {
+          if (!line) continue;
+          const parts = line.split(',');
+          let raw = (parts[colIdx] || '').trim().replace(/^"|"$/g, '');
+          if (!raw) continue;
+          if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+          try { new URL(raw); seedUrls.push(raw); } catch (_) {}
+          if (seedUrls.length >= 1000) break;
+        }
+      } else {
+        // Manual seed URLs — newline or comma separated
+        const raw = String(body.seedUrls || '');
+        seedUrls = raw.split(/[\n,]+/).map((u) => u.trim()).filter(Boolean).map((u) => {
+          if (!/^https?:\/\//i.test(u)) return 'https://' + u;
+          return u;
+        }).filter((u) => { try { new URL(u); return true; } catch (_) { return false; } });
+      }
+
+      if (!seedUrls.length) {
+        res.status(400).json({ error: 'No valid seed URLs provided' });
+        return;
+      }
+
+      const session = await startCrawlSession({
+        name,
+        seedUrls,
+        seedSource,
+        seedFilename,
+        maxDepth,
+        linksPerPage,
+        crawlDelayMs,
+        concurrency,
+        maxPages,
+      }, config.databaseUrl);
+
+      res.status(201).json({ session: { ...session, active: true } });
+    } catch (err) { next(err); }
+  });
+
+  app.get('/api/crawler/sessions/:sessionId', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      const counts = await getCrawlerPageCounts(req.params.sessionId, config.databaseUrl);
+      res.json({ session: { ...session, active: isSessionActive(session.id) }, counts });
+    } catch (err) { next(err); }
+  });
+
+  app.post('/api/crawler/sessions/:sessionId/pause', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      await pauseCrawlSession(session.id, config.databaseUrl);
+      res.json({ ok: true, status: 'paused' });
+    } catch (err) { next(err); }
+  });
+
+  app.post('/api/crawler/sessions/:sessionId/resume', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      await resumeCrawlSession(session.id, config.databaseUrl);
+      res.json({ ok: true, status: 'running' });
+    } catch (err) { next(err); }
+  });
+
+  app.post('/api/crawler/sessions/:sessionId/stop', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      await stopCrawlSession(session.id, config.databaseUrl);
+      res.json({ ok: true, status: 'stopped' });
+    } catch (err) { next(err); }
+  });
+
+  app.delete('/api/crawler/sessions/:sessionId', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      if (isSessionActive(session.id)) {
+        await stopCrawlSession(session.id, config.databaseUrl);
+      }
+      await deleteCrawlerSession(session.id, config.databaseUrl);
+      res.json({ ok: true });
+    } catch (err) { next(err); }
+  });
+
+  app.get('/api/crawler/sessions/:sessionId/pages', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const { rows, total } = await listCrawlerPages(session.id, {
+        limit,
+        offset,
+        status: req.query.status || undefined,
+        isRelevant: req.query.isRelevant,
+        minScore: req.query.minScore,
+        userState: req.query.userState,
+      }, config.databaseUrl);
+      res.json({ pages: rows, total, limit, offset });
+    } catch (err) { next(err); }
+  });
+
+  app.patch('/api/crawler/sessions/:sessionId/pages/:pageId', async (req, res, next) => {
+    try {
+      const updates = {};
+      if (req.body.userState !== undefined) updates.user_state = req.body.userState || null;
+      if (req.body.isRelevant !== undefined) updates.is_relevant = Boolean(req.body.isRelevant);
+      await updateCrawlerPage(req.params.pageId, updates, config.databaseUrl);
+      res.json({ ok: true });
+    } catch (err) { next(err); }
+  });
+
+  // Export relevant pages as CSV for feeding into Scanner
+  app.get('/api/crawler/sessions/:sessionId/export.csv', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+      const minScore = Number(req.query.minScore) || 0;
+      const { rows } = await listCrawlerPages(session.id, {
+        limit: 10000, offset: 0, isRelevant: 'true', minScore,
+      }, config.databaseUrl);
+      const header = 'url,title,depth,relevance_score,matched_categories\n';
+      const lines = rows.map((p) =>
+        [p.url, p.title || '', p.depth, p.relevance_score, (p.matched_categories || []).join('|')]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(','),
+      );
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="crawler-session-${session.id}-relevant.csv"`);
+      res.send(header + lines.join('\n'));
+    } catch (err) { next(err); }
+  });
+
+  // ── End Crawler API ───────────────────────────────────────────────────────────
+
   app.use((error, _req, res, _next) => {
     console.error(error);
     res.status(500).json({
@@ -1909,6 +2103,9 @@ async function main() {
   const app = createApp(config);
   app.listen(config.port, () => {
     console.log(`ugc-api listening on ${config.port}`);
+  });
+  recoverRunningSessions(config.databaseUrl).catch((e) => {
+    console.error('[crawler] recovery error:', e);
   });
 }
 

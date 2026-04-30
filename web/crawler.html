@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UGC Crawler</title>
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+        <a class="site-nav-link" href="./demo.html">Demo Tour</a>
+        <a class="site-nav-link" href="./ml-guide.html">ML Guide</a>
+        <a class="site-nav-link" href="./public-job.html">Public Intake</a>
+        <a class="site-nav-link" href="./domain-metrics.html">Domain Metrics</a>
+        <a class="site-nav-link active" href="./crawler.html">Crawler</a>
+      </nav>
+
+      <section class="hero">
+        <p class="eyebrow">UGC Discovery</p>
+        <h1>Site Crawler</h1>
+        <p class="lede">Seed URLs or a Tranco CSV to crawl at depth, detecting pages with comment sections, forums, reviews, and other user-interaction signals.</p>
+      </section>
+
+      <!-- New session form -->
+      <section class="panel" id="new-session-panel">
+        <h2>New Crawl Session</h2>
+        <form id="crawler-form" class="form">
+          <label class="field">
+            <span>Session Name</span>
+            <input id="crawler-name" name="name" type="text" placeholder="e.g. Tranco top-1k run">
+          </label>
+
+          <div class="config-block">
+            <div class="config-heading">
+              <strong>Seed Source</strong>
+              <span>Paste URLs (one per line) or upload a CSV (domain or url column).</span>
+            </div>
+            <div class="tab-row" id="seed-tab-row">
+              <button type="button" class="tab-btn active" data-seed-tab="manual">Manual URLs</button>
+              <button type="button" class="tab-btn" data-seed-tab="csv">Upload CSV</button>
+            </div>
+            <div id="seed-manual">
+              <label class="field">
+                <span>Seed URLs</span>
+                <textarea id="seed-urls" name="seedUrls" rows="5" placeholder="https://example.com&#10;https://another-site.org"></textarea>
+              </label>
+            </div>
+            <div id="seed-csv" style="display:none">
+              <label class="field">
+                <span>CSV File</span>
+                <input id="seed-csv-file" name="file" type="file" accept=".csv,text/csv">
+              </label>
+              <p class="field-hint">First column is used as URL unless a column named <code>url</code>, <code>domain</code>, or <code>site</code> exists.</p>
+            </div>
+          </div>
+
+          <div class="config-block">
+            <div class="config-heading"><strong>Crawl Settings</strong></div>
+            <div class="config-grid">
+              <label class="field">
+                <span>Max Depth</span>
+                <input id="crawler-max-depth" name="maxDepth" type="number" min="1" max="5" value="3">
+              </label>
+              <label class="field">
+                <span>Links per Page</span>
+                <input id="crawler-links-per-page" name="linksPerPage" type="number" min="1" max="50" value="20">
+              </label>
+              <label class="field">
+                <span>Crawl Delay (ms)</span>
+                <input id="crawler-delay" name="crawlDelayMs" type="number" min="0" max="30000" step="250" value="1500">
+              </label>
+              <label class="field">
+                <span>Concurrency</span>
+                <input id="crawler-concurrency" name="concurrency" type="number" min="1" max="20" value="5">
+              </label>
+              <label class="field">
+                <span>Max Pages</span>
+                <input id="crawler-max-pages" name="maxPages" type="number" min="10" max="50000" step="100" value="5000">
+              </label>
+            </div>
+          </div>
+
+          <button class="primary" type="submit">Start Crawl</button>
+        </form>
+        <p id="crawler-form-message" class="message"></p>
+      </section>
+
+      <!-- Sessions list -->
+      <section class="panel" id="sessions-panel">
+        <div class="panel-header">
+          <h2>Crawl Sessions</h2>
+          <button class="compact link-button" id="refresh-sessions">Refresh</button>
+        </div>
+        <div id="sessions-list"><p class="message">Loading…</p></div>
+      </section>
+
+      <!-- Pages view for selected session -->
+      <section class="panel" id="pages-panel" style="display:none">
+        <div class="panel-header">
+          <h2 id="pages-panel-title">Pages</h2>
+          <div class="button-row">
+            <button class="compact link-button" id="pages-back">← Sessions</button>
+            <button class="compact link-button" id="pages-refresh">Refresh</button>
+            <a class="compact link-button" id="pages-export-csv" href="#" style="display:none">Export Relevant CSV</a>
+          </div>
+        </div>
+
+        <div id="session-detail-bar" class="detail-bar"></div>
+
+        <!-- Session controls -->
+        <div class="button-row" id="session-controls" style="margin-bottom:1rem"></div>
+
+        <!-- Filter bar -->
+        <div class="filter-bar">
+          <label class="field inline">
+            <span>Status</span>
+            <select id="filter-status">
+              <option value="">All</option>
+              <option value="done">Done</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+              <option value="skipped">Skipped</option>
+            </select>
+          </label>
+          <label class="field inline">
+            <span>Relevance</span>
+            <select id="filter-relevant">
+              <option value="">All</option>
+              <option value="true">Relevant only</option>
+              <option value="false">Not relevant</option>
+            </select>
+          </label>
+          <label class="field inline">
+            <span>Min Score</span>
+            <input id="filter-min-score" type="number" min="0" max="1" step="0.1" value="" placeholder="0">
+          </label>
+          <button class="compact primary" id="filter-apply">Apply</button>
+        </div>
+
+        <div id="pages-list"></div>
+
+        <!-- Pagination -->
+        <div class="pagination-bar" id="pages-pagination" style="display:none">
+          <button class="compact link-button" id="pages-prev">← Prev</button>
+          <span id="pages-page-info"></span>
+          <button class="compact link-button" id="pages-next">Next →</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+        var s = document.createElement('script');
+        s.src = './crawler.js' + cacheSuffix;
+        document.body.appendChild(s);
+      })();
+    </script>
+  </body>
+</html>
