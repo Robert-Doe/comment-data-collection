@@ -295,6 +295,11 @@ async function ensureSchema(databaseUrl) {
   `);
 
   await db.query(`
+    ALTER TABLE crawler_sessions ADD COLUMN IF NOT EXISTS continuous BOOLEAN NOT NULL DEFAULT TRUE;
+    CREATE INDEX IF NOT EXISTS idx_crawler_pages_crawled_at ON crawler_pages(session_id, crawled_at DESC) WHERE crawled_at IS NOT NULL;
+  `);
+
+  await db.query(`
     ALTER TABLE jobs
     ADD COLUMN IF NOT EXISTS pending_count INTEGER NOT NULL DEFAULT 0;
 

@@ -11,14 +11,15 @@ async function createCrawlerSession({
   crawlDelayMs = 1500,
   concurrency = 5,
   maxPages = 5000,
+  continuous = true,
 }, databaseUrl) {
   const db = getPool(databaseUrl);
   const result = await db.query(
     `INSERT INTO crawler_sessions
-      (name, seed_source, seed_filename, status, max_depth, links_per_page, crawl_delay_ms, concurrency, max_pages)
-     VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, $8)
+      (name, seed_source, seed_filename, status, max_depth, links_per_page, crawl_delay_ms, concurrency, max_pages, continuous)
+     VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [name, seedSource, seedFilename, maxDepth, linksPerPage, crawlDelayMs, concurrency, maxPages],
+    [name, seedSource, seedFilename, maxDepth, linksPerPage, crawlDelayMs, concurrency, maxPages, continuous],
   );
   return result.rows[0];
 }
@@ -37,7 +38,7 @@ async function listCrawlerSessions(databaseUrl) {
 
 async function updateCrawlerSession(sessionId, updates, databaseUrl) {
   const db = getPool(databaseUrl);
-  const allowed = ['status', 'total_queued', 'total_crawled', 'total_relevant', 'total_failed', 'error_message', 'completed_at'];
+  const allowed = ['status', 'total_queued', 'total_crawled', 'total_relevant', 'total_failed', 'error_message', 'completed_at', 'continuous'];
   const fields = Object.keys(updates).filter((k) => allowed.includes(k));
   if (!fields.length) return;
   const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
@@ -267,6 +268,46 @@ async function getSessionRelevantPages(sessionId, { pageIds, onlyTraining } = {}
   return result.rows;
 }
 
+// Reset seed pages to pending and delete all non-seed child pages for a new continuous pass.
+async function resetSessionForContinuousPass(sessionId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  await db.query(`DELETE FROM crawler_pages WHERE session_id = $1 AND is_seed = FALSE`, [sessionId]);
+  await db.query(`UPDATE crawler_pages SET status = 'pending', crawled_at = NULL, is_relevant = NULL, relevance_score = 0, matched_categories = '{}', title = NULL, outbound_links_found = 0, links_followed = 0, http_status = NULL, error_message = NULL WHERE session_id = $1 AND is_seed = TRUE`, [sessionId]);
+}
+
+// Returns the last N crawled pages for live monitoring.
+async function getRecentlyCrawledPages(sessionId, limit, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, url, title, depth, is_relevant, relevance_score, matched_categories, http_status, crawled_at
+     FROM crawler_pages
+     WHERE session_id = $1 AND crawled_at IS NOT NULL
+     ORDER BY crawled_at DESC
+     LIMIT $2`,
+    [sessionId, limit],
+  );
+  return result.rows;
+}
+
+// Pages crawled in the last minute for rate calculation.
+async function getCrawlRatePerMinute(sessionId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT COUNT(*) AS cnt FROM crawler_pages WHERE session_id = $1 AND crawled_at > NOW() - INTERVAL '1 minute'`,
+    [sessionId],
+  );
+  return parseInt(result.rows[0].cnt, 10);
+}
+
+// List only continuous sessions that are currently marked running or pending.
+async function listContinuousSessions(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT * FROM crawler_sessions WHERE continuous = TRUE AND status IN ('running', 'pending') ORDER BY created_at DESC`,
+  );
+  return result.rows;
+}
+
 module.exports = {
   createCrawlerSession,
   getCrawlerSession,
@@ -285,4 +326,8 @@ module.exports = {
   getSessionSeeds,
   bulkUpdateCrawlerPages,
   getSessionRelevantPages,
+  resetSessionForContinuousPass,
+  getRecentlyCrawledPages,
+  getCrawlRatePerMinute,
+  listContinuousSessions,
 };

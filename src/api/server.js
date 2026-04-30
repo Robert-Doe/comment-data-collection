@@ -101,6 +101,8 @@ const {
   resumeCrawlSession,
   stopCrawlSession,
   recoverRunningSessions,
+  startWatchdog,
+  getLiveCrawlerData,
   isSessionActive,
   normalizeCrawlerUrl,
   UGC_CATEGORIES,
@@ -1941,10 +1943,11 @@ function createApp(config = getConfig()) {
       const body = req.body || {};
       const name = String(body.name || '').trim() || `Crawl ${new Date().toISOString().slice(0, 19)}`;
       const maxDepth = Math.max(1, Math.min(5, Number(body.maxDepth) || 3));
-      const linksPerPage = Math.max(1, Math.min(50, Number(body.linksPerPage) || 20));
-      const crawlDelayMs = Math.max(0, Math.min(30000, Number(body.crawlDelayMs) || 1500));
-      const concurrency = Math.max(1, Math.min(20, Number(body.concurrency) || 5));
-      const maxPages = Math.max(10, Math.min(50000, Number(body.maxPages) || 5000));
+      const linksPerPage = Math.max(1, Math.min(500, Number(body.linksPerPage) || 60));
+      const crawlDelayMs = Math.max(0, Math.min(30000, Number(body.crawlDelayMs) || 0));
+      const concurrency = Math.max(1, Math.min(50, Number(body.concurrency) || 20));
+      const maxPages = Math.max(10, Math.min(500000, Number(body.maxPages) || 50000));
+      const continuous = body.continuous !== 'false' && body.continuous !== false;
 
       let seedUrls = [];
       let seedSource = 'manual';
@@ -1994,6 +1997,7 @@ function createApp(config = getConfig()) {
         crawlDelayMs,
         concurrency,
         maxPages,
+        continuous,
       }, config.databaseUrl);
 
       res.status(201).json({ session: { ...session, active: true } });
@@ -2167,6 +2171,13 @@ function createApp(config = getConfig()) {
     } catch (err) { next(err); }
   });
 
+  app.get('/api/crawler/live', async (_req, res, next) => {
+    try {
+      const data = await getLiveCrawlerData(config.databaseUrl);
+      res.json(data);
+    } catch (err) { next(err); }
+  });
+
   // ── End Crawler API ───────────────────────────────────────────────────────────
 
   app.use((error, _req, res, _next) => {
@@ -2189,6 +2200,7 @@ async function main() {
   recoverRunningSessions(config.databaseUrl).catch((e) => {
     console.error('[crawler] recovery error:', e);
   });
+  startWatchdog(config.databaseUrl);
 }
 
 if (require.main === module) {

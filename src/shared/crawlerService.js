@@ -11,6 +11,10 @@ const {
   updateCrawlerPage,
   getCrawlerPageCounts,
   resetStaleCrawlingPages,
+  resetSessionForContinuousPass,
+  getRecentlyCrawledPages,
+  getCrawlRatePerMinute,
+  listContinuousSessions,
 } = require('./crawlerStore');
 
 // ─── Keyword detection ────────────────────────────────────────────────────────
@@ -249,6 +253,16 @@ function sleep(ms) {
 
 // ─── Core crawler — persistent worker pool ────────────────────────────────────
 
+async function flushStats(sessionId, databaseUrl) {
+  const c = await getCrawlerPageCounts(sessionId, databaseUrl);
+  await updateCrawlerSession(sessionId, {
+    total_crawled: parseInt(c.done, 10),
+    total_relevant: parseInt(c.relevant, 10),
+    total_failed: parseInt(c.failed, 10),
+    total_queued: parseInt(c.total, 10),
+  }, databaseUrl);
+}
+
 async function runCrawlerLoop(sessionId, databaseUrl) {
   const control = activeSessions.get(sessionId);
   if (!control) return;
@@ -257,47 +271,47 @@ async function runCrawlerLoop(sessionId, databaseUrl) {
     await resetStaleCrawlingPages(sessionId, databaseUrl);
     await updateCrawlerSession(sessionId, { status: 'running' }, databaseUrl);
 
-    const session = await getCrawlerSession(sessionId, databaseUrl);
-    if (!session) return;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (control.stop) break;
 
-    // Periodic stats flush every 3s (doesn't block workers)
-    const statsTimer = setInterval(async () => {
-      if (control.stop) return;
-      try {
-        const c = await getCrawlerPageCounts(sessionId, databaseUrl);
-        await updateCrawlerSession(sessionId, {
-          total_crawled: parseInt(c.done, 10),
-          total_relevant: parseInt(c.relevant, 10),
-          total_failed: parseInt(c.failed, 10),
-          total_queued: parseInt(c.total, 10),
-        }, databaseUrl);
-      } catch (_) {}
-    }, 3000);
+      const session = await getCrawlerSession(sessionId, databaseUrl);
+      if (!session || session.status === 'paused' || session.status === 'stopped') break;
 
-    // Spawn N independent workers — each grabs the next page immediately after finishing
-    const workers = Array.from({ length: session.concurrency }, () =>
-      workerLoop(sessionId, session, databaseUrl, control),
-    );
+      // Periodic stats flush every 3s (doesn't block workers)
+      const statsTimer = setInterval(async () => {
+        if (control.stop) return;
+        flushStats(sessionId, databaseUrl).catch(() => {});
+      }, 3000);
 
-    await Promise.all(workers);
-    clearInterval(statsTimer);
+      // Spawn N independent workers — each grabs the next page immediately after finishing
+      const workers = Array.from({ length: session.concurrency }, () =>
+        workerLoop(sessionId, session, databaseUrl, control),
+      );
 
-    // Final stats flush
-    try {
-      const c = await getCrawlerPageCounts(sessionId, databaseUrl);
-      await updateCrawlerSession(sessionId, {
-        total_crawled: parseInt(c.done, 10),
-        total_relevant: parseInt(c.relevant, 10),
-        total_failed: parseInt(c.failed, 10),
-        total_queued: parseInt(c.total, 10),
-      }, databaseUrl);
-    } catch (_) {}
+      await Promise.all(workers);
+      clearInterval(statsTimer);
 
-    if (!control.stop) {
-      const finalSession = await getCrawlerSession(sessionId, databaseUrl);
-      if (finalSession && finalSession.status === 'running') {
-        await updateCrawlerSession(sessionId, { status: 'completed', completed_at: new Date().toISOString() }, databaseUrl);
+      // Final stats flush for this pass
+      await flushStats(sessionId, databaseUrl).catch(() => {});
+
+      if (control.stop) break;
+
+      // Re-read session to get current continuous flag
+      const latest = await getCrawlerSession(sessionId, databaseUrl).catch(() => null);
+      if (!latest || latest.status !== 'running') break;
+
+      if (latest.continuous) {
+        // Reset seeds and clear child pages so we can crawl again indefinitely
+        console.log(`[crawler] session ${sessionId} completed pass — continuous mode, resetting for next pass`);
+        await resetSessionForContinuousPass(sessionId, databaseUrl);
+        await sleep(500); // brief pause between passes
+        continue;
       }
+
+      // Not continuous — mark completed and exit
+      await updateCrawlerSession(sessionId, { status: 'completed', completed_at: new Date().toISOString() }, databaseUrl);
+      break;
     }
   } catch (err) {
     console.error(`[crawler] session ${sessionId} error:`, err);
@@ -424,6 +438,7 @@ async function startCrawlSession({
   crawlDelayMs = 0,
   concurrency = 20,
   maxPages = 50000,
+  continuous = true,
 }, databaseUrl) {
   const session = await createCrawlerSession({
     name,
@@ -434,6 +449,7 @@ async function startCrawlSession({
     crawlDelayMs,
     concurrency,
     maxPages,
+    continuous,
   }, databaseUrl);
 
   // Insert seed pages
@@ -497,12 +513,59 @@ async function recoverRunningSessions(databaseUrl) {
   }
 }
 
+// Watchdog: ensures continuous sessions never stay stopped due to crashes.
+// Called once at startup with a 60s interval.
+function startWatchdog(databaseUrl) {
+  setInterval(async () => {
+    try {
+      const sessions = await listContinuousSessions(databaseUrl);
+      for (const session of sessions) {
+        if (!activeSessions.has(session.id)) {
+          console.log(`[crawler:watchdog] reviving continuous session ${session.id} "${session.name}"`);
+          await resumeCrawlSession(session.id, databaseUrl).catch((e) => {
+            console.error(`[crawler:watchdog] failed to revive session ${session.id}:`, e);
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[crawler:watchdog] error:', e);
+    }
+  }, 60_000);
+}
+
+// Live snapshot of active crawler sessions for the monitor page.
+async function getLiveCrawlerData(databaseUrl) {
+  const { listCrawlerSessions, getCrawlerPageCounts } = require('./crawlerStore');
+  const sessions = await listCrawlerSessions(databaseUrl);
+  const activeSess = sessions.filter((s) => s.status === 'running' || activeSessions.has(s.id));
+
+  const sessionData = await Promise.all(activeSess.map(async (s) => {
+    const counts = await getCrawlerPageCounts(s.id, databaseUrl).catch(() => null);
+    const recent = await getRecentlyCrawledPages(s.id, 20, databaseUrl).catch(() => []);
+    const rate = await getCrawlRatePerMinute(s.id, databaseUrl).catch(() => 0);
+    return {
+      id: s.id,
+      name: s.name,
+      status: s.status,
+      continuous: s.continuous,
+      concurrency: s.concurrency,
+      counts,
+      rate,
+      recentPages: recent,
+    };
+  }));
+
+  return { sessions: sessionData, activeCount: activeSessions.size };
+}
+
 module.exports = {
   startCrawlSession,
   pauseCrawlSession,
   resumeCrawlSession,
   stopCrawlSession,
   recoverRunningSessions,
+  startWatchdog,
+  getLiveCrawlerData,
   isSessionActive,
   normalizeCrawlerUrl,
   UGC_CATEGORIES,

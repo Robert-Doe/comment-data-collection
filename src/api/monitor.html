@@ -621,6 +621,16 @@
       <div id="job-inspector" style="margin-top:10px"><div class="note">Load a job to inspect its rows and events.</div></div>
     </div>
 
+    <div class="card" id="crawler-card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Live Crawler Feed</span>
+        <span id="crawler-status-pill" class="status-pill" style="font-size:10px"></span>
+      </div>
+      <div id="crawler-sessions-wrap" style="display:flex;flex-direction:column;gap:10px">
+        <div class="note">No active crawler sessions.</div>
+      </div>
+    </div>
+
     <div class="log-bar">
       <span class="log-bar-title">Live Activity Log</span>
       <span class="chip on" data-lv="all" onclick="setLv('all')">All</span>
@@ -2668,9 +2678,66 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
+function loadCrawlerLive() {
+  fetch(API+'/api/crawler/live').then(function(r){ return r.json(); }).then(function(d) {
+    var wrap = document.getElementById('crawler-sessions-wrap');
+    var pill = document.getElementById('crawler-status-pill');
+    if (!wrap) return;
+    var sessions = d && Array.isArray(d.sessions) ? d.sessions : [];
+    if (!sessions.length) {
+      wrap.innerHTML = '<div class="note">No active crawler sessions.</div>';
+      if (pill) { pill.textContent = 'Idle'; pill.className = 'status-pill'; }
+      return;
+    }
+    var totalRate = sessions.reduce(function(a, s) { return a + (s.rate || 0); }, 0);
+    if (pill) {
+      pill.textContent = sessions.length + ' active · ' + totalRate + '/min';
+      pill.className = 'status-pill good';
+    }
+    wrap.innerHTML = sessions.map(function(s) {
+      var c = s.counts || {};
+      var done = parseInt(c.done || 0, 10);
+      var total = parseInt(c.total || 0, 10);
+      var pending = parseInt(c.pending || 0, 10);
+      var crawling = parseInt(c.crawling || 0, 10);
+      var relevant = parseInt(c.relevant || 0, 10);
+      var failed = parseInt(c.failed || 0, 10);
+      var pct = total ? Math.min(100, Math.round(done / total * 100)) : 0;
+      var contLabel = s.continuous ? ' <span style="color:var(--green);font-size:10px">∞ continuous</span>' : '';
+      var recentHtml = (s.recentPages || []).map(function(p) {
+        var rel = p.is_relevant ? ' style="border-left:3px solid var(--green)"' : '';
+        var cats = Array.isArray(p.matched_categories) && p.matched_categories.length ? ' [' + p.matched_categories.join(', ') + ']' : '';
+        var title = p.title ? esc(p.title.slice(0, 60)) : esc((p.url || '').slice(0, 70));
+        return '<div class="jcard"' + rel + '>'
+          + '<div class="jid">' + esc(p.url || '') + '</div>'
+          + '<div class="jrow"><span>' + title + esc(cats) + '</span>'
+          + '<span style="color:var(--muted)">' + (p.relevance_score ? (p.relevance_score * 100).toFixed(0) + '%' : '–') + '</span></div>'
+          + '</div>';
+      }).join('');
+      return '<div style="border:1px solid rgba(126,92,62,0.14);border-radius:14px;padding:12px;background:rgba(255,250,244,0.85)">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+        + '<strong style="font-size:12px">' + esc(s.name) + contLabel + '</strong>'
+        + '<span style="font-size:10px;color:var(--muted)">' + s.rate + '/min · ' + s.concurrency + ' workers</span>'
+        + '</div>'
+        + '<div class="hgrid" style="margin-bottom:8px">'
+        + '<div class="hi"><div class="hl">Crawled</div><div class="hv ok">' + done.toLocaleString() + '</div></div>'
+        + '<div class="hi"><div class="hl">Pending</div><div class="hv">' + pending.toLocaleString() + '</div></div>'
+        + '<div class="hi"><div class="hl">Relevant</div><div class="hv" style="color:var(--green)">' + relevant.toLocaleString() + '</div></div>'
+        + '<div class="hi"><div class="hl">Failed</div><div class="hv' + (failed ? ' warn' : '') + '">' + failed.toLocaleString() + '</div></div>'
+        + '</div>'
+        + '<div class="pbar" style="margin-bottom:8px"><div class="pfill' + (pending || crawling ? ' indeterminate' : '') + '" style="width:' + pct + '%"></div></div>'
+        + '<div class="card-title" style="margin-bottom:6px">Recently Crawled</div>'
+        + (recentHtml || '<div class="note">Nothing crawled yet.</div>')
+        + '</div>';
+    }).join('');
+  }).catch(function() {});
+}
+
 doRefresh();
+loadCrawlerLive();
 setInterval(tickLiveSignals, 2000);
 setInterval(tickLiveRefresh, 5000);
+setInterval(loadCrawlerLive, 2000);
 </script>
 </body>
 </html>

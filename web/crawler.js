@@ -167,13 +167,14 @@
         const formData = new FormData();
         formData.append('file', csvFile);
         ['name', 'maxDepth', 'linksPerPage', 'crawlDelayMs', 'concurrency', 'maxPages'].forEach((k) => formData.append(k, fd.get(k) || ''));
+        formData.append('continuous', document.getElementById('crawler-continuous').checked ? 'true' : 'false');
         const raw = await fetch(apiBase + '/api/crawler/sessions', { method: 'POST', body: formData });
         if (!raw.ok) { const j = await raw.json().catch(() => ({})); throw new Error(j.error || `HTTP ${raw.status}`); }
         res = await raw.json();
       } else {
         res = await apiFetch('/api/crawler/sessions', {
           method: 'POST',
-          body: JSON.stringify({ name: fd.get('name') || '', seedUrls: fd.get('seedUrls') || '', maxDepth: fd.get('maxDepth'), linksPerPage: fd.get('linksPerPage'), crawlDelayMs: fd.get('crawlDelayMs'), concurrency: fd.get('concurrency'), maxPages: fd.get('maxPages') }),
+          body: JSON.stringify({ name: fd.get('name') || '', seedUrls: fd.get('seedUrls') || '', maxDepth: fd.get('maxDepth'), linksPerPage: fd.get('linksPerPage'), crawlDelayMs: fd.get('crawlDelayMs'), concurrency: fd.get('concurrency'), maxPages: fd.get('maxPages'), continuous: document.getElementById('crawler-continuous').checked }),
         });
       }
       setMessage(crawlerFormMessage, `Session "${res.session.name}" started (ID ${res.session.id}).`, false);
@@ -198,6 +199,7 @@
         <div class="list-row-main">
           <strong class="list-row-title">${escHtml(s.name)}</strong>
           ${statusBadge(active ? 'running' : s.status)}
+          ${s.continuous ? '<span class="badge badge-teal">∞ continuous</span>' : ''}
           <span class="list-row-meta muted">ID ${s.id} · depth ${s.max_depth} · ${s.links_per_page} links/page · ${s.concurrency} workers</span>
         </div>
         <div class="list-row-stats">
