@@ -193,6 +193,25 @@
 
   function renderSessions(sessions) {
     if (!sessions.length) { sessionsList.innerHTML = '<p class="muted">No crawl sessions yet.</p>'; return; }
+
+    // Auto-start feed for any session that has relevant pages
+    sessions.forEach((s) => {
+      if ((s.active || s.status === 'running' || s.total_relevant > 0) && !feedState[s.id]) {
+        startFeedForSession(s.id);
+        // Seed the sinceId so we don't flood with historical data on first load —
+        // we only want pages found after the feed panel was opened.
+        // sinceId=0 on first call loads the last 100 historical ones, which is fine.
+      }
+    });
+
+    // Show feed panel if any session has relevant pages
+    if (sessions.some((s) => s.total_relevant > 0)) {
+      relevantFeedPanel.style.display = '';
+      if (!relevantFeedList.firstChild) {
+        relevantFeedList.innerHTML = '<div class="feed-empty">Loading relevant URLs…</div>';
+      }
+    }
+
     sessionsList.innerHTML = sessions.map((s) => {
       const active = s.active || s.status === 'running';
       return `<div class="list-row">
@@ -633,6 +652,119 @@
   function clearAutoRefresh() {
     if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
   }
+
+  // ── Relevant URL live feed ────────────────────────────────────────────────────
+  const relevantFeedPanel = document.getElementById('relevant-feed-panel');
+  const relevantFeedTitle = document.getElementById('relevant-feed-title');
+  const relevantFeedCount = document.getElementById('relevant-feed-count');
+  const relevantFeedList  = document.getElementById('relevant-feed-list');
+  const relevantFeedPause = document.getElementById('relevant-feed-pause');
+  const relevantFeedClear = document.getElementById('relevant-feed-clear');
+
+  // feedState: one entry per session being watched  { sessionId, sinceId, paused, totalShown }
+  const feedState = {};
+  let feedTimer = null;
+
+  const CAT_COLORS = {
+    comments:   '#2f7d57',
+    forum:      '#2563a8',
+    reviews:    '#a76b42',
+    discussion: '#7c3aed',
+    ugc:        '#c05621',
+    guestbook:  '#6b7280',
+  };
+
+  function feedCatBadge(cat) {
+    const color = CAT_COLORS[cat] || '#6b7280';
+    return `<span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}44;font-size:0.72rem">${escHtml(cat)}</span>`;
+  }
+
+  function relativeTime(iso) {
+    const diff = Math.round((Date.now() - new Date(iso)) / 1000);
+    if (diff < 5)  return 'just now';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    return Math.floor(diff / 3600) + 'h ago';
+  }
+
+  function buildFeedEntry(page, isNew) {
+    const cats = Array.isArray(page.matched_categories) ? page.matched_categories : [];
+    const score = page.relevance_score ? Math.round(page.relevance_score * 100) + '%' : '';
+    const depth = page.depth != null ? `depth ${page.depth}` : '';
+    const ago   = page.crawled_at ? relativeTime(page.crawled_at) : '';
+
+    const el = document.createElement('div');
+    el.className = 'feed-entry' + (isNew ? ' feed-new' : '');
+    el.dataset.pageId = page.id;
+    el.innerHTML =
+      `<a class="feed-url" href="${escHtml(page.url)}" target="_blank" rel="noopener noreferrer">${escHtml(page.url)}</a>` +
+      (page.title ? `<div class="feed-title">${escHtml(page.title)}</div>` : '') +
+      `<div class="feed-meta">${[depth, ago].filter(Boolean).join(' · ')}</div>` +
+      `<div class="feed-score">${score}</div>` +
+      `<div class="feed-cats">${cats.map(feedCatBadge).join('')}</div>`;
+    return el;
+  }
+
+  function startFeedForSession(sessionId) {
+    if (!feedState[sessionId]) {
+      feedState[sessionId] = { sinceId: 0, paused: false, totalShown: 0 };
+    }
+    if (!feedTimer) {
+      feedTimer = setInterval(tickFeed, 3000);
+    }
+    relevantFeedPanel.style.display = '';
+    tickFeed();
+  }
+
+  async function tickFeed() {
+    const sessionIds = Object.keys(feedState);
+    if (!sessionIds.length) return;
+
+    for (const sid of sessionIds) {
+      const state = feedState[sid];
+      if (state.paused) continue;
+
+      try {
+        const url = `/api/crawler/sessions/${sid}/relevant-feed?sinceId=${state.sinceId}&limit=100`;
+        const data = await apiFetch(url);
+        const pages = data.pages || [];
+        if (!pages.length) continue;
+
+        // Update cursor
+        state.sinceId = pages[pages.length - 1].id;
+        state.totalShown += pages.length;
+
+        // Show "no results" placeholder only before first result
+        if (relevantFeedList.querySelector('.feed-empty')) {
+          relevantFeedList.innerHTML = '';
+        }
+
+        // Prepend newest entries at top (pages arrived oldest→newest, reverse for display)
+        const fragment = document.createDocumentFragment();
+        [...pages].reverse().forEach((p) => fragment.appendChild(buildFeedEntry(p, true)));
+        relevantFeedList.insertBefore(fragment, relevantFeedList.firstChild);
+
+        // Update count label
+        const total = Object.values(feedState).reduce((a, s) => a + s.totalShown, 0);
+        relevantFeedCount.textContent = `${total.toLocaleString()} relevant URLs shown`;
+
+        // Update panel title with session name if known
+        relevantFeedTitle.textContent = `Relevant URLs Found`;
+      } catch (_) {}
+    }
+  }
+
+  relevantFeedPause && relevantFeedPause.addEventListener('click', () => {
+    const allPaused = Object.values(feedState).every((s) => s.paused);
+    Object.values(feedState).forEach((s) => { s.paused = !allPaused; });
+    relevantFeedPause.textContent = allPaused ? '⏸ Pause' : '▶ Resume';
+  });
+
+  relevantFeedClear && relevantFeedClear.addEventListener('click', () => {
+    relevantFeedList.innerHTML = '<div class="feed-empty">Feed cleared. New relevant URLs will appear as they are found.</div>';
+    Object.values(feedState).forEach((s) => { s.totalShown = 0; });
+    relevantFeedCount.textContent = '';
+  });
 
   // ── Init ──────────────────────────────────────────────────────────────────────
   loadSessions();

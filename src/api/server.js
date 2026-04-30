@@ -94,6 +94,8 @@ const {
   getSessionSeeds,
   bulkUpdateCrawlerPages,
   getSessionRelevantPages,
+  getRelevantPagesSince,
+  getLatestRelevantPages,
 } = require('../shared/crawlerStore');
 const {
   startCrawlSession,
@@ -2168,6 +2170,23 @@ function createApp(config = getConfig()) {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="crawler-session-${session.id}-relevant.csv"`);
       res.send(header + lines.join('\n'));
+    } catch (err) { next(err); }
+  });
+
+  // Incremental relevant-pages feed. sinceId=0 returns latest 100; sinceId=N returns only new rows.
+  app.get('/api/crawler/sessions/:sessionId/relevant-feed', async (req, res, next) => {
+    try {
+      const sessionId = req.params.sessionId;
+      const sinceId = Number(req.query.sinceId) || 0;
+      const limit = Math.min(200, Number(req.query.limit) || 100);
+      let pages;
+      if (sinceId === 0) {
+        pages = await getLatestRelevantPages(sessionId, limit, config.databaseUrl);
+        pages = pages.reverse(); // oldest first so the client can append newest-at-top
+      } else {
+        pages = await getRelevantPagesSince(sessionId, sinceId, limit, config.databaseUrl);
+      }
+      res.json({ pages });
     } catch (err) { next(err); }
   });
 

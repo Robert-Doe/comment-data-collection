@@ -114,6 +114,20 @@
         <div id="sessions-list"><p class="message">Loading…</p></div>
       </section>
 
+      <!-- ── Relevant URL live feed ── -->
+      <section class="panel" id="relevant-feed-panel" style="display:none">
+        <div class="panel-header">
+          <h2 id="relevant-feed-title">Relevant URLs Found</h2>
+          <div class="button-row">
+            <span id="relevant-feed-count" class="muted" style="font-size:0.85rem"></span>
+            <button class="compact link-button" id="relevant-feed-pause">⏸ Pause</button>
+            <button class="compact link-button" id="relevant-feed-clear">Clear</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-bottom:0.75rem;font-size:0.85rem">Pages with comments, forums, reviews or discussion detected. Newest at top. Updates every 3 s.</p>
+        <div id="relevant-feed-list"></div>
+      </section>
+
       <!-- ── Pages view ── -->
       <section class="panel" id="pages-panel" style="display:none">
         <div class="panel-header">

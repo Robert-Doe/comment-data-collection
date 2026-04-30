@@ -289,6 +289,34 @@ async function getRecentlyCrawledPages(sessionId, limit, databaseUrl) {
   return result.rows;
 }
 
+// Returns relevant pages discovered after a given page id (for incremental live feed).
+async function getRelevantPagesSince(sessionId, sinceId, limit, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, url, title, depth, relevance_score, matched_categories, crawled_at
+     FROM crawler_pages
+     WHERE session_id = $1 AND is_relevant = TRUE AND id > $2
+     ORDER BY id ASC
+     LIMIT $3`,
+    [sessionId, sinceId, limit],
+  );
+  return result.rows;
+}
+
+// Returns the most recent N relevant pages for initial feed load.
+async function getLatestRelevantPages(sessionId, limit, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, url, title, depth, relevance_score, matched_categories, crawled_at
+     FROM crawler_pages
+     WHERE session_id = $1 AND is_relevant = TRUE
+     ORDER BY id DESC
+     LIMIT $2`,
+    [sessionId, limit],
+  );
+  return result.rows;
+}
+
 // Pages crawled in the last minute for rate calculation.
 async function getCrawlRatePerMinute(sessionId, databaseUrl) {
   const db = getPool(databaseUrl);
@@ -328,6 +356,8 @@ module.exports = {
   getSessionRelevantPages,
   resetSessionForContinuousPass,
   getRecentlyCrawledPages,
+  getRelevantPagesSince,
+  getLatestRelevantPages,
   getCrawlRatePerMinute,
   listContinuousSessions,
 };
