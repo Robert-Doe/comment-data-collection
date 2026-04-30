@@ -210,6 +210,7 @@
         </div>
         <div class="list-row-bar">${progressBar(s.total_crawled + s.total_failed, s.total_queued)}</div>
         <div class="list-row-actions">
+          <button class="compact primary" data-action="promote" data-session-id="${s.id}" ${s.total_relevant === 0 ? 'disabled title="No relevant pages yet"' : ''}>Promote ${s.total_relevant > 0 ? s.total_relevant.toLocaleString() + ' relevant' : 'relevant'} → Job</button>
           <button class="compact link-button" data-action="view" data-session-id="${s.id}">View Pages</button>
           <button class="compact link-button" data-action="tree" data-session-id="${s.id}">Tree</button>
           <button class="compact link-button danger" data-action="delete" data-session-id="${s.id}">Delete</button>
@@ -222,7 +223,8 @@
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const id = btn.dataset.sessionId;
-    if (btn.dataset.action === 'view') openPagesView(id);
+    if (btn.dataset.action === 'promote') { currentSessionId = id; openPromoteModal(null); }
+    else if (btn.dataset.action === 'view') openPagesView(id);
     else if (btn.dataset.action === 'tree') openTreeView(id);
     else if (btn.dataset.action === 'delete') {
       if (!confirm('Delete this session and all its pages?')) return;
@@ -246,6 +248,11 @@
     pagesOffset = 0;
     clearSelection();
     clearAutoRefresh();
+    // Default to showing only relevant (comment) pages
+    filterRelevant.value = 'true';
+    filterStatus.value = '';
+    filterMinScore.value = '';
+    filterTraining.checked = false;
     showPanel('pages');
     loadPagesView();
     scheduleAutoRefresh();
