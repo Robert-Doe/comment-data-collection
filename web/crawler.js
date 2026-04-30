@@ -2,9 +2,12 @@
   const config = window.__APP_CONFIG__ || {};
   const apiBase = (function resolveApi(base) {
     if (base) return String(base).replace(/\/$/, '');
-    const { protocol, hostname } = window.location;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') return `${protocol}//${hostname}:3000`;
-    return '';
+    const { protocol, hostname, port, origin } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]')
+      return port === '3000' ? origin : `${protocol}//${hostname}:3000`;
+    if (hostname.startsWith('api.')) return origin;
+    if (hostname.startsWith('www.')) return `${protocol}//api.${hostname.slice(4)}`;
+    return `${protocol}//api.${hostname}`;
   }(config.apiBaseUrl));
 
   // ── State ─────────────────────────────────────────────────────────────────────
