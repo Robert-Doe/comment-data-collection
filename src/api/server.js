@@ -117,6 +117,13 @@ const backupUpload = multer({
   },
 });
 
+const crawlerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+  },
+});
+
 const manualCaptureUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -1924,7 +1931,7 @@ function createApp(config = getConfig()) {
     } catch (err) { next(err); }
   });
 
-  app.post('/api/crawler/sessions', upload.single('file'), async (req, res, next) => {
+  app.post('/api/crawler/sessions', crawlerUpload.single('file'), async (req, res, next) => {
     try {
       const body = req.body || {};
       const name = String(body.name || '').trim() || `Crawl ${new Date().toISOString().slice(0, 19)}`;
