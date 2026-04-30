@@ -286,6 +286,12 @@ async function ensureSchema(databaseUrl) {
     CREATE INDEX IF NOT EXISTS idx_crawler_pages_session_id ON crawler_pages(session_id);
     CREATE INDEX IF NOT EXISTS idx_crawler_pages_session_status ON crawler_pages(session_id, status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_crawler_pages_session_norm_url ON crawler_pages(session_id, normalized_url);
+    CREATE INDEX IF NOT EXISTS idx_crawler_pages_parent ON crawler_pages(parent_page_id);
+    CREATE INDEX IF NOT EXISTS idx_crawler_pages_relevant ON crawler_pages(session_id, is_relevant) WHERE is_relevant = TRUE;
+  `);
+
+  await db.query(`
+    ALTER TABLE crawler_pages ADD COLUMN IF NOT EXISTS include_in_training BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   await db.query(`

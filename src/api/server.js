@@ -89,6 +89,11 @@ const {
   listCrawlerPages,
   getCrawlerPageCounts,
   deleteCrawlerSession,
+  getPageAncestry,
+  getPageChildren,
+  getSessionSeeds,
+  bulkUpdateCrawlerPages,
+  getSessionRelevantPages,
 } = require('../shared/crawlerStore');
 const {
   startCrawlSession,
@@ -2068,6 +2073,76 @@ function createApp(config = getConfig()) {
       if (req.body.isRelevant !== undefined) updates.is_relevant = Boolean(req.body.isRelevant);
       await updateCrawlerPage(req.params.pageId, updates, config.databaseUrl);
       res.json({ ok: true });
+    } catch (err) { next(err); }
+  });
+
+  // Ancestry chain for a single page (seed → … → this page)
+  app.get('/api/crawler/sessions/:sessionId/pages/:pageId/ancestry', async (req, res, next) => {
+    try {
+      const chain = await getPageAncestry(req.params.pageId, config.databaseUrl);
+      res.json({ ancestry: chain });
+    } catch (err) { next(err); }
+  });
+
+  // Direct children of a page (lazy tree expansion)
+  app.get('/api/crawler/sessions/:sessionId/pages/:pageId/children', async (req, res, next) => {
+    try {
+      const children = await getPageChildren(req.params.pageId, req.params.sessionId, config.databaseUrl);
+      res.json({ children });
+    } catch (err) { next(err); }
+  });
+
+  // Seed pages for the session tree root
+  app.get('/api/crawler/sessions/:sessionId/seeds', async (req, res, next) => {
+    try {
+      const seeds = await getSessionSeeds(req.params.sessionId, config.databaseUrl);
+      res.json({ seeds });
+    } catch (err) { next(err); }
+  });
+
+  // Bulk update page states (user_state, is_relevant, include_in_training)
+  app.patch('/api/crawler/sessions/:sessionId/pages/bulk', async (req, res, next) => {
+    try {
+      const { pageIds, updates } = req.body;
+      if (!Array.isArray(pageIds) || !pageIds.length) {
+        res.status(400).json({ error: 'pageIds array required' }); return;
+      }
+      const allowed = {};
+      if (updates.user_state !== undefined) allowed.user_state = updates.user_state || null;
+      if (updates.is_relevant !== undefined) allowed.is_relevant = Boolean(updates.is_relevant);
+      if (updates.include_in_training !== undefined) allowed.include_in_training = Boolean(updates.include_in_training);
+      await bulkUpdateCrawlerPages(pageIds.map(Number), allowed, config.databaseUrl);
+      res.json({ ok: true, updated: pageIds.length });
+    } catch (err) { next(err); }
+  });
+
+  // Promote selected (or all relevant) pages to a Scanner job
+  app.post('/api/crawler/sessions/:sessionId/promote-to-job', async (req, res, next) => {
+    try {
+      const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
+      if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+      const { pageIds, onlyTraining, jobName, scanDelayMs = 6000, screenshotDelayMs = 1500, candidateMode = 'default' } = req.body;
+      const pages = await getSessionRelevantPages(req.params.sessionId, {
+        pageIds: Array.isArray(pageIds) && pageIds.length ? pageIds.map(Number) : undefined,
+        onlyTraining: Boolean(onlyTraining),
+      }, config.databaseUrl);
+
+      if (!pages.length) { res.status(400).json({ error: 'No pages matched' }); return; }
+
+      const csvText = 'url\n' + pages.map((p) => p.url).join('\n');
+      const name = jobName || `Crawler export — ${session.name}`;
+      const parsed = parseCsvText(csvText, 'url');
+      const job = await createJob({
+        sourceFilename: name,
+        sourceColumn: 'url',
+        records: parsed.records,
+        scanDelayMs: Number(scanDelayMs),
+        screenshotDelayMs: Number(screenshotDelayMs),
+        candidateMode,
+      }, config.databaseUrl);
+
+      res.status(201).json({ ok: true, jobId: job.jobId, totalUrls: job.totalUrls });
     } catch (err) { next(err); }
   });
 

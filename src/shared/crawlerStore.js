@@ -183,6 +183,90 @@ async function resetStaleCrawlingPages(sessionId, databaseUrl) {
   );
 }
 
+// Returns the chain from seed down to pageId, ordered shallowest first.
+async function getPageAncestry(pageId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `WITH RECURSIVE ancestry AS (
+       SELECT * FROM crawler_pages WHERE id = $1
+       UNION ALL
+       SELECT p.* FROM crawler_pages p
+       JOIN ancestry a ON p.id = a.parent_page_id
+     )
+     SELECT * FROM ancestry ORDER BY depth ASC`,
+    [pageId],
+  );
+  return result.rows;
+}
+
+// Returns direct children of a page, sorted by relevance then id.
+async function getPageChildren(pageId, sessionId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, url, depth, status, is_relevant, relevance_score, matched_categories, title,
+            links_followed, outbound_links_found, http_status, include_in_training, user_state
+     FROM crawler_pages
+     WHERE parent_page_id = $1 AND session_id = $2
+     ORDER BY relevance_score DESC, id ASC
+     LIMIT 200`,
+    [pageId, sessionId],
+  );
+  return result.rows;
+}
+
+// Returns root pages (seeds) for the session tree view.
+async function getSessionSeeds(sessionId, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(
+    `SELECT id, url, depth, status, is_relevant, relevance_score, matched_categories, title,
+            links_followed, outbound_links_found, http_status, include_in_training, user_state
+     FROM crawler_pages
+     WHERE session_id = $1 AND is_seed = TRUE
+     ORDER BY id ASC`,
+    [sessionId],
+  );
+  return result.rows;
+}
+
+// Bulk update pages by id array.
+async function bulkUpdateCrawlerPages(pageIds, updates, databaseUrl) {
+  if (!pageIds.length) return;
+  const db = getPool(databaseUrl);
+  const allowed = ['user_state', 'is_relevant', 'include_in_training'];
+  const fields = Object.keys(updates).filter((k) => allowed.includes(k));
+  if (!fields.length) return;
+  const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
+  const values = fields.map((f) => updates[f]);
+  await db.query(
+    `UPDATE crawler_pages SET ${setClause} WHERE id = ANY($1::int[])`,
+    [pageIds, ...values],
+  );
+}
+
+// Get all relevant (or training-tagged) pages for a session, for job promotion.
+async function getSessionRelevantPages(sessionId, { pageIds, onlyTraining } = {}, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const conditions = ['session_id = $1'];
+  const values = [sessionId];
+  let idx = 2;
+  if (pageIds && pageIds.length) {
+    conditions.push(`id = ANY($${idx++}::int[])`);
+    values.push(pageIds);
+  } else if (onlyTraining) {
+    conditions.push(`include_in_training = TRUE`);
+  } else {
+    conditions.push(`is_relevant = TRUE`);
+  }
+  const result = await db.query(
+    `SELECT id, url, title, depth, relevance_score, matched_categories, include_in_training
+     FROM crawler_pages WHERE ${conditions.join(' AND ')}
+     ORDER BY relevance_score DESC, id ASC
+     LIMIT 10000`,
+    values,
+  );
+  return result.rows;
+}
+
 module.exports = {
   createCrawlerSession,
   getCrawlerSession,
@@ -196,4 +280,9 @@ module.exports = {
   listCrawlerPages,
   getCrawlerPageCounts,
   resetStaleCrawlingPages,
+  getPageAncestry,
+  getPageChildren,
+  getSessionSeeds,
+  bulkUpdateCrawlerPages,
+  getSessionRelevantPages,
 };

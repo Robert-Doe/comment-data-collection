@@ -9,7 +9,6 @@ const {
   addCrawlerPages,
   claimPendingCrawlerPages,
   updateCrawlerPage,
-  countKnownUrls,
   getCrawlerPageCounts,
   resetStaleCrawlingPages,
 } = require('./crawlerStore');
@@ -374,22 +373,29 @@ async function crawlOnePage(page, session, databaseUrl, control) {
   if (page.depth < session.max_depth) {
     const allLinks = extractLinks(body, finalUrl || page.url);
     outboundFound = allLinks.length;
-    const normalizedLinks = allLinks.map((l) => ({ url: l, norm: normalizeCrawlerUrl(l) }));
-    const normUrls = normalizedLinks.map((l) => l.norm);
-    const known = await countKnownUrls(session.id, normUrls, databaseUrl).catch(() => new Set());
-
-    const candidates = normalizedLinks.filter((l) => !known.has(l.norm)).slice(0, session.links_per_page);
-
+    // Deduplicate by norm URL, cap at links_per_page before DB insert.
+    // ON CONFLICT DO NOTHING handles session-level dedup; RETURNING tells us
+    // how many were actually new so we get an accurate links_followed count.
+    const seen = new Set();
+    const candidates = [];
+    for (const raw of allLinks) {
+      const norm = normalizeCrawlerUrl(raw);
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        candidates.push({ url: raw, norm });
+        if (candidates.length >= session.links_per_page) break;
+      }
+    }
     if (candidates.length > 0) {
-      await addCrawlerPages(candidates.map((c) => ({
+      const inserted = await addCrawlerPages(candidates.map((c) => ({
         sessionId: session.id,
         url: c.url,
         normalizedUrl: c.norm,
         parentPageId: page.id,
         depth: page.depth + 1,
         isSeed: false,
-      })), databaseUrl).catch(() => {});
-      linksFollowed = candidates.length;
+      })), databaseUrl).catch(() => []);
+      linksFollowed = inserted.length;
     }
   }
 
@@ -414,10 +420,10 @@ async function startCrawlSession({
   seedSource = 'manual',
   seedFilename = null,
   maxDepth = 3,
-  linksPerPage = 20,
+  linksPerPage = 60,
   crawlDelayMs = 0,
   concurrency = 20,
-  maxPages = 5000,
+  maxPages = 50000,
 }, databaseUrl) {
   const session = await createCrawlerSession({
     name,

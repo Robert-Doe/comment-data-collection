@@ -2885,3 +2885,127 @@ img {
   color: var(--muted);
 }
 
+
+/* ── Crawler admin extensions ───────────────────────────────────────────────── */
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  background: #1e3a5f;
+  color: #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.bulk-bar #bulk-count { font-weight: 700; color: #fff; }
+.bulk-bar .compact { font-size: 0.8rem; }
+
+.inline-children {
+  border-left: 3px solid var(--accent);
+  margin: 4px 0 4px 2rem;
+  padding: 6px 12px;
+  background: #f0f4ff;
+  border-radius: 0 6px 6px 0;
+}
+.inline-children-header { font-size: 0.8rem; margin-bottom: 6px; color: var(--muted); }
+.inline-child-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 3px 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.inline-child-row:last-child { border-bottom: none; }
+
+/* Ancestry modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 720px;
+  width: 95%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+  padding: 2px 6px;
+}
+.modal-close:hover { color: #111; }
+
+.ancestry-chain { display: flex; flex-direction: column; gap: 2px; }
+.ancestry-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 0.82rem;
+}
+.ancestry-node-current { background: #eff6ff; border: 1px solid #bfdbfe; }
+.ancestry-arrow { color: var(--muted); font-size: 1rem; padding: 2px 0; }
+
+/* Tree view */
+.tree-node { margin-bottom: 2px; }
+.tree-node-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f9fafb;
+  font-size: 0.82rem;
+}
+.tree-node-row:hover { background: #f0f4ff; }
+.tree-relevant { background: #f0fdf4 !important; }
+.tree-children { padding-left: 28px; border-left: 2px solid #e5e7eb; margin-left: 12px; }
+
+.tree-expand {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.tree-expand:hover:not(.tree-expand-empty) { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tree-expand-empty { cursor: default; opacity: 0.4; }
