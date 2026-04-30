@@ -350,7 +350,21 @@ async function workerLoop(sessionId, session, databaseUrl, control) {
     }
 
     idleMs = 0;
-    await crawlOnePage(pages[0], session, databaseUrl, control);
+    const page = pages[0];
+
+    // Hard deadline — if crawlOnePage hangs (DNS/TLS stall), move on and mark failed.
+    const HARD_TIMEOUT_MS = 25000;
+    let hardTimer;
+    const hardDeadline = new Promise((_, reject) => {
+      hardTimer = setTimeout(() => reject(new Error('hard timeout')), HARD_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([crawlOnePage(page, session, databaseUrl, control), hardDeadline]);
+    } catch (_) {
+      await updateCrawlerPage(page.id, { status: 'failed', error_message: 'Hard timeout (DNS/TLS hang)', crawled_at: new Date().toISOString() }, databaseUrl).catch(() => {});
+    } finally {
+      clearTimeout(hardTimer);
+    }
 
     if (session.crawl_delay_ms > 0) {
       await sleep(session.crawl_delay_ms);
