@@ -3011,24 +3011,23 @@ img {
 
 /* ── Relevant URL live feed ────────────────────────────────────────────────── */
 .feed-entry {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 12px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid var(--line);
+  background: #fff;
   margin-bottom: 6px;
   animation: none;
 }
 .feed-entry.feed-new {
-  animation: feed-flash 1.4s ease-out forwards;
+  animation: feed-flash 1.6s ease-out forwards;
 }
 @keyframes feed-flash {
   0%   { background: #d4f4e2; border-color: #5cb87a; }
   60%  { background: #eaf8ef; border-color: #8dd4a4; }
-  100% { background: var(--surface); border-color: var(--border); }
+  100% { background: #fff;    border-color: var(--line); }
 }
 .feed-url {
   font-size: 0.82rem;
@@ -3036,12 +3035,12 @@ img {
   word-break: break-all;
   color: var(--accent);
   text-decoration: none;
-  grid-column: 1 / -1;
 }
 .feed-url:hover { text-decoration: underline; }
-.feed-meta { font-size: 0.78rem; color: var(--muted); }
-.feed-score { font-size: 0.78rem; color: var(--muted); white-space: nowrap; text-align: right; }
-.feed-cats { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / -1; }
-.feed-title { font-size: 0.8rem; color: var(--text); grid-column: 1 / -1; }
-.feed-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 0.85rem; border: 1px dashed var(--border); border-radius: 8px; }
+.feed-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.feed-meta { font-size: 0.75rem; color: var(--muted); }
+.feed-score { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.feed-cats { display: flex; flex-wrap: wrap; gap: 4px; }
+.feed-title { font-size: 0.79rem; color: #374151; }
+.feed-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 0.85rem; border: 1px dashed var(--line); border-radius: 8px; }
 .tree-expand-empty { cursor: default; opacity: 0.4; }

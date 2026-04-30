@@ -267,9 +267,8 @@
     pagesOffset = 0;
     clearSelection();
     clearAutoRefresh();
-    // Default to showing only relevant (comment) pages
-    filterRelevant.value = 'true';
-    filterStatus.value = '';
+    filterStatus.value = 'done';
+    filterRelevant.value = '';
     filterMinScore.value = '';
     filterTraining.checked = false;
     showPanel('pages');
@@ -692,6 +691,7 @@
     const score = page.relevance_score ? Math.round(page.relevance_score * 100) + '%' : '';
     const depth = page.depth != null ? `depth ${page.depth}` : '';
     const ago   = page.crawled_at ? relativeTime(page.crawled_at) : '';
+    const meta  = [depth, ago].filter(Boolean).join(' · ');
 
     const el = document.createElement('div');
     el.className = 'feed-entry' + (isNew ? ' feed-new' : '');
@@ -699,9 +699,8 @@
     el.innerHTML =
       `<a class="feed-url" href="${escHtml(page.url)}" target="_blank" rel="noopener noreferrer">${escHtml(page.url)}</a>` +
       (page.title ? `<div class="feed-title">${escHtml(page.title)}</div>` : '') +
-      `<div class="feed-meta">${[depth, ago].filter(Boolean).join(' · ')}</div>` +
-      `<div class="feed-score">${score}</div>` +
-      `<div class="feed-cats">${cats.map(feedCatBadge).join('')}</div>`;
+      `<div class="feed-row"><span class="feed-meta">${escHtml(meta)}</span><span class="feed-score">${escHtml(score)}</span></div>` +
+      (cats.length ? `<div class="feed-cats">${cats.map(feedCatBadge).join('')}</div>` : '');
     return el;
   }
 
@@ -753,6 +752,32 @@
       } catch (_) {}
     }
   }
+
+  const relevantFeedDownload = document.getElementById('relevant-feed-download');
+
+  relevantFeedDownload && relevantFeedDownload.addEventListener('click', () => {
+    // Collect all feed entries from the DOM and export as CSV
+    const entries = relevantFeedList.querySelectorAll('.feed-entry[data-page-id]');
+    if (!entries.length) { alert('No URLs in the feed yet.'); return; }
+    const rows = ['url,title,depth,relevance_score,keywords'];
+    entries.forEach((el) => {
+      const url   = el.querySelector('.feed-url')  ? el.querySelector('.feed-url').href : '';
+      const title = el.querySelector('.feed-title') ? el.querySelector('.feed-title').textContent.trim() : '';
+      const metaEl = el.querySelector('.feed-meta');
+      const depthMatch = metaEl ? metaEl.textContent.match(/depth (\d+)/) : null;
+      const depth = depthMatch ? depthMatch[1] : '';
+      const score = el.querySelector('.feed-score') ? el.querySelector('.feed-score').textContent.trim().replace('%','') : '';
+      const cats  = [...el.querySelectorAll('.badge')].map((b) => b.textContent.trim()).join('|');
+      const esc   = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+      rows.push([esc(url), esc(title), esc(depth), esc(score), esc(cats)].join(','));
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'relevant-urls.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 
   relevantFeedPause && relevantFeedPause.addEventListener('click', () => {
     const allPaused = Object.values(feedState).every((s) => s.paused);
