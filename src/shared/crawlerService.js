@@ -244,7 +244,11 @@ function isSessionActive(sessionId) {
   return activeSessions.has(sessionId);
 }
 
-// ─── Core crawler loop ────────────────────────────────────────────────────────
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ─── Core crawler — persistent worker pool ────────────────────────────────────
 
 async function runCrawlerLoop(sessionId, databaseUrl) {
   const control = activeSessions.get(sessionId);
@@ -254,45 +258,41 @@ async function runCrawlerLoop(sessionId, databaseUrl) {
     await resetStaleCrawlingPages(sessionId, databaseUrl);
     await updateCrawlerSession(sessionId, { status: 'running' }, databaseUrl);
 
-    while (true) {
-      if (control.stop) break;
+    const session = await getCrawlerSession(sessionId, databaseUrl);
+    if (!session) return;
 
-      const session = await getCrawlerSession(sessionId, databaseUrl);
-      if (!session || session.status === 'paused' || session.status === 'stopped') break;
+    // Periodic stats flush every 3s (doesn't block workers)
+    const statsTimer = setInterval(async () => {
+      if (control.stop) return;
+      try {
+        const c = await getCrawlerPageCounts(sessionId, databaseUrl);
+        await updateCrawlerSession(sessionId, {
+          total_crawled: parseInt(c.done, 10),
+          total_relevant: parseInt(c.relevant, 10),
+          total_failed: parseInt(c.failed, 10),
+          total_queued: parseInt(c.total, 10),
+        }, databaseUrl);
+      } catch (_) {}
+    }, 3000);
 
-      const counts = await getCrawlerPageCounts(sessionId, databaseUrl);
-      const totalProcessed = parseInt(counts.done, 10) + parseInt(counts.failed, 10) + parseInt(counts.skipped, 10);
-      const totalQueued = parseInt(counts.total, 10);
+    // Spawn N independent workers — each grabs the next page immediately after finishing
+    const workers = Array.from({ length: session.concurrency }, () =>
+      workerLoop(sessionId, session, databaseUrl, control),
+    );
 
-      if (totalQueued >= session.max_pages) {
-        // Hit page cap — wait for remaining crawling/pending to drain
-        if (parseInt(counts.pending, 10) === 0 && parseInt(counts.crawling, 10) === 0) break;
-      }
+    await Promise.all(workers);
+    clearInterval(statsTimer);
 
-      if (parseInt(counts.pending, 10) === 0 && parseInt(counts.crawling, 10) === 0) break;
-
-      const batch = await claimPendingCrawlerPages(sessionId, session.concurrency, databaseUrl);
-      if (!batch.length) {
-        // Nothing claimable right now; wait a moment
-        await sleep(500);
-        continue;
-      }
-
-      await Promise.all(batch.map((page) => crawlOnePage(page, session, databaseUrl, control)));
-
-      // Update aggregate counts on session
-      const updatedCounts = await getCrawlerPageCounts(sessionId, databaseUrl);
+    // Final stats flush
+    try {
+      const c = await getCrawlerPageCounts(sessionId, databaseUrl);
       await updateCrawlerSession(sessionId, {
-        total_crawled: parseInt(updatedCounts.done, 10),
-        total_relevant: parseInt(updatedCounts.relevant, 10),
-        total_failed: parseInt(updatedCounts.failed, 10),
-        total_queued: parseInt(updatedCounts.total, 10),
+        total_crawled: parseInt(c.done, 10),
+        total_relevant: parseInt(c.relevant, 10),
+        total_failed: parseInt(c.failed, 10),
+        total_queued: parseInt(c.total, 10),
       }, databaseUrl);
-
-      if (session.crawl_delay_ms > 0) {
-        await sleep(session.crawl_delay_ms);
-      }
-    }
+    } catch (_) {}
 
     if (!control.stop) {
       const finalSession = await getCrawlerSession(sessionId, databaseUrl);
@@ -305,6 +305,43 @@ async function runCrawlerLoop(sessionId, databaseUrl) {
     await updateCrawlerSession(sessionId, { status: 'failed', error_message: err.message }, databaseUrl).catch(() => {});
   } finally {
     activeSessions.delete(sessionId);
+  }
+}
+
+// One persistent worker: claims one page, processes it, immediately claims the next.
+// Exits only when there are no pending or in-flight pages left (session done).
+async function workerLoop(sessionId, session, databaseUrl, control) {
+  let idleMs = 0;
+  const IDLE_GIVE_UP_MS = 8000; // exit after 8s of nothing to pick up
+
+  while (true) {
+    if (control.stop) break;
+
+    // Check session status every so often
+    if (idleMs > 0 && idleMs % 2000 === 0) {
+      const s = await getCrawlerSession(sessionId, databaseUrl).catch(() => null);
+      if (!s || s.status === 'paused' || s.status === 'stopped') break;
+    }
+
+    const pages = await claimPendingCrawlerPages(sessionId, 1, databaseUrl).catch(() => []);
+
+    if (!pages.length) {
+      // No pending pages. If nothing is crawling either, we're done.
+      const c = await getCrawlerPageCounts(sessionId, databaseUrl).catch(() => null);
+      if (c && parseInt(c.pending, 10) === 0 && parseInt(c.crawling, 10) === 0) break;
+
+      idleMs += 150;
+      if (idleMs >= IDLE_GIVE_UP_MS) break;
+      await sleep(150);
+      continue;
+    }
+
+    idleMs = 0;
+    await crawlOnePage(pages[0], session, databaseUrl, control);
+
+    if (session.crawl_delay_ms > 0) {
+      await sleep(session.crawl_delay_ms);
+    }
   }
 }
 
@@ -331,63 +368,42 @@ async function crawlOnePage(page, session, databaseUrl, control) {
   const matchedCategories = detectUgcCategories(body);
   const relevanceScore = scoreRelevance(matchedCategories);
   const isRelevant = matchedCategories.length > 0;
-
   let linksFollowed = 0;
+  let outboundFound = 0;
 
-  // Only queue children if we haven't hit depth limit and page cap
   if (page.depth < session.max_depth) {
     const allLinks = extractLinks(body, finalUrl || page.url);
+    outboundFound = allLinks.length;
     const normalizedLinks = allLinks.map((l) => ({ url: l, norm: normalizeCrawlerUrl(l) }));
-
-    // Check which ones are already known
     const normUrls = normalizedLinks.map((l) => l.norm);
     const known = await countKnownUrls(session.id, normUrls, databaseUrl).catch(() => new Set());
 
-    const candidates = normalizedLinks
-      .filter((l) => !known.has(l.norm))
-      .slice(0, session.links_per_page);
+    const candidates = normalizedLinks.filter((l) => !known.has(l.norm)).slice(0, session.links_per_page);
 
     if (candidates.length > 0) {
-      const pagesToAdd = candidates.map((c) => ({
+      await addCrawlerPages(candidates.map((c) => ({
         sessionId: session.id,
         url: c.url,
         normalizedUrl: c.norm,
         parentPageId: page.id,
         depth: page.depth + 1,
         isSeed: false,
-      }));
-      await addCrawlerPages(pagesToAdd, databaseUrl).catch(() => {});
+      })), databaseUrl).catch(() => {});
       linksFollowed = candidates.length;
     }
-
-    await updateCrawlerPage(page.id, {
-      status: 'done',
-      is_relevant: isRelevant,
-      relevance_score: relevanceScore,
-      matched_categories: matchedCategories,
-      title: title ? title.slice(0, 500) : null,
-      outbound_links_found: allLinks.length,
-      links_followed: linksFollowed,
-      http_status: status,
-      crawled_at: new Date().toISOString(),
-    }, databaseUrl).catch(() => {});
-  } else {
-    await updateCrawlerPage(page.id, {
-      status: 'done',
-      is_relevant: isRelevant,
-      relevance_score: relevanceScore,
-      matched_categories: matchedCategories,
-      title: title ? title.slice(0, 500) : null,
-      outbound_links_found: 0,
-      links_followed: 0,
-      http_status: status,
-      crawled_at: new Date().toISOString(),
-    }, databaseUrl).catch(() => {});
   }
-}
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  await updateCrawlerPage(page.id, {
+    status: 'done',
+    is_relevant: isRelevant,
+    relevance_score: relevanceScore,
+    matched_categories: matchedCategories,
+    title: title ? title.slice(0, 500) : null,
+    outbound_links_found: outboundFound,
+    links_followed: linksFollowed,
+    http_status: status,
+    crawled_at: new Date().toISOString(),
+  }, databaseUrl).catch(() => {});
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -399,8 +415,8 @@ async function startCrawlSession({
   seedFilename = null,
   maxDepth = 3,
   linksPerPage = 20,
-  crawlDelayMs = 1500,
-  concurrency = 5,
+  crawlDelayMs = 0,
+  concurrency = 20,
   maxPages = 5000,
 }, databaseUrl) {
   const session = await createCrawlerSession({
