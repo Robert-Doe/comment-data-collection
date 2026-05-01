@@ -1224,6 +1224,23 @@ button[data-error="true"],
   flex-wrap: wrap;
 }
 
+.job-labeler-filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.job-labeler-filter-row .field.compact {
+  flex: 0 1 180px;
+  min-width: 140px;
+}
+
+.job-labeler-filter-row .field.compact span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .job-labeler-jump-field {
   flex: 1 1 220px;
   min-width: 220px;

@@ -57,7 +57,8 @@
   const jobLabelerPrevButton = document.getElementById('job-labeler-prev');
   const jobLabelerNextButton = document.getElementById('job-labeler-next');
   const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
-  const jobLabelerFilterUnlabeled = document.getElementById('job-labeler-filter-unlabeled');
+  const labelerLabelFilter = document.getElementById('job-labeler-label-filter');
+  const labelerUgcFilter   = document.getElementById('job-labeler-ugc-filter');
   const jobLabelerJumpForm = document.getElementById('job-labeler-jump-form');
   const jobLabelerJumpPosition = document.getElementById('job-labeler-jump-position');
   const jobLabelerJumpButton = document.getElementById('job-labeler-jump-button');
@@ -1130,10 +1131,7 @@
     if (!state || !state.entries.length) return -1;
     const start = Math.max(0, Number(startIndex) || 0);
     for (let index = start; index < state.entries.length; index += 1) {
-      const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
-      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') {
-        return index;
-      }
+      if (entryMatchesLabelerFilters(state, state.entries[index])) return index;
     }
     return -1;
   }
@@ -1142,14 +1140,40 @@
     if (!state || !state.entries.length) return -1;
     const end = Math.min(beforeIndex - 1, state.entries.length - 1);
     for (let index = end; index >= 0; index -= 1) {
-      const { candidate } = jobLabelerCandidateForEntry(state, state.entries[index]);
-      if (!candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed') return index;
+      if (entryMatchesLabelerFilters(state, state.entries[index])) return index;
     }
     return -1;
   }
 
+  function labelerLabelFilterValue() {
+    return (labelerLabelFilter && labelerLabelFilter.value) || 'any';
+  }
+  function labelerUgcFilterValue() {
+    return (labelerUgcFilter && labelerUgcFilter.value) || 'any';
+  }
   function isFilteringUnlabeled() {
-    return !!(jobLabelerFilterUnlabeled && jobLabelerFilterUnlabeled.checked);
+    return labelerLabelFilterValue() === 'unlabeled';
+  }
+  function isAnyLabelerFilterActive() {
+    return labelerLabelFilterValue() !== 'any' || labelerUgcFilterValue() !== 'any';
+  }
+  function entryMatchesLabelerFilters(state, entry) {
+    const ugcFilter = labelerUgcFilterValue();
+    if (ugcFilter !== 'any') {
+      const item = state && state.itemsById && state.itemsById.get(entry.itemId);
+      const detected = !!(item && item.ugc_detected);
+      if (ugcFilter === 'detected' && !detected) return false;
+      if (ugcFilter === 'not_detected' && detected) return false;
+    }
+    const labelFilter = labelerLabelFilterValue();
+    if (labelFilter !== 'any') {
+      const { candidate } = jobLabelerCandidateForEntry(state, entry);
+      const status = candidateReviewStatus(candidate);
+      const isUnreviewed = !status || status === 'unreviewed';
+      if (labelFilter === 'unlabeled' && !isUnreviewed) return false;
+      if (labelFilter === 'labeled' && isUnreviewed) return false;
+    }
+    return true;
   }
 
   function setJobLabelerNavState(state) {
@@ -1159,7 +1183,7 @@
     const loadingMore = !!(state && state.loadingMorePromise);
     const currentIndex = Math.max(0, Number(state && state.index) || 0);
     const lastIndex = Math.max(0, (state && state.entries ? state.entries.length : 0) - 1);
-    const filtering = isFilteringUnlabeled();
+    const filtering = isAnyLabelerFilterActive();
     let atEnd;
     if (filtering) {
       const nextUnreviewed = findNextUnreviewedLabelerIndex(state, currentIndex + 1);
@@ -2208,12 +2232,11 @@
 
     const totalUnreviewed = state.entries.length - reviewed;
     let positionLine;
-    if (isFilteringUnlabeled()) {
-      const unreviewedUpToCursor = state.entries.slice(0, (state.index || 0) + 1).filter((entry) => {
-        const { candidate } = jobLabelerCandidateForEntry(state, entry);
-        return !candidateReviewStatus(candidate) || candidateReviewStatus(candidate) === 'unreviewed';
-      }).length;
-      positionLine = `<div><strong>Unlabeled Position:</strong> ${escapeHtml(unreviewedUpToCursor)} / ${escapeHtml(totalUnreviewed)}${state.hasMore ? '+' : ''}</div>`;
+    if (isAnyLabelerFilterActive()) {
+      const matchingEntries = state.entries.filter((e) => entryMatchesLabelerFilters(state, e));
+      const matchingUpToCursor = state.entries.slice(0, (state.index || 0) + 1)
+        .filter((e) => entryMatchesLabelerFilters(state, e)).length;
+      positionLine = `<div><strong>Filtered Position:</strong> ${escapeHtml(matchingUpToCursor)} / ${escapeHtml(matchingEntries.length)}${state.hasMore ? '+' : ''}</div>`;
     } else {
       positionLine = `<div><strong>Cursor Position:</strong> ${escapeHtml((state.index || 0) + 1)} / ${escapeHtml(state.entries.length)}</div>`;
     }
@@ -2402,7 +2425,7 @@
     state.pendingAdvanceFromIndex = -1;
     const step = direction < 0 ? -1 : 1;
 
-    if (isFilteringUnlabeled()) {
+    if (isAnyLabelerFilterActive()) {
       const currentIndex = state.index || 0;
       const targetIndex = step > 0
         ? findNextUnreviewedLabelerIndex(state, currentIndex + 1)
@@ -4270,16 +4293,16 @@
     handleJobLabelerStep(1);
   });
 
-  if (jobLabelerFilterUnlabeled) {
-    jobLabelerFilterUnlabeled.addEventListener('change', () => {
-      const state = currentJobLabelerState();
-      if (state && jobLabelerFilterUnlabeled.checked) {
-        const firstUnreviewed = findNextUnreviewedLabelerIndex(state, 0);
-        if (firstUnreviewed >= 0) state.index = firstUnreviewed;
-      }
-      renderJobLabelerReview();
-    });
+  function handleLabelerFilterChange() {
+    const state = currentJobLabelerState();
+    if (state && isAnyLabelerFilterActive()) {
+      const first = findNextUnreviewedLabelerIndex(state, 0);
+      if (first >= 0) state.index = first;
+    }
+    renderJobLabelerReview();
   }
+  if (labelerLabelFilter) labelerLabelFilter.addEventListener('change', handleLabelerFilterChange);
+  if (labelerUgcFilter)   labelerUgcFilter.addEventListener('change', handleLabelerFilterChange);
 
   managerResumeButton.addEventListener('click', () => {
     handleResumeJob(currentJobId, managerResumeButton).catch((error) => console.error(error));
