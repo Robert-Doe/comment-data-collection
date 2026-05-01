@@ -527,10 +527,18 @@
       panel.classList.toggle('active', isActive);
     });
     if (activeWorkspaceTab === 'candidates') {
+      if (!selectedItem() && currentItemsById.size) {
+        const first = [...currentItemsById.values()].find((i) => Array.isArray(i.candidates) && i.candidates.length);
+        if (first) { selectManualItem(first); }
+      }
       renderCandidateReview(selectedItem());
       return;
     }
     if (activeWorkspaceTab === 'scoring') {
+      if (!selectedItem() && currentItemsById.size) {
+        const first = [...currentItemsById.values()].find((i) => Array.isArray(i.candidates) && i.candidates.length);
+        if (first) { selectManualItem(first); }
+      }
       renderScoringBreakdown(selectedItem());
       return;
     }
