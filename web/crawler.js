@@ -520,12 +520,13 @@
       const data = await apiFetch(`/api/crawler/sessions/${currentSessionId}/promote-to-job`, { method: 'POST', body: JSON.stringify(body) });
       const jobCount = data.jobs.length;
       if (jobCount === 1) {
+        const jobUrl = `./index.html?jobId=${encodeURIComponent(data.jobs[0].jobId)}`;
         setMessage(promoteMessage, `Job created! ${data.totalUrls} URLs queued.`, false);
-        promoteMessage.innerHTML += ` <a href="./index.html" style="color:var(--accent)">→ Open Scanner</a>`;
+        promoteMessage.innerHTML += ` <a href="${jobUrl}" style="color:var(--accent)">→ Open Scanner</a>`;
       } else {
         setMessage(promoteMessage, `${jobCount} jobs created across ${data.totalUrls} URLs:`, false);
         const links = data.jobs.map((j) =>
-          `<a href="./index.html" style="color:var(--accent)">${escHtml(j.name)} (${j.totalUrls})</a>`
+          `<a href="./index.html?jobId=${encodeURIComponent(j.jobId)}" style="color:var(--accent)">${escHtml(j.name)} (${j.totalUrls})</a>`
         ).join(' · ');
         promoteMessage.innerHTML += `<br><small>${links}</small>`;
       }

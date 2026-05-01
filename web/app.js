@@ -3285,21 +3285,11 @@
   }
 
   async function fetchJobEvents(jobId) {
-    if (!jobId) {
-      renderJobEvents([], { message: 'Select a job to view recent events.' });
-      return [];
-    }
-
+    if (!jobId) return [];
     try {
       const body = await fetchJson(`/api/jobs/${jobId}/events?limit=120`);
-      const events = Array.isArray(body && body.events) ? body.events : [];
-      renderJobEvents(events);
-      return events;
-    } catch (error) {
-      renderJobEvents([], {
-        message: error && error.message ? error.message : 'Failed to load job events.',
-        isError: true,
-      });
+      return Array.isArray(body && body.events) ? body.events : [];
+    } catch (_) {
       return [];
     }
   }
@@ -3400,7 +3390,7 @@
     const isStale = () => requestToken !== refreshJobToken;
     const previousJobId = currentJobId;
     try {
-      const [{ job, items, pagination }] = await Promise.all([
+      const [{ job, items, pagination }, events] = await Promise.all([
         fetchJson(`/api/jobs/${jobId}?limit=${pageSize}&offset=${currentOffset}`),
         fetchJobEvents(jobId),
       ]);
@@ -3417,6 +3407,7 @@
       try { localStorage.setItem('ugc_selected_job_id', jobId); } catch (_) {}
       renderSummary(job);
       renderItems(items, pagination);
+      renderJobEvents(events);
       renderJobManager(job);
       await refreshSelectedItem().catch((error) => console.error(error));
       if (isStale()) {
@@ -3442,6 +3433,9 @@
       }
       startPolling(jobId, pollIntervalForStatus(job.status));
     } catch (error) {
+      if (!currentJobId) {
+        renderJobEvents([], { message: 'Select a job to view recent events.' });
+      }
       if (requestToken === refreshJobToken && previousPollingJobId) {
         startPolling(previousPollingJobId, previousPollingInterval || activePollIntervalMs);
       }
