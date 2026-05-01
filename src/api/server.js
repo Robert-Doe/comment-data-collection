@@ -2116,33 +2116,48 @@ function createApp(config = getConfig()) {
     } catch (err) { next(err); }
   });
 
-  // Promote selected (or all relevant) pages to a Scanner job
+  // Promote selected (or all relevant) pages to Scanner job(s)
+  // If pages exceed JOB_CHUNK_SIZE, multiple jobs are created: name_1, name_2, etc.
   app.post('/api/crawler/sessions/:sessionId/promote-to-job', async (req, res, next) => {
+    const JOB_CHUNK_SIZE = 10000;
     try {
       const session = await getCrawlerSession(req.params.sessionId, config.databaseUrl);
       if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
 
-      const { pageIds, onlyTraining, jobName, scanDelayMs = 6000, screenshotDelayMs = 1500, candidateMode = 'default' } = req.body;
+      const {
+        pageIds, onlyTraining, jobName,
+        scanDelayMs = 6000, screenshotDelayMs = 1500, candidateMode = 'default',
+        minScore = 0.75,
+      } = req.body;
       const pages = await getSessionRelevantPages(req.params.sessionId, {
         pageIds: Array.isArray(pageIds) && pageIds.length ? pageIds.map(Number) : undefined,
         onlyTraining: Boolean(onlyTraining),
+        minScore: Number(minScore),
       }, config.databaseUrl);
 
-      if (!pages.length) { res.status(400).json({ error: 'No pages matched' }); return; }
+      if (!pages.length) { res.status(400).json({ error: 'No pages matched the confidence threshold' }); return; }
 
-      const csvText = 'url\n' + pages.map((p) => p.url).join('\n');
-      const name = jobName || `Crawler export — ${session.name}`;
-      const parsed = parseCsvText(csvText, 'url');
-      const job = await createJob({
-        sourceFilename: name,
-        sourceColumn: 'url',
-        records: parsed.records,
-        scanDelayMs: Number(scanDelayMs),
-        screenshotDelayMs: Number(screenshotDelayMs),
-        candidateMode,
-      }, config.databaseUrl);
+      const baseName = jobName || `Crawler export — ${session.name}`;
+      const needsChunking = pages.length > JOB_CHUNK_SIZE;
+      const jobs = [];
 
-      res.status(201).json({ ok: true, jobId: job.jobId, totalUrls: job.totalUrls });
+      for (let chunkIdx = 0; chunkIdx * JOB_CHUNK_SIZE < pages.length; chunkIdx++) {
+        const chunk = pages.slice(chunkIdx * JOB_CHUNK_SIZE, (chunkIdx + 1) * JOB_CHUNK_SIZE);
+        const chunkName = needsChunking ? `${baseName} (${chunkIdx + 1})` : baseName;
+        const csvText = 'url\n' + chunk.map((p) => p.url).join('\n');
+        const parsed = parseCsvText(csvText, 'url');
+        const job = await createJob({
+          sourceFilename: chunkName,
+          sourceColumn: 'url',
+          records: parsed.records,
+          scanDelayMs: Number(scanDelayMs),
+          screenshotDelayMs: Number(screenshotDelayMs),
+          candidateMode,
+        }, config.databaseUrl);
+        jobs.push({ jobId: job.jobId, name: chunkName, totalUrls: job.totalUrls });
+      }
+
+      res.status(201).json({ ok: true, jobs, totalUrls: pages.length });
     } catch (err) { next(err); }
   });
 

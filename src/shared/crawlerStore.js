@@ -244,7 +244,7 @@ async function bulkUpdateCrawlerPages(pageIds, updates, databaseUrl) {
 }
 
 // Get all relevant (or training-tagged) pages for a session, for job promotion.
-async function getSessionRelevantPages(sessionId, { pageIds, onlyTraining } = {}, databaseUrl) {
+async function getSessionRelevantPages(sessionId, { pageIds, onlyTraining, minScore } = {}, databaseUrl) {
   const db = getPool(databaseUrl);
   const conditions = ['session_id = $1'];
   const values = [sessionId];
@@ -257,11 +257,14 @@ async function getSessionRelevantPages(sessionId, { pageIds, onlyTraining } = {}
   } else {
     conditions.push(`is_relevant = TRUE`);
   }
+  if (minScore != null && minScore > 0) {
+    conditions.push(`relevance_score >= $${idx++}`);
+    values.push(minScore);
+  }
   const result = await db.query(
     `SELECT id, url, title, depth, relevance_score, matched_categories, include_in_training
      FROM crawler_pages WHERE ${conditions.join(' AND ')}
-     ORDER BY relevance_score DESC, id ASC
-     LIMIT 10000`,
+     ORDER BY relevance_score DESC, id ASC`,
     values,
   );
   return result.rows;

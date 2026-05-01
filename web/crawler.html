@@ -222,6 +222,16 @@
               </label>
             </div>
             <label class="field">
+              <span>Minimum Confidence</span>
+              <select id="promote-min-score">
+                <option value="1.0">100% — Certain (4+ signals matched)</option>
+                <option value="0.75" selected>75% — High (3+ signals matched)</option>
+                <option value="0.5">50% — Medium (2+ signals matched)</option>
+                <option value="0.25">25% — Any match (1+ signal)</option>
+                <option value="0">All relevant (no score filter)</option>
+              </select>
+            </label>
+            <label class="field">
               <span>Scanner Mode</span>
               <select id="promote-mode">
                 <option value="default">Default</option>

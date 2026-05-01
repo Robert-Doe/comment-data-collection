@@ -70,6 +70,7 @@
   const promoteName       = document.getElementById('promote-name');
   const promoteScanDelay  = document.getElementById('promote-scan-delay');
   const promoteScreenshotDelay = document.getElementById('promote-screenshot-delay');
+  const promoteMinScore   = document.getElementById('promote-min-score');
   const promoteMode       = document.getElementById('promote-mode');
   const promoteMessage    = document.getElementById('promote-message');
   const promoteClose      = document.getElementById('promote-close');
@@ -506,7 +507,7 @@
 
   promoteForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    setMessage(promoteMessage, 'Creating job…', false);
+    setMessage(promoteMessage, 'Creating job(s)…', false);
     try {
       const body = {
         pageIds: pendingPromoteIds || undefined,
@@ -514,10 +515,20 @@
         scanDelayMs: Number(promoteScanDelay.value),
         screenshotDelayMs: Number(promoteScreenshotDelay.value),
         candidateMode: promoteMode.value,
+        minScore: Number(promoteMinScore.value),
       };
       const data = await apiFetch(`/api/crawler/sessions/${currentSessionId}/promote-to-job`, { method: 'POST', body: JSON.stringify(body) });
-      setMessage(promoteMessage, `Job created! ${data.totalUrls} URLs queued.`, false);
-      promoteMessage.innerHTML += ` <a href="./index.html" style="color:var(--accent)">→ Open Scanner</a>`;
+      const jobCount = data.jobs.length;
+      if (jobCount === 1) {
+        setMessage(promoteMessage, `Job created! ${data.totalUrls} URLs queued.`, false);
+        promoteMessage.innerHTML += ` <a href="./index.html" style="color:var(--accent)">→ Open Scanner</a>`;
+      } else {
+        setMessage(promoteMessage, `${jobCount} jobs created across ${data.totalUrls} URLs:`, false);
+        const links = data.jobs.map((j) =>
+          `<a href="./index.html" style="color:var(--accent)">${escHtml(j.name)} (${j.totalUrls})</a>`
+        ).join(' · ');
+        promoteMessage.innerHTML += `<br><small>${links}</small>`;
+      }
       clearSelection();
     } catch (err) { setMessage(promoteMessage, err.message, true); }
   });
