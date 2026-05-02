@@ -1171,10 +1171,68 @@
       const { candidate } = jobLabelerCandidateForEntry(state, entry);
       const status = candidateReviewStatus(candidate);
       const isUnreviewed = !status || status === 'unreviewed';
+      const isInferred = !!(candidate && candidate.human_review_source === 'inferred');
       if (labelFilter === 'unlabeled' && !isUnreviewed) return false;
       if (labelFilter === 'labeled' && isUnreviewed) return false;
+      if (labelFilter === 'inferred' && !isInferred) return false;
     }
     return true;
+  }
+
+  function candidateStructuralSignature(item, candidate) {
+    const url = String((item && (item.final_url || item.normalized_url || item.input_url)) || '');
+    let domain = '';
+    try { domain = new URL(url).hostname; } catch (_) { domain = url.split('/')[0] || ''; }
+    const xpath = String((candidate && candidate.xpath) || '').replace(/\[\d+\]/g, '').trim();
+    const signals = Array.isArray(candidate && candidate.matched_signals)
+      ? [...candidate.matched_signals].sort().join(',')
+      : '';
+    return `${domain}||${xpath}||${signals}`;
+  }
+
+  async function applyInferredLabels(state, labeledEntry, label) {
+    if (!state || !label || label === 'uncertain' || !currentJobId) return 0;
+    const { item: srcItem, candidate: srcCandidate } = jobLabelerCandidateForEntry(state, labeledEntry);
+    if (!srcItem || !srcCandidate) return 0;
+    const sig = candidateStructuralSignature(srcItem, srcCandidate);
+    if (!sig || sig === '||||') return 0;
+
+    const toInfer = [];
+    for (const [, item] of state.itemsById) {
+      if (!Array.isArray(item.candidates)) continue;
+      for (const candidate of item.candidates) {
+        if (item.id === srcItem.id && candidate.candidate_key === labeledEntry.candidateKey) continue;
+        if (candidate.human_label && candidate.human_review_source !== 'inferred') continue;
+        if (candidateStructuralSignature(item, candidate) !== sig) continue;
+        toInfer.push({
+          itemId: item.id,
+          candidateKey: candidate.candidate_key,
+          label,
+          xpath: candidate.xpath || '',
+          cssPath: candidate.css_path || '',
+          candidateRank: candidate.candidate_rank || 0,
+        });
+      }
+    }
+    if (!toInfer.length) return 0;
+
+    const response = await fetch(apiUrl(`/api/jobs/${currentJobId}/infer-labels`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviews: toInfer }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return 0;
+
+    const now = new Date().toISOString();
+    for (const { itemId, candidateKey } of toInfer) {
+      const patch = { human_label: label, human_reviewed_at: now, human_review_source: 'inferred' };
+      applyCandidateReviewSnapshot(state.itemsById, itemId, candidateKey, patch);
+      if (currentItemsById.has(itemId)) {
+        applyCandidateReviewSnapshot(currentItemsById, itemId, candidateKey, patch);
+      }
+    }
+    return Number(body.count) || toInfer.length;
   }
 
   function setJobLabelerNavState(state) {
@@ -2648,6 +2706,14 @@
         finalizeOptimisticJobLabelerReview(state, entry);
         if (activeWorkspaceTab === 'labeler' && !(jobLabelerTransition && jobLabelerTransition.jobId === currentJobId)) {
           renderJobLabelerReview();
+        }
+        if (!clear && label) {
+          applyInferredLabels(state, entry, label).then((count) => {
+            if (count > 0) {
+              showToast(`Auto-labeled ${count} structurally identical candidate${count === 1 ? '' : 's'} on the same domain. Use "Inferred (review)" filter to confirm.`, { tone: 'info', duration: 6000 });
+              renderJobLabelerReview();
+            }
+          }).catch(() => {});
         }
       },
     }).catch((error) => {

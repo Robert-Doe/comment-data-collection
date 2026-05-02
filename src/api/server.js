@@ -73,6 +73,7 @@ const {
   markItemCompleted,
   markItemFailed,
   upsertCandidateReview: persistCandidateReview,
+  bulkInferCandidateReviews,
   recomputeJob,
 } = require('../shared/store');
 const {
@@ -1307,6 +1308,20 @@ function createApp(config = getConfig()) {
         ok: true,
         item: materializeItem(updatedItem, req),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/jobs/:jobId/infer-labels', async (req, res, next) => {
+    try {
+      const reviews = Array.isArray(req.body && req.body.reviews) ? req.body.reviews : [];
+      if (!reviews.length) {
+        res.json({ ok: true, count: 0 });
+        return;
+      }
+      const count = await bulkInferCandidateReviews(req.params.jobId, reviews, config.databaseUrl);
+      res.json({ ok: true, count });
     } catch (error) {
       next(error);
     }

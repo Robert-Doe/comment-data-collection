@@ -1441,6 +1441,42 @@ async function upsertCandidateReview(jobId, itemId, review, databaseUrl, existin
   return nextReviews;
 }
 
+async function bulkInferCandidateReviews(jobId, reviews, databaseUrl) {
+  if (!Array.isArray(reviews) || !reviews.length) return 0;
+  const db = getPool(databaseUrl);
+  const byItem = new Map();
+  for (const r of reviews) {
+    if (!r.itemId || !r.candidateKey) continue;
+    if (!byItem.has(r.itemId)) byItem.set(r.itemId, []);
+    byItem.get(r.itemId).push(r);
+  }
+  let count = 0;
+  for (const [itemId, itemReviews] of byItem) {
+    const item = await getJobItem(jobId, itemId, databaseUrl);
+    if (!item) continue;
+    let currentReviews = item.candidate_reviews || [];
+    for (const r of itemReviews) {
+      const existing = currentReviews.find((rev) => rev.candidate_key === r.candidateKey);
+      if (existing && existing.source && existing.source !== 'inferred') continue;
+      currentReviews = upsertCandidateReviewArray(currentReviews, {
+        candidate_key: r.candidateKey,
+        label: r.label,
+        notes: '',
+        xpath: r.xpath || '',
+        css_path: r.cssPath || '',
+        candidate_rank: r.candidateRank || 0,
+        source: 'inferred',
+      });
+      count += 1;
+    }
+    await db.query(
+      `UPDATE job_items SET candidate_reviews = $2::jsonb, updated_at = NOW() WHERE job_id = $1 AND id = $3`,
+      [jobId, JSON.stringify(currentReviews), itemId],
+    );
+  }
+  return count;
+}
+
 async function recomputeJob(jobId, databaseUrl) {
   const db = getPool(databaseUrl);
   await db.query(
@@ -2293,5 +2329,6 @@ module.exports = {
   markItemCompleted,
   markItemFailed,
   upsertCandidateReview,
+  bulkInferCandidateReviews,
   recomputeJob,
 };
