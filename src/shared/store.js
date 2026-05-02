@@ -1118,8 +1118,7 @@ async function getJobLabelSummaries(databaseUrl) {
   const db = getPool(databaseUrl);
   const result = await db.query(`
     SELECT
-      j.id,
-      j.name,
+      j.id AS job_id,
       j.status,
       j.total_urls,
       j.created_at,
