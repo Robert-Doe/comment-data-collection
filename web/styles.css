@@ -1227,18 +1227,24 @@ button[data-error="true"],
 .job-labeler-filter-row {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
+  flex: 0 0 100%;
+  order: 10;
 }
 
 .job-labeler-filter-row .field.compact {
-  flex: 0 1 180px;
-  min-width: 140px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .job-labeler-filter-row .field.compact span {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.job-labeler-filter-row .field.compact select {
+  min-width: 160px;
 }
 
 .job-labeler-jump-field {
