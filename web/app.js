@@ -4295,9 +4295,15 @@
 
   function handleLabelerFilterChange() {
     const state = currentJobLabelerState();
-    if (state && isAnyLabelerFilterActive()) {
-      const first = findNextUnreviewedLabelerIndex(state, 0);
-      if (first >= 0) state.index = first;
+    if (state && state.entries.length) {
+      const currentIndex = Math.max(0, Math.min(state.index || 0, state.entries.length - 1));
+      if (isAnyLabelerFilterActive()) {
+        if (!entryMatchesLabelerFilters(state, state.entries[currentIndex])) {
+          const next = findNextUnreviewedLabelerIndex(state, currentIndex);
+          const target = next >= 0 ? next : findNextUnreviewedLabelerIndex(state, 0);
+          if (target >= 0) state.index = target;
+        }
+      }
     }
     renderJobLabelerReview();
   }
