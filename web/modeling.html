@@ -55,6 +55,20 @@
         </section>
 
         <section class="panel">
+          <div class="panel-header">
+            <h2>Training Pool</h2>
+            <button id="refresh-label-summary" class="secondary" type="button">Refresh</button>
+          </div>
+          <p class="lede manual-lede">Select jobs whose labeled candidates you want to combine into a training pool. Pooling positives from multiple jobs helps offset class imbalance and lets you build cocktail models. Click <strong>Use Selected for Training</strong> to populate the Job IDs Filter below.</p>
+          <p id="label-summary-message" class="message"></p>
+          <div id="label-summary-shell" class="table-shell empty">Loading label summary...</div>
+          <div class="panel-actions" id="label-summary-actions" style="display:none;align-items:center">
+            <span id="label-summary-selected-totals" class="candidate-copy"></span>
+            <button id="use-pool-for-training" class="primary compact" type="button">Use Selected for Training</button>
+          </div>
+        </section>
+
+        <section class="panel">
           <div class="panel-header"><h2>Train Variants</h2></div>
           <p class="lede manual-lede">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates currently stored, or limit training to specific jobs by entering comma-separated job IDs.</p>
           <div class="config-grid">
