@@ -518,19 +518,53 @@ async function getJobItems(jobId, optionsOrDatabaseUrl, maybeDatabaseUrl) {
     ? optionsOrDatabaseUrl
     : maybeDatabaseUrl;
   const db = getPool(databaseUrl);
+  const conditions = ['job_id = $1'];
+  const params = [jobId];
+
+  if (options.ugcDetected === true) {
+    conditions.push('ugc_detected = true');
+  } else if (options.ugcDetected === false) {
+    conditions.push('(ugc_detected IS NULL OR ugc_detected = false)');
+  }
+
+  if (options.labeled === false) {
+    conditions.push("(candidate_reviews IS NULL OR candidate_reviews = '[]'::jsonb OR jsonb_array_length(candidate_reviews) = 0)");
+  } else if (options.labeled === true) {
+    conditions.push("(candidate_reviews IS NOT NULL AND candidate_reviews <> '[]'::jsonb AND jsonb_array_length(candidate_reviews) > 0)");
+  }
+
+  params.push(Math.max(1, Number(options.limit) || 100));
+  params.push(Math.max(0, Number(options.offset) || 0));
+
   const result = await db.query(
-    `SELECT *
-     FROM job_items
-     WHERE job_id = $1
-     ORDER BY row_number ASC
-     LIMIT $2 OFFSET $3`,
-    [
-      jobId,
-      Math.max(1, Number(options.limit) || 100),
-      Math.max(0, Number(options.offset) || 0),
-    ],
+    `SELECT * FROM job_items WHERE ${conditions.join(' AND ')} ORDER BY row_number ASC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
   );
   return result.rows;
+}
+
+async function countJobItems(jobId, options, databaseUrl) {
+  const db = getPool(databaseUrl);
+  const conditions = ['job_id = $1'];
+  const params = [jobId];
+
+  if (options && options.ugcDetected === true) {
+    conditions.push('ugc_detected = true');
+  } else if (options && options.ugcDetected === false) {
+    conditions.push('(ugc_detected IS NULL OR ugc_detected = false)');
+  }
+
+  if (options && options.labeled === false) {
+    conditions.push("(candidate_reviews IS NULL OR candidate_reviews = '[]'::jsonb OR jsonb_array_length(candidate_reviews) = 0)");
+  } else if (options && options.labeled === true) {
+    conditions.push("(candidate_reviews IS NOT NULL AND candidate_reviews <> '[]'::jsonb AND jsonb_array_length(candidate_reviews) > 0)");
+  }
+
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS total FROM job_items WHERE ${conditions.join(' AND ')}`,
+    params,
+  );
+  return Number((result.rows[0] && result.rows[0].total) || 0);
 }
 
 async function getJobItemsByStatus(jobId, status, optionsOrDatabaseUrl, maybeDatabaseUrl) {
@@ -2241,6 +2275,7 @@ module.exports = {
   getJob,
   getJobItem,
   getJobItems,
+  countJobItems,
   getJobItemsByStatus,
   getDatabaseSummary,
   listItemsForModeling,

@@ -59,6 +59,7 @@
   const jobLabelerAutoAdvance = document.getElementById('job-labeler-auto-advance');
   const labelerLabelFilter = document.getElementById('job-labeler-label-filter');
   const labelerUgcFilter   = document.getElementById('job-labeler-ugc-filter');
+  const labelerLoadFilteredButton = document.getElementById('job-labeler-load-filtered');
   const jobLabelerJumpForm = document.getElementById('job-labeler-jump-form');
   const jobLabelerJumpPosition = document.getElementById('job-labeler-jump-position');
   const jobLabelerJumpButton = document.getElementById('job-labeler-jump-button');
@@ -1253,6 +1254,7 @@
       loadingMorePromise: null,
       focusEntryKey: String(options.focusEntryKey || ''),
       pendingAdvanceFromIndex: -1,
+      serverFilters: options.serverFilters || null,
     };
   }
 
@@ -1326,8 +1328,13 @@
     return entries.length;
   }
 
-  async function fetchJobLabelerBatch(jobId, offset, limit) {
-    const body = await fetchJson(`/api/jobs/${jobId}?limit=${limit}&offset=${offset}`);
+  async function fetchJobLabelerBatch(jobId, offset, limit, serverFilters) {
+    const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (serverFilters) {
+      if (serverFilters.ugcDetected !== undefined) qs.set('ugcDetected', String(serverFilters.ugcDetected));
+      if (serverFilters.labeled !== undefined) qs.set('labeled', String(serverFilters.labeled));
+    }
+    const body = await fetchJson(`/api/jobs/${jobId}?${qs}`);
     return {
       items: Array.isArray(body && body.items) ? body.items : [],
       pagination: body && body.pagination ? body.pagination : { limit, offset, total: 0 },
@@ -1342,7 +1349,7 @@
     }
 
     state.loadingMorePromise = (async () => {
-      const { items, pagination } = await fetchJobLabelerBatch(jobId, state.nextOffset, jobLabelerBatchSize);
+      const { items, pagination } = await fetchJobLabelerBatch(jobId, state.nextOffset, jobLabelerBatchSize, state.serverFilters);
       return appendJobLabelerBatch(state, items, pagination);
     })();
 
@@ -1396,7 +1403,7 @@
     }
   }
 
-  async function loadJobLabelerState(jobId, force) {
+  async function loadJobLabelerState(jobId, force, serverFilters) {
     if (!jobId) return null;
     if (!force && jobLabelerCache.has(jobId)) {
       return jobLabelerCache.get(jobId);
@@ -1406,7 +1413,7 @@
     }
 
     const existing = jobLabelerCache.get(jobId);
-    const existingEntry = existing && existing.entries[existing.index || 0]
+    const existingEntry = (!serverFilters && existing && existing.entries[existing.index || 0])
       ? `${existing.entries[existing.index || 0].itemId}:${existing.entries[existing.index || 0].candidateKey}`
       : '';
     const total = Math.max(0, Number(currentJob && currentJob.id === jobId ? currentJob.total_urls : 0) || 0);
@@ -1416,10 +1423,11 @@
       const state = createJobLabelerState({
         totalRows: total,
         focusEntryKey: existingEntry,
+        serverFilters: serverFilters || null,
       });
       let offset = 0;
       do {
-        const { items, pagination } = await fetchJobLabelerBatch(jobId, offset, jobLabelerBatchSize);
+        const { items, pagination } = await fetchJobLabelerBatch(jobId, offset, jobLabelerBatchSize, state.serverFilters);
         if (jobLabelerLoadToken !== loadToken || jobLabelerLoadingJobId !== jobId) {
           return null;
         }
@@ -4267,6 +4275,43 @@
       showToast(message, { tone: 'error' });
     });
   });
+
+  if (labelerLoadFilteredButton) {
+    labelerLoadFilteredButton.addEventListener('click', () => {
+      runElementAction(labelerLoadFilteredButton, async () => {
+        if (!currentJobId) throw new Error('Select a job first.');
+
+        const serverFilters = {};
+        const ugcFilter = labelerUgcFilterValue();
+        if (ugcFilter === 'detected') serverFilters.ugcDetected = true;
+        else if (ugcFilter === 'not_detected') serverFilters.ugcDetected = false;
+
+        const labelFilter = labelerLabelFilterValue();
+        if (labelFilter === 'unlabeled') serverFilters.labeled = false;
+        else if (labelFilter === 'labeled') serverFilters.labeled = true;
+
+        const hasFilters = Object.keys(serverFilters).length > 0;
+        invalidateJobLabelerCache(currentJobId);
+        renderJobLabelerReview();
+        await loadJobLabelerState(currentJobId, true, hasFilters ? serverFilters : null);
+        renderJobLabelerReview();
+        maybePrefetchJobLabelerEntries(currentJobId);
+
+        const parts = [];
+        if (serverFilters.ugcDetected === true) parts.push('UGC detected');
+        if (serverFilters.ugcDetected === false) parts.push('not UGC detected');
+        if (serverFilters.labeled === false) parts.push('unlabeled');
+        if (serverFilters.labeled === true) parts.push('labeled');
+        const desc = parts.length ? parts.join(' + ') : 'no filters';
+        setJobLabelerMessage(`Queue loaded from server: ${desc}.`, false);
+        showToast(`Queue loaded: ${desc}.`, { tone: 'success' });
+      }).catch((error) => {
+        const message = error && error.message ? error.message : String(error);
+        setJobLabelerMessage(message, true);
+        showToast(message, { tone: 'error' });
+      });
+    });
+  }
 
   if (jobLabelerJumpForm) {
     jobLabelerJumpForm.addEventListener('submit', (event) => {

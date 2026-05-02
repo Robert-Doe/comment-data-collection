@@ -56,6 +56,7 @@ const {
   getJob,
   getJobItem,
   getJobItems,
+  countJobItems,
   getJobItemsByStatus,
   getDatabaseSummary,
   getDatabaseQuerySnapshot,
@@ -965,21 +966,23 @@ function createApp(config = getConfig()) {
     try {
       const limit = Math.max(1, Number(req.query.limit) || config.apiResultsPageSize);
       const offset = Math.max(0, Number(req.query.offset) || 0);
+      const ugcDetected = req.query.ugcDetected === 'true' ? true : req.query.ugcDetected === 'false' ? false : undefined;
+      const labeled = req.query.labeled === 'true' ? true : req.query.labeled === 'false' ? false : undefined;
       const job = await getJob(req.params.jobId, config.databaseUrl);
       if (!job) {
         res.status(404).json({ error: 'Job not found' });
         return;
       }
 
-      const items = await getJobItems(req.params.jobId, { limit, offset }, config.databaseUrl);
+      const filterOptions = { limit, offset, ugcDetected, labeled };
+      const items = await getJobItems(req.params.jobId, filterOptions, config.databaseUrl);
+      const total = (ugcDetected !== undefined || labeled !== undefined)
+        ? await countJobItems(req.params.jobId, { ugcDetected, labeled }, config.databaseUrl)
+        : job.total_urls;
       res.json({
         job,
         items: items.map((item) => materializeItem(item, req)),
-        pagination: {
-          limit,
-          offset,
-          total: job.total_urls,
-        },
+        pagination: { limit, offset, total },
       });
     } catch (error) {
       next(error);
