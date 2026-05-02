@@ -1114,6 +1114,39 @@ async function listItemsForModeling(optionsOrDatabaseUrl, maybeDatabaseUrl) {
   return result.rows;
 }
 
+async function getJobLabelSummaries(databaseUrl) {
+  const db = getPool(databaseUrl);
+  const result = await db.query(`
+    SELECT
+      j.id,
+      j.name,
+      j.status,
+      j.total_urls,
+      j.created_at,
+      COALESCE(lc.positive_candidates, 0)::int AS positive_candidates,
+      COALESCE(lc.negative_candidates, 0)::int AS negative_candidates,
+      COALESCE(lc.inferred_positive, 0)::int   AS inferred_positive,
+      COALESCE(lc.inferred_negative, 0)::int   AS inferred_negative
+    FROM jobs j
+    LEFT JOIN (
+      SELECT
+        ji.job_id,
+        COUNT(*) FILTER (WHERE rev->>'label' = 'comment_region'     AND (rev->>'source' IS NULL OR rev->>'source' <> 'inferred')) AS positive_candidates,
+        COUNT(*) FILTER (WHERE rev->>'label' = 'not_comment_region' AND (rev->>'source' IS NULL OR rev->>'source' <> 'inferred')) AS negative_candidates,
+        COUNT(*) FILTER (WHERE rev->>'label' = 'comment_region'     AND rev->>'source' = 'inferred') AS inferred_positive,
+        COUNT(*) FILTER (WHERE rev->>'label' = 'not_comment_region' AND rev->>'source' = 'inferred') AS inferred_negative
+      FROM job_items ji
+      CROSS JOIN LATERAL jsonb_array_elements(ji.candidate_reviews) AS rev
+      WHERE ji.candidate_reviews IS NOT NULL
+        AND ji.candidate_reviews <> '[]'::jsonb
+        AND jsonb_array_length(ji.candidate_reviews) > 0
+      GROUP BY ji.job_id
+    ) lc ON lc.job_id = j.id
+    ORDER BY j.created_at DESC
+  `);
+  return result.rows;
+}
+
 async function listJobItemsByStatuses(statuses, optionsOrDatabaseUrl, maybeDatabaseUrl) {
   const options = typeof optionsOrDatabaseUrl === 'object' && optionsOrDatabaseUrl !== null
     ? optionsOrDatabaseUrl
@@ -2315,6 +2348,7 @@ module.exports = {
   getJobItemsByStatus,
   getDatabaseSummary,
   listItemsForModeling,
+  getJobLabelSummaries,
   listJobItemsByStatuses,
   listManualReviewCandidates,
   searchJobs,

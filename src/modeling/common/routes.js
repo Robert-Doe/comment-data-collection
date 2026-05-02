@@ -110,6 +110,22 @@ function createModelingRouter(dependencies) {
     });
   }
 
+  router.get('/job-label-summary', async (_req, res, next) => {
+    try {
+      const jobs = await dependencies.getJobLabelSummaries();
+      const totals = jobs.reduce((acc, j) => {
+        acc.positive += j.positive_candidates;
+        acc.negative += j.negative_candidates;
+        acc.inferred_positive += j.inferred_positive;
+        acc.inferred_negative += j.inferred_negative;
+        return acc;
+      }, { positive: 0, negative: 0, inferred_positive: 0, inferred_negative: 0 });
+      res.json({ jobs, totals });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get('/overview', async (req, res, next) => {
     try {
       const jobIds = normalizeJobIds(req.query.jobIds || '');

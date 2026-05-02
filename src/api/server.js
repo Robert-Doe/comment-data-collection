@@ -64,6 +64,7 @@ const {
   listAllEvents,
   listJobEvents,
   listItemsForModeling,
+  getJobLabelSummaries,
   listManualReviewCandidates,
   searchJobs,
   searchJobItems,
@@ -349,6 +350,7 @@ function createApp(config = getConfig()) {
       offset: Math.max(0, Number(options.offset) || 0),
     }, config.databaseUrl),
     scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
+    getJobLabelSummaries: () => getJobLabelSummaries(config.databaseUrl),
   }));
 
   app.get('/api/health', async (_req, res) => {

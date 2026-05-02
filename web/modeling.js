@@ -55,7 +55,14 @@
   const liveProbeInspectNotes = document.getElementById('live-probe-inspect-notes');
   const liveProbeInspectMarkup = document.getElementById('live-probe-inspect-markup');
   const liveProbeInspectClose = document.getElementById('live-probe-inspect-close');
+  const labelSummaryShell = document.getElementById('label-summary-shell');
+  const labelSummaryMessage = document.getElementById('label-summary-message');
+  const labelSummaryActions = document.getElementById('label-summary-actions');
+  const labelSummarySelectedTotals = document.getElementById('label-summary-selected-totals');
+  const usePoolForTrainingButton = document.getElementById('use-pool-for-training');
+  const refreshLabelSummaryButton = document.getElementById('refresh-label-summary');
 
+  let currentLabelSummary = null;
   let currentModels = [];
   let currentVariants = [];
   let currentTrainingVariantId = '';
@@ -2323,6 +2330,139 @@
     return '';
   }
 
+  function renderLabelSummary(data) {
+    currentLabelSummary = data;
+    const jobs = data && Array.isArray(data.jobs) ? data.jobs : [];
+    if (!jobs.length) {
+      labelSummaryShell.className = 'table-shell empty';
+      labelSummaryShell.textContent = 'No labeled jobs found yet. Label some candidates and refresh.';
+      if (labelSummaryActions) labelSummaryActions.style.display = 'none';
+      return;
+    }
+    labelSummaryShell.className = 'table-shell';
+    labelSummaryShell.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th style="width:2rem"><input type="checkbox" id="label-summary-check-all" title="Select all"></th>
+            <th>Job ID</th>
+            <th>Created</th>
+            <th title="Human-labeled positive (comment_region)">Positives</th>
+            <th title="Human-labeled negative (not_comment_region)">Negatives</th>
+            <th title="Auto-inferred positive">Inf+</th>
+            <th title="Auto-inferred negative">Inf−</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${jobs.map((job) => {
+            const created = job.created_at ? new Date(job.created_at).toLocaleDateString() : '';
+            return `
+              <tr>
+                <td><input type="checkbox" class="label-pool-check" data-job-id="${escapeHtml(job.job_id)}" value="${escapeHtml(job.job_id)}"></td>
+                <td class="mono" style="font-size:0.82rem">${escapeHtml(job.job_id)}</td>
+                <td>${escapeHtml(created)}</td>
+                <td><span class="review-chip">${escapeHtml(job.positive_candidates)}</span></td>
+                <td><span class="review-chip warn">${escapeHtml(job.negative_candidates)}</span></td>
+                <td class="muted">${escapeHtml(job.inferred_positive)}</td>
+                <td class="muted">${escapeHtml(job.inferred_negative)}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr id="label-pool-selected-row" style="display:none">
+            <td colspan="3" style="font-weight:600">Selected total</td>
+            <td id="label-pool-sel-pos" class="mono"></td>
+            <td id="label-pool-sel-neg" class="mono"></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="3" style="font-weight:600">All jobs total</td>
+            <td class="mono">${escapeHtml(data.totals ? data.totals.positive : 0)}</td>
+            <td class="mono">${escapeHtml(data.totals ? data.totals.negative : 0)}</td>
+            <td class="mono muted">${escapeHtml(data.totals ? data.totals.inferred_positive : 0)}</td>
+            <td class="mono muted">${escapeHtml(data.totals ? data.totals.inferred_negative : 0)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+    if (labelSummaryActions) labelSummaryActions.style.display = 'flex';
+    updateLabelPoolSelection();
+  }
+
+  function updateLabelPoolSelection() {
+    if (!labelSummaryShell || !currentLabelSummary) return;
+    const checkboxes = labelSummaryShell.querySelectorAll('.label-pool-check');
+    const checked = Array.from(checkboxes).filter((cb) => cb.checked);
+    const jobs = currentLabelSummary && Array.isArray(currentLabelSummary.jobs) ? currentLabelSummary.jobs : [];
+    let selPos = 0;
+    let selNeg = 0;
+    checked.forEach((cb) => {
+      const job = jobs.find((j) => j.job_id === cb.value);
+      if (job) {
+        selPos += Number(job.positive_candidates) || 0;
+        selNeg += Number(job.negative_candidates) || 0;
+      }
+    });
+    const selRow = document.getElementById('label-pool-selected-row');
+    const selPosEl = document.getElementById('label-pool-sel-pos');
+    const selNegEl = document.getElementById('label-pool-sel-neg');
+    if (selRow) selRow.style.display = checked.length ? '' : 'none';
+    if (selPosEl) selPosEl.textContent = String(selPos);
+    if (selNegEl) selNegEl.textContent = String(selNeg);
+    if (labelSummarySelectedTotals) {
+      labelSummarySelectedTotals.textContent = checked.length
+        ? `${checked.length} job${checked.length > 1 ? 's' : ''} selected — ${selPos} positives, ${selNeg} negatives`
+        : '';
+    }
+    if (usePoolForTrainingButton) {
+      usePoolForTrainingButton.disabled = checked.length === 0;
+    }
+  }
+
+  async function fetchLabelSummary() {
+    if (!labelSummaryShell) return;
+    try {
+      const data = await fetchJson('/api/modeling/job-label-summary');
+      renderLabelSummary(data);
+    } catch (err) {
+      if (labelSummaryMessage) setMessage(labelSummaryMessage, err.message || String(err), true);
+    }
+  }
+
+  if (labelSummaryShell) {
+    labelSummaryShell.addEventListener('change', (event) => {
+      const checkAll = event.target.closest('#label-summary-check-all');
+      if (checkAll) {
+        const checkboxes = labelSummaryShell.querySelectorAll('.label-pool-check');
+        checkboxes.forEach((cb) => { cb.checked = checkAll.checked; });
+      }
+      updateLabelPoolSelection();
+    });
+  }
+
+  if (usePoolForTrainingButton) {
+    usePoolForTrainingButton.addEventListener('click', () => {
+      if (!labelSummaryShell) return;
+      const checked = Array.from(labelSummaryShell.querySelectorAll('.label-pool-check:checked'));
+      if (!checked.length) return;
+      const ids = checked.map((cb) => cb.value).join(', ');
+      if (trainJobIds) trainJobIds.value = ids;
+      trainJobIds.dispatchEvent(new Event('input'));
+      trainJobIds.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
+  if (refreshLabelSummaryButton) {
+    refreshLabelSummaryButton.addEventListener('click', () => {
+      if (labelSummaryMessage) setMessage(labelSummaryMessage, '', false);
+      fetchLabelSummary().catch((err) => {
+        if (labelSummaryMessage) setMessage(labelSummaryMessage, err.message || String(err), true);
+      });
+    });
+  }
+
   async function refreshOverview() {
     const overview = await fetchOverviewSnapshot();
     renderOverview(overview);
@@ -2341,6 +2481,7 @@
     renderModelList(overview.models || []);
     renderRecentJobs(recentJobs.jobs || []);
     syncOverviewPolling();
+    fetchLabelSummary().catch(() => {});
   }
 
   async function trainVariant(variantId) {
