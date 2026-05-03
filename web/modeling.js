@@ -55,6 +55,14 @@
   const liveProbeInspectNotes = document.getElementById('live-probe-inspect-notes');
   const liveProbeInspectMarkup = document.getElementById('live-probe-inspect-markup');
   const liveProbeInspectClose = document.getElementById('live-probe-inspect-close');
+  const archetypeModelId = document.getElementById('archetype-model-id');
+  const archetypeJobIds = document.getElementById('archetype-job-ids');
+  const archetypeTopN = document.getElementById('archetype-top-n');
+  const archetypeAnalyzeButton = document.getElementById('archetype-analyze');
+  const archetypeMessage = document.getElementById('archetype-message');
+  const archetypeProfile = document.getElementById('archetype-profile');
+  const archetypeSmoteNote = document.getElementById('archetype-smote-note');
+  const archetypeShell = document.getElementById('archetype-shell');
   const labelSummaryShell = document.getElementById('label-summary-shell');
   const labelSummaryMessage = document.getElementById('label-summary-message');
   const labelSummaryActions = document.getElementById('label-summary-actions');
@@ -1868,6 +1876,7 @@
 
   function renderModelList(models) {
     repopulateModelSelects(models);
+    syncArchetypeModelSelector(models || []);
     if (!models || !models.length) {
       modelList.className = 'table-shell empty';
       modelList.textContent = 'No trained models saved yet.';
@@ -2460,6 +2469,163 @@
       fetchLabelSummary().catch((err) => {
         if (labelSummaryMessage) setMessage(labelSummaryMessage, err.message || String(err), true);
       });
+    });
+  }
+
+  function syncArchetypeModelSelector(models) {
+    if (!archetypeModelId) return;
+    const current = archetypeModelId.value;
+    archetypeModelId.innerHTML = models.length
+      ? models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.id)}</option>`).join('')
+      : '<option value="">No trained models</option>';
+    if (current && models.find((m) => m.id === current)) archetypeModelId.value = current;
+  }
+
+  function renderArchetype(data) {
+    if (!data) {
+      archetypeShell.className = 'table-shell empty';
+      archetypeShell.textContent = 'Select a model and click Analyze to explore the comment archetype.';
+      if (archetypeProfile) { archetypeProfile.style.display = 'none'; archetypeProfile.textContent = ''; }
+      if (archetypeSmoteNote) { archetypeSmoteNote.style.display = 'none'; archetypeSmoteNote.textContent = ''; }
+      return;
+    }
+
+    const stats = Array.isArray(data.class_stats) ? data.class_stats : [];
+    const counts = data.counts || {};
+    const topN = archetypeTopN ? (Number(archetypeTopN.value) || 0) : 25;
+
+    // Sort by absolute contribution to positive class descending
+    const sorted = stats.slice().sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+    const visible = topN > 0 ? sorted.slice(0, topN) : sorted;
+    const maxAbsContrib = visible.reduce((m, s) => Math.max(m, Math.abs(s.contribution)), 0) || 1;
+
+    // --- Archetype profile narrative ---
+    const topPos = sorted.filter((s) => s.contribution > 0).slice(0, 8);
+    const topNeg = sorted.filter((s) => s.contribution < 0).slice(0, 4);
+
+    const booleanSignals = topPos.filter((s) => s.type === 'boolean' && s.mean_positive > 0.3)
+      .map((s) => `<span class="feature-chip good"><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(Math.round(s.mean_positive * 100))}% of positives</span></span>`);
+    const numericSignals = topPos.filter((s) => s.type === 'number')
+      .map((s) => `<span class="feature-chip good"><strong>${escapeHtml(s.title)}</strong><span>avg ${escapeHtml(formatMetric(s.mean_positive))} (neg: ${escapeHtml(formatMetric(s.mean_negative))})</span></span>`);
+    const catSignals = topPos.filter((s) => s.type === 'categorical' && s.mean_positive > 0.2)
+      .map((s) => `<span class="feature-chip good"><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(Math.round(s.mean_positive * 100))}%</span></span>`);
+    const negSignals = topNeg.map((s) => `<span class="feature-chip muted"><strong>${escapeHtml(s.title)}</strong><span>pushes negative</span></span>`);
+
+    archetypeProfile.style.display = '';
+    archetypeProfile.className = 'summary';
+    archetypeProfile.innerHTML = `
+      <div style="margin-bottom:10px">
+        <strong>${escapeHtml(data.variant_title || data.variant_id || '')} — ${escapeHtml(data.algorithm || '')}</strong>
+        &nbsp;·&nbsp; ${escapeHtml(counts.positive)} real positives &nbsp;·&nbsp; ${escapeHtml(counts.negative)} real negatives &nbsp;·&nbsp; ${escapeHtml(counts.synthetic)} SMOTE synthetics
+      </div>
+      <div style="margin-bottom:6px"><strong>Features that push toward comment_region:</strong></div>
+      <div class="feature-chip-list" style="margin-bottom:10px">${(booleanSignals.concat(numericSignals, catSignals)).join('') || '<span class="candidate-copy muted">None found</span>'}</div>
+      <div style="margin-bottom:6px"><strong>Features that push away from comment_region:</strong></div>
+      <div class="feature-chip-list">${negSignals.join('') || '<span class="candidate-copy muted">None found</span>'}</div>
+    `;
+
+    // --- SMOTE note ---
+    if (archetypeSmoteNote && data.smote_summary) {
+      const sm = data.smote_summary;
+      const synCount = counts.synthetic || 0;
+      // Find top features where synthetic closely matches real positive (delta < 10%)
+      const faithfulFeatures = stats.filter((s) => Math.abs(s.mean_synthetic - s.mean_positive) < 0.05 && Math.abs(s.contribution) > 0.01).length;
+      archetypeSmoteNote.style.display = '';
+      archetypeSmoteNote.className = 'summary';
+      archetypeSmoteNote.innerHTML = `
+        <strong>SMOTE Validation</strong>
+        &nbsp;·&nbsp; ${escapeHtml(synCount)} synthetic samples generated
+        &nbsp;·&nbsp; ${escapeHtml(faithfulFeatures)} features where synthetic mean is within 5% of real positive mean
+        <div class="candidate-copy muted" style="margin-top:6px">
+          When synthetic and real means align closely, SMOTE is interpolating in a region of feature space that genuinely represents comment structure.
+          Large divergences indicate the synthesizer is extrapolating into uncharted territory — treat those features with caution.
+        </div>
+      `;
+    }
+
+    // --- Feature table ---
+    archetypeShell.className = 'table-shell';
+    archetypeShell.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Family</th>
+            <th title="Logistic regression coefficient">Coeff</th>
+            <th title="Mean value across real positive (comment_region) candidates">Real Positive</th>
+            <th title="Mean value across real negative (not_comment_region) candidates">Real Negative</th>
+            <th title="Mean value across SMOTE-synthesized positive candidates">Synthetic Pos</th>
+            <th title="Mean positive minus mean negative — higher means more discriminating">Δ</th>
+            <th title="Contribution = mean_positive × coefficient — net push toward comment_region per typical positive">Contribution</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visible.map((s) => {
+            const contrib = s.contribution;
+            const pct = Math.round((Math.abs(contrib) / maxAbsContrib) * 100);
+            const isPositive = contrib >= 0;
+            const deltaSign = s.delta > 0.01 ? '+' : (s.delta < -0.01 ? '' : '≈');
+            const synDivergence = Math.abs(s.mean_synthetic - s.mean_positive);
+            const synClass = synDivergence > 0.15 ? 'warn' : (synDivergence > 0.05 ? '' : 'good');
+            const fmt = (v) => escapeHtml(String(v !== undefined ? Number(v).toFixed(3) : '—'));
+            return `
+              <tr>
+                <td style="font-size:0.82rem">${escapeHtml(s.title)}</td>
+                <td class="muted" style="font-size:0.78rem">${escapeHtml(s.family || '')}</td>
+                <td class="mono" style="font-size:0.82rem;color:${s.coefficient >= 0 ? 'var(--accent)' : 'var(--muted)'}">${fmt(s.coefficient)}</td>
+                <td class="mono">${fmt(s.mean_positive)}</td>
+                <td class="mono">${fmt(s.mean_negative)}</td>
+                <td class="mono"><span class="review-chip ${synClass}" style="font-size:0.78rem">${fmt(s.mean_synthetic)}</span></td>
+                <td class="mono" style="color:${s.delta > 0.01 ? 'var(--accent)' : (s.delta < -0.01 ? 'var(--muted)' : '')}">${deltaSign}${fmt(s.delta)}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div style="flex:0 0 80px;height:8px;background:var(--panel-bg);border-radius:4px;overflow:hidden">
+                      <div style="height:100%;width:${pct}%;background:${isPositive ? 'var(--accent)' : 'var(--muted)'};border-radius:4px"></div>
+                    </div>
+                    <span class="mono" style="font-size:0.78rem;color:${isPositive ? 'var(--accent)' : 'var(--muted)'}">${isPositive ? '+' : ''}${fmt(contrib)}</span>
+                  </div>
+                </td>
+                <td></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (archetypeAnalyzeButton) {
+    archetypeAnalyzeButton.addEventListener('click', () => {
+      if (!archetypeModelId || !archetypeModelId.value) {
+        setMessage(archetypeMessage, 'Select a trained model first.', true);
+        return;
+      }
+      runElementAction(archetypeAnalyzeButton, async () => {
+        setMessage(archetypeMessage, 'Analyzing…', false);
+        const result = await fetchJson('/api/modeling/comment-archetype', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modelId: archetypeModelId.value,
+            jobIds: archetypeJobIds ? archetypeJobIds.value.trim() : '',
+          }),
+        });
+        setMessage(archetypeMessage, '', false);
+        if (archetypeShell) archetypeShell._archetypeData = result;
+        renderArchetype(result);
+      }).catch((err) => {
+        setMessage(archetypeMessage, err.message || String(err), true);
+      });
+    });
+  }
+
+  if (archetypeTopN) {
+    archetypeTopN.addEventListener('change', () => {
+      // Re-render with same data if available — store last result on the shell element
+      if (archetypeShell && archetypeShell._archetypeData) {
+        renderArchetype(archetypeShell._archetypeData);
+      }
     });
   }
 

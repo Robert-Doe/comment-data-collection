@@ -69,6 +69,37 @@
         </section>
 
         <section class="panel">
+          <div class="panel-header"><h2>Comment Archetype Explorer</h2></div>
+          <p class="lede manual-lede">Select a trained model and a job pool, then click <strong>Analyze</strong> to see what features actually define a comment region — real positive vs real negative means side by side, plus how SMOTE synthesizes positives and whether those synthetics are faithful to the real data.</p>
+          <div class="config-grid">
+            <label class="field">
+              <span>Model</span>
+              <select id="archetype-model-id"></select>
+            </label>
+            <label class="field">
+              <span>Job IDs Filter</span>
+              <input id="archetype-job-ids" type="text" placeholder="Optional: job-1, job-2">
+            </label>
+            <label class="field">
+              <span>Show top N features</span>
+              <select id="archetype-top-n">
+                <option value="15">Top 15</option>
+                <option value="25" selected>Top 25</option>
+                <option value="50">Top 50</option>
+                <option value="0">All features</option>
+              </select>
+            </label>
+          </div>
+          <div class="panel-actions">
+            <button id="archetype-analyze" class="primary compact" type="button">Analyze</button>
+          </div>
+          <p id="archetype-message" class="message"></p>
+          <div id="archetype-profile" class="summary empty" style="display:none"></div>
+          <div id="archetype-smote-note" class="summary empty" style="display:none;margin-top:12px"></div>
+          <div id="archetype-shell" class="table-shell empty" style="margin-top:16px">Select a model and click Analyze to explore the comment archetype.</div>
+        </section>
+
+        <section class="panel">
           <div class="panel-header"><h2>Train Variants</h2></div>
           <p class="lede manual-lede">Training uses human-reviewed candidate rows only. Leave the job filter blank to use all labeled candidates currently stored, or limit training to specific jobs by entering comma-separated job IDs.</p>
           <div class="config-grid">

@@ -25,6 +25,7 @@ const {
   scoreLiveUrlProbe,
   exportDataset,
   deleteModelArtifact,
+  computeCommentArchetype,
 } = require('./service');
 const { parseJobIdList } = require('./utils');
 const { normalizeInputUrl } = require('../../shared/csv');
@@ -121,6 +122,19 @@ function createModelingRouter(dependencies) {
         return acc;
       }, { positive: 0, negative: 0, inferred_positive: 0, inferred_negative: 0 });
       res.json({ jobs, totals });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/comment-archetype', async (req, res, next) => {
+    try {
+      const { modelId, jobIds: rawJobIds } = req.body || {};
+      if (!modelId) return res.status(400).json({ error: 'modelId is required' });
+      const jobIds = normalizeJobIds(rawJobIds || '');
+      const items = await loadModelingItems(jobIds);
+      const result = await computeCommentArchetype(dependencies.artifactRoot, String(modelId), items);
+      res.json(result);
     } catch (error) {
       next(error);
     }

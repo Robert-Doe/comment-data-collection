@@ -1965,6 +1965,93 @@ function exportDataset(items, variantId, options = {}) {
   };
 }
 
+async function computeCommentArchetype(artifactRoot, artifactId, items) {
+  const artifact = await loadModelArtifact(artifactRoot, artifactId);
+  if (!artifact) throw new Error(`Model artifact not found: ${artifactId}`);
+
+  const variant = getModelVariant(artifact.variant_id);
+  const dataset = extractCandidateDataset(items, { variant });
+  const { rows, featureCatalog } = dataset;
+
+  const labeledRows = rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  const positiveRows = labeledRows.filter((row) => row.binary_label === 1);
+  const negativeRows = labeledRows.filter((row) => row.binary_label === 0);
+  const vectorizer = artifact.vectorizer || {};
+  const weights = (artifact.model && Array.isArray(artifact.model.weights)) ? artifact.model.weights : [];
+  const descriptors = Array.isArray(vectorizer.descriptors) ? vectorizer.descriptors : [];
+
+  function computeRawMeans(rowSet) {
+    if (!rowSet.length) return {};
+    const sums = {};
+    descriptors.forEach((d) => { sums[d.index] = 0; });
+    rowSet.forEach((row) => {
+      const fv = (row && row.feature_values) ? row.feature_values : {};
+      descriptors.forEach((d) => {
+        if (d.type === 'number') {
+          sums[d.index] += Number(fv[d.feature_key]) || 0;
+        } else if (d.type === 'boolean') {
+          sums[d.index] += fv[d.feature_key] ? 1 : 0;
+        } else if (d.type === 'categorical') {
+          const val = String(fv[d.feature_key] || '').trim() || '__missing__';
+          sums[d.index] += val === d.category ? 1 : 0;
+        }
+      });
+    });
+    const means = {};
+    descriptors.forEach((d) => { means[d.index] = sums[d.index] / rowSet.length; });
+    return means;
+  }
+
+  let syntheticRows = [];
+  let smoteSummary = null;
+  try {
+    const smoteResult = prepareImbalanceTrainingRows(labeledRows, featureCatalog, vectorizer, 'smote');
+    syntheticRows = smoteResult.rows.filter((row) => row.analysis_source === 'synthetic_smote');
+    smoteSummary = smoteResult.summary || null;
+  } catch (_) { /* too few positives for SMOTE — silently skip */ }
+
+  const posMeans = computeRawMeans(positiveRows);
+  const negMeans = computeRawMeans(negativeRows);
+  const synMeans = computeRawMeans(syntheticRows);
+
+  const classStats = descriptors.map((d) => {
+    const meanPos = posMeans[d.index] !== undefined ? posMeans[d.index] : 0;
+    const meanNeg = negMeans[d.index] !== undefined ? negMeans[d.index] : 0;
+    const meanSyn = synMeans[d.index] !== undefined ? synMeans[d.index] : 0;
+    const coeff = weights[d.index] !== undefined ? weights[d.index] : 0;
+    return {
+      descriptor_index: d.index,
+      feature_key: d.feature_key,
+      output_key: d.output_key,
+      title: d.title,
+      family: d.family,
+      type: d.type,
+      category: d.category || null,
+      coefficient: roundNumber(coeff, 4),
+      mean_positive: roundNumber(meanPos, 4),
+      mean_negative: roundNumber(meanNeg, 4),
+      mean_synthetic: roundNumber(meanSyn, 4),
+      delta: roundNumber(meanPos - meanNeg, 4),
+      contribution: roundNumber(meanPos * coeff, 4),
+    };
+  });
+
+  return {
+    artifact_id: artifact.id,
+    variant_id: artifact.variant_id,
+    variant_title: artifact.variant_title,
+    algorithm: artifact.algorithm,
+    counts: {
+      positive: positiveRows.length,
+      negative: negativeRows.length,
+      synthetic: syntheticRows.length,
+      labeled: labeledRows.length,
+    },
+    class_stats: classStats,
+    smote_summary: smoteSummary,
+  };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -1981,4 +2068,5 @@ module.exports = {
   scoreLiveUrlProbe,
   exportDataset,
   deleteModelArtifact,
+  computeCommentArchetype,
 };
