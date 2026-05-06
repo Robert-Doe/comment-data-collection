@@ -966,7 +966,7 @@
         PseudoDOM.setUGCConfidenceById(candidate.id, score);
         if (domNode) PseudoDOM.setUGCConfidence(domNode, score);
 
-        if (domNode && score >= UGC_HIGH_THRESHOLD) {
+        if (domNode && score >= UGC_LOW_THRESHOLD) {
           _scoredForHighlight.push({ domNode, score });
         }
 
