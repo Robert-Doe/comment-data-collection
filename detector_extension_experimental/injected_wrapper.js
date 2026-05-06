@@ -825,9 +825,13 @@
     function hasAuthorSignal(el) {
       if (!el) return false;
       const blob = getAttributeBlob(el);
-      return AUTHOR_MARKERS.test(blob) ||
-             shadowAwareQuerySelector(el, '[itemprop="author"]') !== null ||
-             shadowAwareQuerySelector(el, '[rel="author"]') !== null;
+      if (AUTHOR_MARKERS.test(blob)) return true;
+      if (shadowAwareQuerySelector(el, '[itemprop="author"],[rel="author"]') !== null) return true;
+      // BEM / utility class patterns — catches commentItem__username, user-name, handle, etc.
+      // without matching the unit element's own class (which is checked via blob above).
+      return shadowAwareQuerySelector(
+        el, '[class*="username"],[class*="author"],[class*="commenter"],[class*="handle"]'
+      ) !== null;
     }
 
     function hasReplyAction(el) {
@@ -838,11 +842,16 @@
 
     function hasAvatarSignal(el) {
       if (!el) return false;
+      // <img> with avatar/profile in its attributes (most sites)
       const imgs = shadowAwareQuerySelectorAll(el, 'img');
-      return imgs.some(img => {
-        const blob = getAttributeBlob(img);
-        return /avatar|profile|user.?photo|headshot/i.test(blob);
-      });
+      if (imgs.some(img => /avatar|profile|user.?photo|headshot/i.test(getAttributeBlob(img)))) {
+        return true;
+      }
+      // CSS background-image avatars (e.g. SoundCloud uses <span style="background-image:…">
+      // with aria-label="Username's avatar" — no <img> tag at all).
+      return shadowAwareQuerySelector(
+        el, '[aria-label*="avatar"],[class*="avatar"],[class*="profile-pic"]'
+      ) !== null;
     }
 
     function hasNearbyComposer(el) {
