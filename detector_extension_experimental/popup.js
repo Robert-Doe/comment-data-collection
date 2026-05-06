@@ -72,6 +72,9 @@ async function loadOverview(tab) {
 function getPageStatsFromPage() {
   const dbg = window.__PSEUDODOM_DEBUG;
   if (!dbg) return null;
+  // classify() has no real awaits — calling it updates ugcRegionMap synchronously
+  // before we read the snapshot, fixing the race where the map was empty on popup open.
+  dbg.reclassify();
   const snap = dbg.getPseudoDOM();
   const candidates = dbg.getCandidates();
   const ugcRegions = Object.values(snap.ugcRegionMap || {}).filter(s => s >= 0.35).length;
@@ -129,36 +132,59 @@ async function loadCandidates(tab) {
   if (candidates.length === 0) return; // leave default empty state
 
   list.innerHTML = '';
-  candidates
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
-    .forEach((c, i) => {
-      const card = document.createElement('div');
-      const scoreClass = c.score >= 0.65 ? 'high' : c.score >= 0.35 ? 'med' : 'low';
-      const ugcClass   = c.score >= 0.65 ? 'ugc-high' : c.score >= 0.35 ? 'ugc-med' : 'ugc-low';
-      card.className   = `candidate-card ${ugcClass}`;
-      card.innerHTML   = `
-        <div class="candidate-header">
-          <span class="candidate-tag">&lt;${c.tag || 'div'}&gt;</span>
-          <span class="candidate-meta">${c.dominantFamilySize} units · ${Math.round(c.homogeneity * 100)}% uniform</span>
-          <span class="candidate-score ${scoreClass}">${Math.round(c.score * 100)}%</span>
-        </div>
-        <div class="candidate-meta">${c.dominantTemplate || '—'}</div>
-      `;
-      list.appendChild(card);
+  const sorted = candidates.sort((a, b) => b.score - a.score).slice(0, 10);
+  sorted.forEach((c, i) => {
+    const card = document.createElement('div');
+    const scoreClass = c.score >= 0.65 ? 'high' : c.score >= 0.35 ? 'med' : 'low';
+    const ugcClass   = c.score >= 0.65 ? 'ugc-high' : c.score >= 0.35 ? 'ugc-med' : 'ugc-low';
+    const topBadge   = i === 0 ? ' <span class="pill" style="font-size:10px;padding:1px 5px">top pick</span>' : '';
+    card.className   = `candidate-card ${ugcClass}`;
+    card.style.cursor = 'pointer';
+    card.title = 'Click to highlight this region on the page';
+    const sourceLabel = c.modelLoaded ? 'model' : 'heuristic';
+    card.innerHTML = `
+      <div class="candidate-header">
+        <span class="candidate-tag">&lt;${c.tag || 'div'}&gt;${topBadge}</span>
+        <span class="candidate-meta">${c.dominantFamilySize} units · ${Math.round(c.homogeneity * 100)}% uniform · ${sourceLabel}</span>
+        <span class="candidate-score ${scoreClass}">${Math.round(c.score * 100)}%</span>
+      </div>
+      <div class="candidate-meta">${c.dominantTemplate || '—'}</div>
+    `;
+    card.addEventListener('click', () => highlightCandidateOnPage(tab, c.id));
+    list.appendChild(card);
+  });
+}
+
+async function highlightCandidateOnPage(tab, candidateId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world:  'MAIN',
+      func:   (id) => window.postMessage(
+        { __pseudodom: true, __push: true, type: 'HIGHLIGHT_CANDIDATE', payload: { id } },
+        '*'
+      ),
+      args: [candidateId],
     });
+  } catch (_) {}
 }
 
 function getCandidatesFromPage() {
   const dbg = window.__PSEUDODOM_DEBUG;
   if (!dbg) return [];
+  // getCandidateRoots() returns structural metrics only — scores live in ugcRegionMap.
+  // reclassify() is synchronous so the map is fresh when we read it below.
+  dbg.reclassify();
+  const snap = dbg.getPseudoDOM();
+  const modelLoaded = Boolean(dbg.runtimeModel?.()?.model?.weights?.length);
   return (dbg.getCandidates() || []).map(c => ({
     id:                c.id,
     tag:               c.node?.tag,
-    score:             c.score || 0,
+    score:             snap.ugcRegionMap?.[c.id] ?? 0,
     dominantFamilySize: c.dominantFamilySize,
     homogeneity:       c.homogeneity,
     dominantTemplate:  c.dominantTemplate,
+    modelLoaded,
   }));
 }
 

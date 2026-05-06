@@ -140,6 +140,11 @@
     // Populated by the heuristic classifier; replaced by ML model later.
     const ugcRegionMap = new Map();
 
+    // Mutation activity counter: nodeId → count of child insertions.
+    // Incremented every time a node receives a child via record().
+    // Used by getCandidateRoots to boost dynamically-populated containers.
+    const _mutationActivity = new Map();
+
     /**
      * Ensure a PseudoNode exists for a real DOM Node.
      * Creates it if it doesn't exist yet.
@@ -205,6 +210,10 @@
           const targetNode = nodes.get(targetId);
           targetNode.children.push(...subtreeIds);
         }
+        // Track activity — string mutations often inject batches of comment units
+        if (targetId && subtreeIds.length > 0) {
+          _mutationActivity.set(targetId, (_mutationActivity.get(targetId) || 0) + subtreeIds.length);
+        }
       } else if (insertedNodeOrString && typeof insertedNodeOrString === 'object') {
         // Node-based insertion
         insertedId = ensureNode(insertedNodeOrString, type, targetDomNode);
@@ -215,6 +224,10 @@
           }
           const insertedNode = nodes.get(insertedId);
           if (insertedNode) insertedNode.parentId = targetId;
+        }
+        // Track activity — each child appended to a parent is a signal
+        if (targetId) {
+          _mutationActivity.set(targetId, (_mutationActivity.get(targetId) || 0) + 1);
         }
       }
 
@@ -371,35 +384,74 @@
     }
 
     /**
-     * Get all candidate subgraph roots: element nodes with >= 3 repeated
-     * sibling children (by wildcard XPath template). These are the
-     * candidates the UGC classifier will score.
+     * Structural signature of a live DOM element: tag + sorted child tags.
+     * Mirrors the server's structuralSignature() in commentFeatures.js.
+     * Two elements with the same signature look structurally identical to the model.
+     */
+    function _structSig(el) {
+      const tag = (el.tagName || 'unknown').toLowerCase();
+      const childTags = Array.from(el.children)
+        .map(c => (c.tagName || '?').toLowerCase())
+        .sort();
+      return `${tag}[${childTags.join(',')}]`;
+    }
+
+    /**
+     * Walk the LIVE DOM to find candidate UGC container roots.
+     *
+     * We scan the live DOM (not the PseudoDOM node map) because for
+     * html-string mutations (innerHTML, insertAdjacentHTML) the PseudoDOM
+     * builds its tree from a sandboxed DOMParser — those node objects are
+     * different from the real DOM nodes and can't be used for live scoring.
+     * By the time classify() runs (after debounce), every mutation has already
+     * been applied to the live DOM, so the live DOM IS the "future DOM" that
+     * the wrappers previewed.
+     *
+     * Grouping by structural signature (tag + sorted child tags) mirrors the
+     * server's dominantChildGroup() and catches template-based comment lists
+     * that tag-name grouping misses.
      */
     function getCandidateRoots() {
       const candidates = [];
-      for (const [id, node] of nodes) {
-        if (node.children.length < 3) continue;
+      const seen = new Set();
+      try {
+        const walker = document.createTreeWalker(
+          document.documentElement,
+          NodeFilter.SHOW_ELEMENT
+        );
+        let el;
+        while ((el = walker.nextNode())) {
+          if (seen.has(el) || el.children.length < 3) continue;
 
-        // Group children by wildcard XPath template
-        const groups = new Map();
-        for (const childId of node.children) {
-          const tmpl = wildcardXPath(childId);
-          if (!groups.has(tmpl)) groups.set(tmpl, []);
-          groups.get(tmpl).push(childId);
-        }
+          // Group direct children by structural signature
+          const sigGroups = new Map();
+          for (const child of el.children) {
+            const sig = _structSig(child);
+            if (!sigGroups.has(sig)) sigGroups.set(sig, []);
+            sigGroups.get(sig).push(child);
+          }
+          const dominant = [...sigGroups.values()].sort((a, b) => b.length - a.length)[0];
+          if (!dominant || dominant.length < 3) continue;
 
-        const dominant = [...groups.values()].sort((a, b) => b.length - a.length)[0];
-        if (dominant && dominant.length >= 3) {
+          seen.add(el);
+
+          // Give this live element a stable PseudoDOM ID (WeakMap, so consistent
+          // across repeated calls) and ensure liveNodeById is current.
+          const id = nodeId(el);
+          if (!liveNodeById.has(id)) liveNodeById.set(id, el);
+          if (!nodes.has(id)) ensureNode(el, 'candidateScan', el.parentElement);
+
           candidates.push({
             id,
-            node,
+            node:               nodes.get(id),
             dominantFamilySize: dominant.length,
-            dominantTemplate:   wildcardXPath(dominant[0]),
-            totalChildren:      node.children.length,
-            homogeneity:        dominant.length / node.children.length,
+            dominantTemplate:   _structSig(dominant[0]) + '[*]',
+            totalChildren:      el.children.length,
+            homogeneity:        dominant.length / el.children.length,
+            mutationActivity:   _mutationActivity.get(id) || 0,
           });
         }
-      }
+      } catch (_) {}
       return candidates;
     }
 
@@ -459,6 +511,7 @@
 
     return {
       nodeId,
+      ensureNode,
       record,
       seedFromLiveDOM,
       registerShadowRoot,
@@ -474,8 +527,61 @@
       getLiveNode,
       nodes,
       mutations,
+      mutationActivity: _mutationActivity,
     };
   })();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // § 1.5 — Candidate Highlight
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  let _highlightMode = false;
+  const _highlightedEls = new Set();
+
+  const HIGHLIGHT_STYLE = '7px solid #e55353';
+  const HIGHLIGHT_OFFSET = '2px';
+
+  function _applyHighlightToAll(scored) {
+    _clearAllHighlights();
+    for (const { domNode } of scored) {
+      if (!domNode || domNode.nodeType !== Node.ELEMENT_NODE) continue;
+      domNode.style.outline = HIGHLIGHT_STYLE;
+      domNode.style.outlineOffset = HIGHLIGHT_OFFSET;
+      _highlightedEls.add(domNode);
+    }
+  }
+
+  function _clearAllHighlights() {
+    for (const el of _highlightedEls) {
+      try { el.style.outline = ''; el.style.outlineOffset = ''; } catch (_) {}
+    }
+    _highlightedEls.clear();
+  }
+
+  // Single-element focus: called when a candidate card is clicked in the popup.
+  // Clears the auto-highlight (if any), then draws the same 7px red border on
+  // the explicitly chosen element.
+  function _applyHighlight(domNode) {
+    _clearAllHighlights();
+    if (!domNode || domNode.nodeType !== Node.ELEMENT_NODE) return;
+    domNode.style.outline = HIGHLIGHT_STYLE;
+    domNode.style.outlineOffset = HIGHLIGHT_OFFSET;
+    _highlightedEls.add(domNode);
+  }
+
+  function _handleCandidateJson(selectors) {
+    if (!Array.isArray(selectors) || !selectors.length) return;
+    let bestEl = null, bestScore = -1;
+    for (const selector of selectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (!el) continue;
+        const score = HeuristicClassifier.scoreElement(el);
+        if (score > bestScore) { bestScore = score; bestEl = el; }
+      } catch (_) {}
+    }
+    if (_highlightMode && bestEl) _applyHighlight(bestEl);
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // § 2 — Heuristic UGC Classifier (stub for ML model)
@@ -504,18 +610,13 @@
    */
   const HeuristicClassifier = (function () {
 
-    // Keywords for semantic signal detection
-    // From brainstorm/004_ml_refinements_from_reference_detectors.md
-    const KW_HIGH = [
-      'comment','comments','commenter','commentlist','comment-list',
-      'commentthread','comment-thread','reply','replies','discussion',
-      'thread','forum','review','reviews','answer','answers','feedback',
-    ];
-    const KW_MED = [
-      'post','message','messages','response','conversation',
-      'community','topic','reaction','remark','note',
-    ];
-    const KW_LOW = ['item','entry','block','card','unit','feed','list'];
+    // Keyword patterns — NFKD-normalized regex with word boundaries + international keywords.
+    // Mirrors commentFeatures.js on the server so heuristic scores are calibrated the same way.
+    const _KW_HIGH_RE = /\b(comment|comments|commenter|reply|replies|discussion|discussions|review|reviews|feedback|thread|threads|answer|answers|question|questions|forum|forums|qa|komentarz|komentarze|komentarzy|odpowiedz|odpowiedzi|comentario|comentarios|commentaire|commentaires|kommentar|kommentare|antwort|antworten|resposta|respostas|respuesta|respuestas|reponse|reponses)\b|\bq\s*(?:&|\/)\s*a\b/;
+    const _KW_MED_RE  = /\b(post|posts|message|messages|response|responses|conversation|conversations|community|communities)\b/;
+    const _KW_LOW_RE  = /\b(item|card|entry|block|unit|feed|list)\b/;
+    const _COMBINING  = /[̀-ͯ]/g;
+    function _kwNorm(v) { return String(v||'').normalize('NFKD').replace(_COMBINING,'').toLowerCase(); }
 
     const TS_RELATIVE = /\b(just now|today|yesterday|\d+\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks|mo|month|months|y|yr|year|years)\s*ago|(\d+)(s|m|h|d|w|mo|y)\b)/i;
     const TS_ABSOLUTE = /\b(\d{4}[-\/]\d{2}[-\/]\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s*\d{4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4})\b/i;
@@ -548,7 +649,9 @@
       else if (homogeneity >= 0.5) score += 0.05;
 
       // ── Semantic keyword signals ───────────────────────────────────────────
-      const attrBlob = getAttributeBlob(domNode);
+      // Include the parent element's tag/attributes so a container like
+      // #contents under ytd-comments still matches "comments" via its parent.
+      const attrBlob = getAttributeBlob(domNode, true);
       const kwScore = keywordScore(attrBlob);
       score += kwScore;
 
@@ -580,6 +683,13 @@
         if (hasNearbyComposer(domNode)) score += 0.06;
       }
 
+      // ── Mutation activity bonus (SPA comment injection signal) ────────────
+      // Containers that received many dynamically-added similar children are
+      // very likely to be comment/feed regions being populated by the app.
+      const activity = candidate.mutationActivity || 0;
+      if (activity >= 10) score += 0.10;
+      else if (activity >= 3) score += 0.05;
+
       // ── Negative controls ──────────────────────────────────────────────────
       if (NEGATIVE_COMMERCE.test(attrBlob)) score -= 0.15;
       if (NEGATIVE_NAV.test(attrBlob))      score -= 0.10;
@@ -590,7 +700,7 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    function getAttributeBlob(el) {
+    function getAttributeBlob(el, includeParent = false) {
       if (!el || !el.attributes) return '';
       const parts = [el.tagName || ''];
       for (const attr of el.attributes) {
@@ -600,20 +710,62 @@
       parts.push(el.childNodes.length === 1 && el.firstChild?.nodeType === 3
         ? (el.textContent || '').slice(0, 100)
         : '');
+      // Include parent tag + attributes so a container like #contents under
+      // ytd-comments still matches the "comments" keyword via its parent.
+      if (includeParent && el.parentElement) {
+        parts.push(el.parentElement.tagName || '');
+        for (const attr of (el.parentElement.attributes || [])) {
+          parts.push(attr.name, attr.value);
+        }
+      }
       return parts.join(' ');
     }
 
+    // Query an element and its direct children's shadow roots — one level deep.
+    // Needed for YouTube-style custom elements where light-DOM querySelector
+    // can't reach inside shadow roots.
+    function shadowAwareQuerySelector(el, selector) {
+      const direct = el.querySelector?.(selector);
+      if (direct) return direct;
+      for (const child of (el.children || [])) {
+        try {
+          if (child.shadowRoot) {
+            const found = child.shadowRoot.querySelector?.(selector);
+            if (found) return found;
+          }
+        } catch (_) {}
+      }
+      return null;
+    }
+
+    function shadowAwareTextContent(el) {
+      let text = el.textContent || '';
+      for (const child of (el.children || [])) {
+        try {
+          if (child.shadowRoot) text += ' ' + (child.shadowRoot.textContent || '');
+        } catch (_) {}
+      }
+      return text;
+    }
+
+    function shadowAwareQuerySelectorAll(el, selector) {
+      const results = [];
+      try {
+        results.push(...el.querySelectorAll(selector));
+      } catch (_) {}
+      for (const child of (el.children || [])) {
+        try {
+          if (child.shadowRoot) results.push(...child.shadowRoot.querySelectorAll(selector));
+        } catch (_) {}
+      }
+      return results;
+    }
+
     function keywordScore(blob) {
-      const lower = blob.toLowerCase();
-      for (const kw of KW_HIGH) {
-        if (lower.includes(kw)) return 0.15;
-      }
-      for (const kw of KW_MED) {
-        if (lower.includes(kw)) return 0.08;
-      }
-      for (const kw of KW_LOW) {
-        if (lower.includes(kw)) return 0.03;
-      }
+      const norm = _kwNorm(blob);
+      if (_KW_HIGH_RE.test(norm)) return 0.15;
+      if (_KW_MED_RE.test(norm))  return 0.08;
+      if (_KW_LOW_RE.test(norm))  return 0.03;
       return 0;
     }
 
@@ -635,18 +787,24 @@
       return el?.getAttribute?.('role') === 'comment';
     }
 
+    function _heurSig(el) {
+      const tag = (el.tagName || 'unknown').toLowerCase();
+      const childTags = Array.from(el.children).map(c => (c.tagName||'?').toLowerCase()).sort();
+      return `${tag}[${childTags.join(',')}]`;
+    }
+
     function getRepeatedUnits(el) {
       if (!el || !el.children) return [];
       const children = Array.from(el.children);
       if (children.length < 3) return [];
-      // Group by tag name to find the dominant family
-      const tagGroups = new Map();
+      // Group by structural signature (tag + sorted child tags) — matches server logic.
+      const sigGroups = new Map();
       for (const child of children) {
-        const tag = child.tagName;
-        if (!tagGroups.has(tag)) tagGroups.set(tag, []);
-        tagGroups.get(tag).push(child);
+        const sig = _heurSig(child);
+        if (!sigGroups.has(sig)) sigGroups.set(sig, []);
+        sigGroups.get(sig).push(child);
       }
-      const dominant = [...tagGroups.values()].sort((a, b) => b.length - a.length)[0];
+      const dominant = [...sigGroups.values()].sort((a, b) => b.length - a.length)[0];
       return dominant && dominant.length >= 3 ? dominant : [];
     }
 
@@ -656,11 +814,11 @@
 
     function hasTimeSignal(el) {
       if (!el) return false;
-      const text = el.textContent || '';
+      const text = shadowAwareTextContent(el);
       const attrs = getAttributeBlob(el);
       return TS_RELATIVE.test(text) ||
              TS_ABSOLUTE.test(text) ||
-             el.querySelector?.('time[datetime]') !== null ||
+             shadowAwareQuerySelector(el, 'time[datetime]') !== null ||
              /data-(time|date|timestamp|created|epoch)/i.test(attrs);
     }
 
@@ -668,20 +826,20 @@
       if (!el) return false;
       const blob = getAttributeBlob(el);
       return AUTHOR_MARKERS.test(blob) ||
-             el.querySelector?.('[itemprop="author"]') !== null ||
-             el.querySelector?.('[rel="author"]') !== null;
+             shadowAwareQuerySelector(el, '[itemprop="author"]') !== null ||
+             shadowAwareQuerySelector(el, '[rel="author"]') !== null;
     }
 
     function hasReplyAction(el) {
       if (!el) return false;
-      const buttons = el.querySelectorAll?.('button, [role="button"], a') || [];
-      return [...buttons].some(b => REPLY_ACTIONS.test(b.textContent || b.getAttribute('aria-label') || ''));
+      const buttons = shadowAwareQuerySelectorAll(el, 'button, [role="button"], a');
+      return buttons.some(b => REPLY_ACTIONS.test(b.textContent || b.getAttribute?.('aria-label') || ''));
     }
 
     function hasAvatarSignal(el) {
       if (!el) return false;
-      const imgs = el.querySelectorAll?.('img') || [];
-      return [...imgs].some(img => {
+      const imgs = shadowAwareQuerySelectorAll(el, 'img');
+      return imgs.some(img => {
         const blob = getAttributeBlob(img);
         return /avatar|profile|user.?photo|headshot/i.test(blob);
       });
@@ -700,7 +858,7 @@
         parent,
       ];
       return nearby.some(n =>
-        n.querySelector?.('textarea, [contenteditable="true"]') !== null ||
+        shadowAwareQuerySelector(n, 'textarea, [contenteditable="true"]') !== null ||
         n.tagName === 'TEXTAREA' ||
         n.getAttribute?.('contenteditable') === 'true'
       );
@@ -782,6 +940,12 @@
         snapshot = PseudoDOM.serialize();
       }
 
+      // Only elements scoring above HIGH_THRESHOLD (0.65) are highlight-eligible.
+      // This filters out video/media lists (~0.46) which pass LOW_THRESHOLD but
+      // lack the semantic signals (reply actions, author markers, timestamps) that
+      // push genuine comment sections above 0.65.
+      const _scoredForHighlight = [];
+
       for (const candidate of candidates) {
         const domNode = findDOMNodeById(candidate.id);
         let score = scoreCandidateHeuristic(candidate, domNode);
@@ -790,6 +954,8 @@
           try {
             const runtimeScore = scoreCandidateWithRuntime(candidate, domNode, featureExtractor, snapshot);
             if (Number.isFinite(runtimeScore)) {
+              // Model is the sole source of truth when loaded — use its score directly.
+              // The heuristic stays as the fallback path (useRuntime === false branch).
               score = runtimeScore;
             }
           } catch (error) {
@@ -797,11 +963,12 @@
           }
         }
 
-        // Always record the score against the stable pseudo-ID so isInUGCRegion
-        // ancestor walks can find it even when the live node is unavailable.
         PseudoDOM.setUGCConfidenceById(candidate.id, score);
-        // Also sync via the live DOM node so nodeId(domNode) lookups work.
         if (domNode) PseudoDOM.setUGCConfidence(domNode, score);
+
+        if (domNode && score >= UGC_HIGH_THRESHOLD) {
+          _scoredForHighlight.push({ domNode, score });
+        }
 
         if (score >= UGC_HIGH_THRESHOLD) {
           _sendToBackground('CANDIDATE_FEATURES', {
@@ -815,6 +982,14 @@
             capturedAt:           Date.now(),
           });
         }
+      }
+
+      // Always highlight the top pick — no popup interaction needed.
+      if (_scoredForHighlight.length > 0) {
+        const best = _scoredForHighlight.reduce((a, b) => b.score > a.score ? b : a);
+        _applyHighlightToAll([best]);
+      } else {
+        _clearAllHighlights();
       }
     }
 
@@ -832,8 +1007,129 @@
         : null;
     }
 
-    return { classify };
+    function scoreElement(el) {
+      if (!el) return 0;
+      const fakeCandidate = {
+        dominantFamilySize: el.children ? el.children.length : 0,
+        homogeneity:        0.5,
+        totalChildren:      el.children ? el.children.length : 0,
+      };
+      return scoreCandidateHeuristic(fakeCandidate, el);
+    }
+
+    return {
+      classify,
+      scoreElement,
+      // Exposed for eager in-wrapper promotion (§ 2.5)
+      scoreDirect:   (candidate, domNode) => scoreCandidateHeuristic(candidate, domNode),
+      predictDirect: (featureValues) => predictRuntimeProbability(_runtimeModel, featureValues),
+    };
   })();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // § 2.5 — Eager In-Wrapper Promotion
+  //
+  // Called synchronously AFTER reconciliation on every insertion mutation.
+  // If the target element now has >= 3 structurally-similar children we run
+  // the full feature extraction + model pipeline immediately — no debounce.
+  // A score >= UGC_LOW_THRESHOLD lands in ugcRegionMap before the call
+  // returns, so the NEXT mutation into this element is gated.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Tracks the dominant-group count at which we last ran feature extraction
+  // for each element.  Re-evaluation is triggered whenever the count crosses
+  // a new tier, so confidence rises progressively as repetitions accumulate.
+  const _promotionTierMap = new Map(); // pseudoId → dominant count at last run
+
+  // Tier thresholds that trigger a re-evaluation.
+  // Each crossing brings a richer feature vector: more coverage, higher
+  // dominantFamilySize, stronger min_k flags — giving the model more signal.
+  const _PROMOTION_TIERS = [2, 3, 5, 8, 15];
+
+  function _promotionTierOf(count) {
+    let tier = 0;
+    for (const t of _PROMOTION_TIERS) {
+      if (count >= t) tier = t;
+    }
+    // Above the last explicit tier, re-evaluate every 10 additional units.
+    if (count > _PROMOTION_TIERS[_PROMOTION_TIERS.length - 1]) {
+      tier = _PROMOTION_TIERS[_PROMOTION_TIERS.length - 1] +
+        Math.floor((count - _PROMOTION_TIERS[_PROMOTION_TIERS.length - 1]) / 10) * 10;
+    }
+    return tier;
+  }
+
+  function _tryEagerPromotion(domNode) {
+    try {
+      if (!domNode || domNode.nodeType !== Node.ELEMENT_NODE) return;
+      if (domNode.children.length < 2) return;
+
+      // Compute structural groups: require >= 2 children sharing a signature.
+      const sigGroups = new Map();
+      for (const child of domNode.children) {
+        const tag = (child.tagName || '?').toLowerCase();
+        const childTags = Array.from(child.children)
+          .map(c => (c.tagName || '?').toLowerCase()).sort();
+        const sig = `${tag}[${childTags.join(',')}]`;
+        if (!sigGroups.has(sig)) sigGroups.set(sig, []);
+        sigGroups.get(sig).push(child);
+      }
+      const dominant = [...sigGroups.values()].sort((a, b) => b.length - a.length)[0];
+      if (!dominant || dominant.length < 2) return;
+
+      // Only re-run when the repetition count has crossed into a new tier.
+      // This means confidence rises progressively: score at 3 units < score
+      // at 5 < score at 8 < score at 15, as the feature vector fills in.
+      const pseudoId = PseudoDOM.nodeId(domNode);
+      const currentTier = _promotionTierOf(dominant.length);
+      const lastTier    = _promotionTierOf(_promotionTierMap.get(pseudoId) || 0);
+      if (currentTier <= lastTier) return; // same tier — nothing new to learn
+      _promotionTierMap.set(pseudoId, dominant.length);
+
+      // Ensure this element is registered — handles lazy-loaded containers
+      // (e.g. YouTube's #contents) that were created without going through
+      // document.createElement or seedFromLiveDOM.
+      if (!PseudoDOM.nodes.has(pseudoId)) {
+        PseudoDOM.ensureNode(domNode, 'eagerPromotion', domNode.parentElement);
+      }
+      const pseudoNode = PseudoDOM.nodes.get(pseudoId) || null;
+      const candidate = {
+        id:                 pseudoId,
+        node:               pseudoNode,
+        dominantFamilySize: dominant.length,
+        dominantTemplate:   null,
+        totalChildren:      domNode.children.length,
+        homogeneity:        dominant.length / domNode.children.length,
+        mutationActivity:   PseudoDOM.mutationActivity.get(pseudoId) || 0,
+      };
+
+      // Full pipeline: feature extractor → ML model → score.
+      // Falls back to heuristic when model or extractor not yet loaded.
+      const featureExtractor = window.__PSEUDODOM_FEATURE_EXTRACTOR__?.extractFeatures;
+      let score;
+
+      const hScore = HeuristicClassifier.scoreDirect(candidate, domNode);
+
+      if (typeof featureExtractor === 'function') {
+        const featureValues = featureExtractor(
+          domNode, pseudoNode, candidate, _pageSignals || null
+        );
+        if (_runtimeModel?.model?.weights && _runtimeModel?.vectorizer?.descriptors) {
+          // Model is authoritative — same policy as classify().
+          score = HeuristicClassifier.predictDirect(featureValues);
+        } else {
+          score = hScore;
+        }
+      } else {
+        score = hScore;
+      }
+
+      if (Number.isFinite(score) && score >= UGC_LOW_THRESHOLD) {
+        PseudoDOM.setUGCConfidenceById(pseudoId, score);
+        PseudoDOM.setUGCConfidence(domNode, score);
+      }
+    } catch (_) {}
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // § 3 — XSS Security Precheck
@@ -972,28 +1268,35 @@
    */
   function makeWrapper(mutationType, originalFn, extractArgs) {
     return function intercepted(...args) {
+      let _target = null;
+      let _isInsertion = false;
       try {
         const { target, content, attrName } = extractArgs(this, args);
+        _target = target;
+        _isInsertion = content !== null;
 
         // Always record in PseudoDOM (data collection)
         PseudoDOM.record(mutationType, target, content);
 
         // Security gate — only active when target is in a UGC region
-        if (content !== null && PseudoDOM.isInUGCRegion(target)) {
+        if (_isInsertion && PseudoDOM.isInUGCRegion(target)) {
           const v = SecurityGate.verdict(mutationType, content, attrName);
           if (v.action === 'block') {
-            // Block: do not call the original function
             console.warn(`[PseudoDOM Guard] Blocked mutation: ${v.reason}`);
             return;
           }
-          // 'flag' and 'pass' both allow the mutation through
         }
-      } catch (e) {
-        // Never let our wrapper break the page
-        // Silently fall through to the original call
-      }
+      } catch (e) {}
 
-      return originalFn.apply(this, args);
+      // Reconciliation: real mutation reaches the live DOM
+      const result = originalFn.apply(this, args);
+
+      // Post-reconciliation: run full feature extraction on the target now
+      // that its new child is live.  Promotes it to UGC immediately if it
+      // scores above the low threshold — gates the very next mutation.
+      if (_isInsertion && _target) _tryEagerPromotion(_target);
+
+      return result;
     };
   }
 
@@ -1035,6 +1338,8 @@
         }
       } catch (_) {}
       _originals.innerHTMLDescriptor.set.call(this, value);
+      // Post-reconciliation: children are now live — check for eager promotion.
+      _tryEagerPromotion(this);
     },
     configurable: true,
     enumerable:   true,
@@ -1054,6 +1359,8 @@
         }
       } catch (_) {}
       _originals.outerHTMLDescriptor.set.call(this, value);
+      // outerHTML replaces the element itself — check its new parent.
+      _tryEagerPromotion(this.parentElement);
     },
     configurable: true,
     enumerable:   true,
@@ -1072,7 +1379,13 @@
         }
       }
     } catch (_) {}
-    return _originals.insertAdjacentHTML.call(this, position, html);
+    const result = _originals.insertAdjacentHTML.call(this, position, html);
+    // afterbegin/beforeend add children to `this`; beforebegin/afterend add
+    // siblings so the relevant container is the parent.
+    const target = (position === 'beforebegin' || position === 'afterend')
+      ? this.parentElement : this;
+    _tryEagerPromotion(target);
+    return result;
   };
 
   // ── 4.4 setAttribute family ───────────────────────────────────────────────
@@ -1498,6 +1811,61 @@
     subtree:   true,
   });
 
+  /**
+   * SPA navigation detection.
+   *
+   * React / Vue / TikTok / Facebook all navigate via history.pushState or
+   * history.replaceState without a full page reload.  The MutationObserver
+   * above catches the DOM churn, but comment sections often load lazily
+   * 400–800 ms after the URL changes.  We therefore:
+   *   1. Detect the URL change immediately and clear the stale highlight.
+   *   2. Re-classify after 700 ms — long enough for the new content to
+   *      render, short enough to feel instant.
+   */
+  // Shared debounce for all signal-driven classify() invocations.
+  // PAGE_SIGNALS, RUNTIME_MODEL, and FEATURE_EXTRACTOR_READY can all arrive
+  // within milliseconds of each other on page load — coalescing them into one
+  // classify() run prevents stacked calls each briefly highlighting different elements.
+  let _classifyTimer = null;
+  function _scheduleClassify(delay) {
+    clearTimeout(_classifyTimer);
+    _classifyTimer = setTimeout(() => void HeuristicClassifier.classify(), delay || 80);
+  }
+
+  let _lastHref = window.location.href;
+  let _navTimer  = null;
+
+  function _onNavigation() {
+    const href = window.location.href;
+    if (href === _lastHref) return;
+    _lastHref = href;
+    _clearAllHighlights();
+    clearTimeout(_navTimer);
+    clearTimeout(_classifyTimer); // cancel any in-flight classify from the old page
+    _navTimer = setTimeout(() => {
+      PseudoDOM.seedFromLiveDOM();
+      _scheduleClassify(0); // run immediately after seed; debounce still guards against
+    }, 700);                // late-arriving RUNTIME_MODEL / PAGE_SIGNALS on the new page
+  }
+
+  // Wrap pushState / replaceState — captured before any page script runs.
+  const _origPushState    = history.pushState.bind(history);
+  const _origReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args) {
+    _origPushState(...args);
+    _onNavigation();
+  };
+
+  history.replaceState = function (...args) {
+    _origReplaceState(...args);
+    _onNavigation();
+  };
+
+  // Back / forward button navigation.
+  window.addEventListener('popstate',   _onNavigation);
+  window.addEventListener('hashchange', _onNavigation);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // § 6 — Background Communication
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1516,18 +1884,39 @@
 
     if (event.data.type === 'PAGE_SIGNALS') {
       _pageSignals = event.data.payload || null;
-      void HeuristicClassifier.classify();
+      _scheduleClassify();
       return;
     }
 
     if (event.data.type === 'RUNTIME_MODEL') {
       _runtimeModel = event.data.payload || null;
-      void HeuristicClassifier.classify();
+      _scheduleClassify();
+      return;
+    }
+
+    if (event.data.type === 'HIGHLIGHT_CANDIDATE') {
+      const el = PseudoDOM.getLiveNode(event.data.payload?.id);
+      if (el && el.nodeType === Node.ELEMENT_NODE) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        _applyHighlight(el);
+      }
+      return;
+    }
+
+    if (event.data.type === 'HIGHLIGHT_MODE') {
+      _highlightMode = Boolean(event.data.payload?.enabled);
+      if (!_highlightMode) _clearAllHighlights();
+      else _scheduleClassify();
+      return;
+    }
+
+    if (event.data.type === 'CANDIDATE_JSON') {
+      _handleCandidateJson(event.data.payload?.selectors || []);
       return;
     }
 
     if (event.data.type === 'FEATURE_EXTRACTOR_READY') {
-      void HeuristicClassifier.classify();
+      _scheduleClassify();
     }
   });
 
