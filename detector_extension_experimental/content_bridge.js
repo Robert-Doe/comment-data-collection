@@ -107,6 +107,21 @@
       pendingRuntimeModel = null;
       pendingClearModel = true;
       flushPendingPushes();
+      return;
+    }
+
+    if (message.type === 'SET_HIGHLIGHT_MODE') {
+      postToPage('HIGHLIGHT_MODE', message.payload);
+      return;
+    }
+
+    if (message.type === 'HIGHLIGHT_CANDIDATE') {
+      postToPage('HIGHLIGHT_CANDIDATE', message.payload);
+      return;
+    }
+
+    if (message.type === 'LOAD_CANDIDATE_JSON') {
+      postToPage('CANDIDATE_JSON', message.payload);
     }
   });
 

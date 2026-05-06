@@ -17,21 +17,26 @@
  *   3. The training dataset export for labeling
  */
 
-// ─── Keyword dictionaries ─────────────────────────────────────────────────────
-// From brainstorm/004_ml_refinements_from_reference_detectors.md §1
+// ─── Keyword patterns (mirrors server commentFeatures.js) ────────────────────
+// NFKD-normalized regex with word boundaries + international keywords
 
-const KW = {
-  HIGH: new Set([
-    'comment','comments','commenter','commentlist','comment-list',
-    'commentthread','comment-thread','reply','replies','discussion',
-    'thread','forum','review','reviews','answer','answers','feedback',
-  ]),
-  MED: new Set([
-    'post','message','messages','response','conversation',
-    'community','topic','reaction','remark','note',
-  ]),
-  LOW: new Set(['item','entry','block','card','unit','feed','list']),
-};
+const HIGH_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(comment|comments|commenter|reply|replies|discussion|discussions|review|reviews|feedback|thread|threads|answer|answers|question|questions|forum|forums|qa|komentarz|komentarze|komentarzy|odpowiedz|odpowiedzi|comentario|comentarios|commentaire|commentaires|kommentar|kommentare|antwort|antworten|resposta|respostas|respuesta|respuestas|reponse|reponses)\b|\bq\s*(?:&|\/)\s*a\b/;
+const MEDIUM_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(post|posts|message|messages|response|responses|conversation|conversations|community|communities)\b/;
+const LOW_CONFIDENCE_UGC_KEYWORD_PATTERN = /\b(item|card|entry|block|unit|feed|list)\b/;
+const COMBINING_MARKS_PATTERN = /[̀-ͯ]/g;
+
+function normalizeKeywordText(value) {
+  return String(value || '').normalize('NFKD').replace(COMBINING_MARKS_PATTERN, '').toLowerCase();
+}
+function hasHighConfidenceUgcKeyword(value) {
+  return HIGH_CONFIDENCE_UGC_KEYWORD_PATTERN.test(normalizeKeywordText(value));
+}
+function hasMediumConfidenceUgcKeyword(value) {
+  return MEDIUM_CONFIDENCE_UGC_KEYWORD_PATTERN.test(normalizeKeywordText(value));
+}
+function hasLowConfidenceUgcKeyword(value) {
+  return LOW_CONFIDENCE_UGC_KEYWORD_PATTERN.test(normalizeKeywordText(value));
+}
 
 // ─── Time patterns ─────────────────────────────────────────────────────────────
 // From brainstorm/004_ml_refinements_from_reference_detectors.md §2
@@ -51,7 +56,8 @@ const RE_SHARE     = /\b(share|permalink|link)\b/i;
 const RE_REPORT    = /\b(report|flag|spam|abuse)\b/i;
 const RE_EDIT_DEL  = /\b(edit|delete|remove|modify)\b/i;
 const RE_AUTHOR    = /\b(author|commenter|user|poster|username|handle)\b/i;
-const RE_AVATAR    = /avatar|profile.?(?:photo|image|pic)|headshot|userpic/i;
+const RE_AVATAR_CLASS = /\b(avatar|user.?photo|profile.?pic|userpic|gravatar|author.?img|user.?image|member.?photo)\b/i;
+const RE_AVATAR_URL   = /\/(avatar|gravatar|profile|user.?image|photo|avatars|userpic)s?\/|\/\d{4,}\.(jpg|jpeg|png|webp|gif)/i;
 const RE_VERIFIED  = /verified|checkmark|badge|trusted/i;
 const RE_PINNED    = /pinned|sticky|featured/i;
 const RE_DELETED   = /deleted|removed|\\[deleted\\]|\\[removed\\]/i;
@@ -135,21 +141,21 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   // ── C. Keyword and semantic signals ───────────────────────────────────────
 
   const attrBlob                = buildAttributeBlob(el);
-  fv.keyword_container_high     = hasKeyword(attrBlob, KW.HIGH);
-  fv.keyword_container_med      = hasKeyword(attrBlob, KW.MED);
-  fv.keyword_container_low      = hasKeyword(attrBlob, KW.LOW);
+  fv.keyword_container_high     = hasHighConfidenceUgcKeyword(attrBlob);
+  fv.keyword_container_med      = hasMediumConfidenceUgcKeyword(attrBlob);
+  fv.keyword_container_low      = hasLowConfidenceUgcKeyword(attrBlob);
   fv.attributes_contain_keywords = fv.keyword_container_high || fv.keyword_container_med;
 
   // Granular keyword breakdown: attribute names vs. values (separate signals for the model).
-  fv.keyword_attr_name_high  = hasKeywordInAttrNames(el, KW.HIGH);
-  fv.keyword_attr_value_high = hasKeywordInAttrValues(el, KW.HIGH);
+  fv.keyword_attr_name_high  = hasKeywordInAttrNames(el);
+  fv.keyword_attr_value_high = hasKeywordInAttrValues(el);
 
   const units                   = getRepeatedUnits(el);
   fv.unit_count                 = units.length;
 
-  fv.keyword_unit_high          = units.some(u => hasKeyword(buildAttributeBlob(u), KW.HIGH));
+  fv.keyword_unit_high          = units.some(u => hasHighConfidenceUgcKeyword(buildAttributeBlob(u)));
   fv.keyword_unit_high_coverage = safeDivide(
-    units.filter(u => hasKeyword(buildAttributeBlob(u), KW.HIGH)).length,
+    units.filter(u => hasHighConfidenceUgcKeyword(buildAttributeBlob(u))).length,
     units.length
   );
 
@@ -184,11 +190,11 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.total_text_length          = subtreeText.length;
 
   // Text-based keyword signals (subtree visible text, not attributes).
-  const subtreeTextLower        = subtreeText.toLowerCase();
-  fv.keyword_text_high          = hasKeyword(subtreeTextLower, KW.HIGH);
-  fv.keyword_text_med           = hasKeyword(subtreeTextLower, KW.MED);
-  // Direct-text: keywords in short text directly attached to the candidate root.
-  fv.keyword_direct_text_high   = hasKeyword(getDirectText(el), KW.HIGH);
+  fv.keyword_text_high          = hasHighConfidenceUgcKeyword(subtreeText);
+  fv.keyword_text_med           = hasMediumConfidenceUgcKeyword(subtreeText);
+  // Direct-text: keywords in short text directly attached to the candidate root (≤80 chars).
+  const _directText             = getDirectText(el);
+  fv.keyword_direct_text_high   = _directText.length <= 80 && hasHighConfidenceUgcKeyword(_directText);
 
   fv.text_contains_mentions     = RE_MENTION.test(subtreeText);
   fv.mention_count              = (subtreeText.match(/@\w+/g) || []).length;
@@ -249,11 +255,8 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   const authorData              = computeAuthorSignals(el, units);
   fv.includes_author            = authorData.present;
   fv.author_element_count       = authorData.count;
-  fv.has_avatar                 = el.querySelector('img') !== null &&
-                                   RE_AVATAR.test(buildAttributeBlob(el.querySelector('img')));
-  fv.avatar_img_count           = [...el.querySelectorAll('img')].filter(
-    img => RE_AVATAR.test(buildAttributeBlob(img))
-  ).length;
+  fv.has_avatar                 = [...el.querySelectorAll('img')].some(isAvatarImg);
+  fv.avatar_img_count           = [...el.querySelectorAll('img')].filter(isAvatarImg).length;
   fv.author_avatar_colocation   = authorData.colocationPresent;
   fv.author_avatar_colocation_unit_count = authorData.colocationCount;
   fv.author_avatar_coverage     = safeDivide(authorData.colocationCount, units.length || 1);
@@ -405,13 +408,6 @@ function buildAttributeBlob(el) {
   return parts.join(' ').toLowerCase();
 }
 
-function hasKeyword(blob, kwSet) {
-  for (const kw of kwSet) {
-    if (blob.includes(kw)) return true;
-  }
-  return false;
-}
-
 function safeDivide(a, b) {
   return b === 0 ? 0 : a / b;
 }
@@ -443,15 +439,24 @@ function computeChildTagVariety(el) {
   return tags.size;
 }
 
+function structuralSignature(el) {
+  const tag = (el.tagName || 'unknown').toLowerCase();
+  const childTags = Array.from(el.children)
+    .map(c => (c.tagName || 'unknown').toLowerCase())
+    .sort();
+  return `${tag}[${childTags.join(',')}]`;
+}
+
 function getRepeatedUnits(el) {
   if (!el.children || el.children.length < 3) return [];
-  const tagGroups = new Map();
+  // Group by structural signature (tag + sorted child tags) — matches server groupBySigId.
+  const sigGroups = new Map();
   for (const child of el.children) {
-    const tag = child.tagName;
-    if (!tagGroups.has(tag)) tagGroups.set(tag, []);
-    tagGroups.get(tag).push(child);
+    const sig = structuralSignature(child);
+    if (!sigGroups.has(sig)) sigGroups.set(sig, []);
+    sigGroups.get(sig).push(child);
   }
-  const dominant = [...tagGroups.values()].sort((a, b) => b.length - a.length)[0];
+  const dominant = [...sigGroups.values()].sort((a, b) => b.length - a.length)[0];
   return dominant && dominant.length >= 3 ? dominant : [];
 }
 
@@ -567,7 +572,7 @@ function computeAuthorSignals(el, units) {
   for (const unit of units) {
     const hasAuthor = unit.querySelector('[itemprop="author"],[rel="author"],[class*="author"]') !== null ||
                       RE_AUTHOR.test(buildAttributeBlob(unit));
-    const hasAvatar = [...unit.querySelectorAll('img')].some(img => RE_AVATAR.test(buildAttributeBlob(img)));
+    const hasAvatar = [...unit.querySelectorAll('img')].some(isAvatarImg);
     const hasTime   = unit.querySelector('time[datetime]') !== null || RE_RELATIVE_TIME.test(unit.textContent || '');
     const hasProfileLink = unit.querySelector('a[href*="/user/"],a[href*="/profile/"],a[href*="/@"]') !== null;
 
@@ -723,6 +728,12 @@ function findNavAncestor(el) {
 
 // ─── Helpers added for runtime-model feature parity ──────────────────────────
 
+function isAvatarImg(img) {
+  const attrBlob = `${img.className || ''} ${img.id || ''} ${img.getAttribute('alt') || ''} ${img.getAttribute('aria-label') || ''}`;
+  const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+  return RE_AVATAR_CLASS.test(attrBlob) || RE_AVATAR_URL.test(src);
+}
+
 /**
  * Returns lowercased short text taken directly from the candidate root's own
  * text nodes (not from descendants). Used for keyword_direct_text_high.
@@ -735,35 +746,21 @@ function getDirectText(el) {
       if (t) parts.push(t);
     }
   }
-  return parts.join(' ').slice(0, 200).toLowerCase();
+  return parts.join(' ').toLowerCase();
 }
 
-/**
- * Returns true if any attribute NAME on el contains a keyword from kwSet.
- * Used for keyword_attr_name_high.
- */
-function hasKeywordInAttrNames(el, kwSet) {
+function hasKeywordInAttrNames(el) {
   if (!el || !el.attributes) return false;
   for (const attr of el.attributes) {
-    const n = attr.name.toLowerCase();
-    for (const kw of kwSet) {
-      if (n.includes(kw)) return true;
-    }
+    if (hasHighConfidenceUgcKeyword(attr.name)) return true;
   }
   return false;
 }
 
-/**
- * Returns true if any attribute VALUE on el contains a keyword from kwSet.
- * Used for keyword_attr_value_high.
- */
-function hasKeywordInAttrValues(el, kwSet) {
+function hasKeywordInAttrValues(el) {
   if (!el || !el.attributes) return false;
   for (const attr of el.attributes) {
-    const v = attr.value.toLowerCase();
-    for (const kw of kwSet) {
-      if (v.includes(kw)) return true;
-    }
+    if (hasHighConfidenceUgcKeyword(attr.value)) return true;
   }
   return false;
 }
@@ -829,15 +826,12 @@ function detectSubmitButtonKeywords(el) {
     );
   }
   for (const btn of candidates) {
-    const text = (
+    const text =
       (btn.textContent  || '') + ' ' +
       (btn.value        || '') + ' ' +
       (btn.getAttribute('aria-label') || '') + ' ' +
-      (btn.getAttribute('title')      || '')
-    ).toLowerCase();
-    for (const kw of KW.HIGH) {
-      if (text.includes(kw)) return true;
-    }
+      (btn.getAttribute('title')      || '');
+    if (hasHighConfidenceUgcKeyword(text)) return true;
   }
   return false;
 }

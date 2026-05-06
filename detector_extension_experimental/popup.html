@@ -110,7 +110,7 @@
     .stat-card .label { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
     /* ── Candidate list ──────────────────────────────────────────────────── */
-    .candidate-list { display: flex; flex-direction: column; gap: 6px; }
+    .candidate-list { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
     .candidate-card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -210,6 +210,56 @@
       font-size: 11px;
     }
 
+    /* ── Highlight toggle ────────────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0 10px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .toggle-label { font-size: 12px; font-weight: 500; }
+    .toggle-sub   { font-size: 11px; color: var(--muted); }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--red); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+    /* ── Candidate JSON fallback ─────────────────────────────────────────── */
+    .json-fallback {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      display: none;
+    }
+    .json-fallback-title { font-size: 12px; font-weight: 500; margin-bottom: 6px; }
+
     /* ── Scrollbar ───────────────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -267,8 +317,26 @@
 
   <!-- Candidates panel -->
   <div class="panel" id="panel-candidates">
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Highlight best candidate</div>
+        <div class="toggle-sub">Draws a red border around the top-scored element</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="highlight-toggle">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
     <div class="candidate-list" id="candidate-list">
       <div class="empty-state">No UGC candidates detected yet.<br>Visit a page with comments or reviews.</div>
+    </div>
+    <div class="json-fallback" id="candidate-json-section">
+      <div class="json-fallback-title">No candidates found — provide selectors</div>
+      <div class="runtime-field" style="gap:6px">
+        <input id="candidate-json-file" type="file" accept="application/json,.json">
+        <button class="btn primary" id="btn-load-candidate-json" type="button">Load Selectors JSON</button>
+        <div class="runtime-note">Format: an array of CSS selectors — ["#comments", ".review-list"]</div>
+      </div>
     </div>
   </div>
 
