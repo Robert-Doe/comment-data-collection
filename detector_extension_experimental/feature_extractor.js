@@ -129,9 +129,9 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   // Additional repetition metrics required by the runtime model vectorizer.
   // xpath_star_group_count mirrors dominantFamilySize (the strongest repeated family).
   fv.xpath_star_group_count       = candidateMeta?.dominantFamilySize || 0;
-  // child_sig_id_group_count: how many distinct direct-child tag families have >= 2 members.
+  // child_sig_id_group_count: how many distinct direct-child structural signatures exist.
   fv.child_sig_id_group_count     = computeChildSigGroupCount(el);
-  // child_xpath_star_group_count: how many class+tag signature groups among direct children have >= 2 members.
+  // child_xpath_star_group_count: how many distinct direct-child xpath-star groups exist.
   fv.child_xpath_star_group_count = computeChildXPathStarGroupCount(el);
   // Signature repetition tier flags (mirrors min_k thresholds from the backend feature extractor).
   fv.sig_id_count_weak            = (candidateMeta?.dominantFamilySize || 0) >= 3;
@@ -729,14 +729,22 @@ function findNavAncestor(el) {
 // ─── Helpers added for runtime-model feature parity ──────────────────────────
 
 function isAvatarImg(img) {
-  const attrBlob = `${img.className || ''} ${img.id || ''} ${img.getAttribute('alt') || ''} ${img.getAttribute('aria-label') || ''}`;
+  const attrBlob = [
+    img.className || '',
+    img.id || '',
+    img.getAttribute('role') || '',
+    img.getAttribute('aria-label') || '',
+    img.getAttribute('itemtype') || '',
+    img.getAttribute('data-testid') || '',
+    img.getAttribute('alt') || '',
+  ].join(' ');
   const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
   return RE_AVATAR_CLASS.test(attrBlob) || RE_AVATAR_URL.test(src);
 }
 
 /**
- * Returns lowercased short text taken directly from the candidate root's own
- * text nodes (not from descendants). Used for keyword_direct_text_high.
+ * Returns lowercased direct text taken from the candidate root's own text nodes
+ * (not from descendants). Used for keyword_direct_text_high.
  */
 function getDirectText(el) {
   const parts = [];
@@ -766,40 +774,50 @@ function hasKeywordInAttrValues(el) {
 }
 
 /**
- * Returns how many distinct direct-child tag families contain >= 2 members.
- * Approximates the backend's child_sig_id_group_count.
+ * Returns how many distinct direct-child structural signatures exist.
+ * Mirrors the backend's child_sig_id_group_count.
  */
 function computeChildSigGroupCount(el) {
   if (!el || !el.children) return 0;
-  const tagGroups = new Map();
+  const sigGroups = new Map();
   for (const child of el.children) {
-    const tag = child.tagName;
-    tagGroups.set(tag, (tagGroups.get(tag) || 0) + 1);
+    const sig = structuralSignature(child);
+    sigGroups.set(sig, (sigGroups.get(sig) || 0) + 1);
   }
-  let count = 0;
-  for (const n of tagGroups.values()) {
-    if (n >= 2) count++;
+  return sigGroups.size;
+}
+
+function xpathStarSignature(el) {
+  if (!el || !el.parentElement) return '';
+  const parts = [];
+  let node = el;
+  while (node && node.nodeType === Node.ELEMENT_NODE) {
+    let index = 1;
+    let sibling = node.previousElementSibling;
+    while (sibling) {
+      if (sibling.tagName === node.tagName) index++;
+      sibling = sibling.previousElementSibling;
+    }
+    parts.unshift(`${(node.tagName || 'unknown').toLowerCase()}[${index}]`);
+    node = node.parentElement;
   }
-  return count;
+  if (!parts.length) return '';
+  parts[parts.length - 1] = parts[parts.length - 1].replace(/\[\d+\]$/, '[*]');
+  return `/${parts.join('/')}`;
 }
 
 /**
- * Returns how many distinct class+tag signature groups among direct children
- * contain >= 2 members.  Approximates child_xpath_star_group_count.
+ * Returns how many distinct direct-child xpath-star groups exist.
+ * Mirrors the backend's child_xpath_star_group_count.
  */
 function computeChildXPathStarGroupCount(el) {
   if (!el || !el.children) return 0;
   const sigGroups = new Map();
   for (const child of el.children) {
-    const classes = [...(child.classList || [])].sort().join('.');
-    const sig = (child.tagName || '') + ':' + classes;
+    const sig = xpathStarSignature(child);
     sigGroups.set(sig, (sigGroups.get(sig) || 0) + 1);
   }
-  let count = 0;
-  for (const n of sigGroups.values()) {
-    if (n >= 2) count++;
-  }
-  return count;
+  return sigGroups.size;
 }
 
 /**

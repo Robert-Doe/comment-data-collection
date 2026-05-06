@@ -535,7 +535,8 @@
   // § 1.5 — Candidate Highlight
   // ═══════════════════════════════════════════════════════════════════════════
 
-  let _highlightMode = false;
+  // Auto-highlight is on by default. The popup toggle can turn it off.
+  let _autoHighlightEnabled = true;
   const _highlightedEls = new Set();
 
   const HIGHLIGHT_STYLE = '7px solid #e55353';
@@ -580,7 +581,7 @@
         if (score > bestScore) { bestScore = score; bestEl = el; }
       } catch (_) {}
     }
-    if (_highlightMode && bestEl) _applyHighlight(bestEl);
+    if (_autoHighlightEnabled && bestEl) _applyHighlight(bestEl);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -994,12 +995,14 @@
         }
       }
 
-      // Always highlight the top pick — no popup interaction needed.
-      if (_scoredForHighlight.length > 0) {
-        const best = _scoredForHighlight.reduce((a, b) => b.score > a.score ? b : a);
-        _applyHighlightToAll([best]);
-      } else {
-        _clearAllHighlights();
+      // Highlight the top pick if auto-highlight is enabled (popup toggle controls this).
+      if (_autoHighlightEnabled) {
+        if (_scoredForHighlight.length > 0) {
+          const best = _scoredForHighlight.reduce((a, b) => b.score > a.score ? b : a);
+          _applyHighlightToAll([best]);
+        } else {
+          _clearAllHighlights();
+        }
       }
     }
 
@@ -1935,8 +1938,8 @@
     }
 
     if (event.data.type === 'HIGHLIGHT_MODE') {
-      _highlightMode = Boolean(event.data.payload?.enabled);
-      if (!_highlightMode) _clearAllHighlights();
+      _autoHighlightEnabled = Boolean(event.data.payload?.enabled);
+      if (!_autoHighlightEnabled) _clearAllHighlights();
       else _scheduleClassify();
       return;
     }

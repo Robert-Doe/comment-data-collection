@@ -327,6 +327,7 @@
         <span class="toggle-slider"></span>
       </label>
     </div>
+    <div class="runtime-note" id="candidate-panel-message">Highlight mode is off.</div>
     <div class="candidate-list" id="candidate-list">
       <div class="empty-state">No UGC candidates detected yet.<br>Visit a page with comments or reviews.</div>
     </div>
@@ -335,7 +336,7 @@
       <div class="runtime-field" style="gap:6px">
         <input id="candidate-json-file" type="file" accept="application/json,.json">
         <button class="btn primary" id="btn-load-candidate-json" type="button">Load Selectors JSON</button>
-        <div class="runtime-note">Format: an array of CSS selectors — ["#comments", ".review-list"]</div>
+        <div class="runtime-note">Format: a JSON array of CSS selectors or an object with a `selectors` array.</div>
       </div>
     </div>
   </div>

@@ -122,6 +122,7 @@
 
     if (message.type === 'LOAD_CANDIDATE_JSON') {
       postToPage('CANDIDATE_JSON', message.payload);
+      return;
     }
   });
 

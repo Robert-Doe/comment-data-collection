@@ -128,22 +128,7 @@ async function broadcastRuntimeModel(bundle) {
       type: bundle ? 'RUNTIME_MODEL' : 'CLEAR_RUNTIME_MODEL',
       payload: bundle || null,
     };
-
-    try {
-      const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
-      if (Array.isArray(frames) && frames.length) {
-        await Promise.all(frames.map(async (frame) => {
-          try {
-            await chrome.tabs.sendMessage(tab.id, message, { frameId: frame.frameId });
-          } catch (_) {}
-        }));
-        return;
-      }
-    } catch (_) {}
-
-    try {
-      await chrome.tabs.sendMessage(tab.id, message);
-    } catch (_) {}
+    await broadcastMessageToTab(tab.id, message);
   }));
 }
 
@@ -170,6 +155,40 @@ async function fetchWrapperSource() {
   const url = chrome.runtime.getURL('injected_wrapper.js');
   const response = await fetch(url);
   return response.text();
+}
+
+async function broadcastMessageToTab(tabId, message) {
+  let delivered = false;
+  try {
+    const frames = await chrome.webNavigation.getAllFrames({ tabId });
+    if (Array.isArray(frames) && frames.length) {
+      await Promise.all(frames.map(async (frame) => {
+        try {
+          await chrome.tabs.sendMessage(tabId, message, { frameId: frame.frameId });
+          delivered = true;
+        } catch (_) {}
+      }));
+      if (delivered) return true;
+    }
+  } catch (_) {}
+
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+    delivered = true;
+  } catch (_) {}
+
+  return delivered;
+}
+
+async function forwardMessageToActiveTab(message) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || typeof tab.id !== 'number') {
+    throw new Error('No active tab');
+  }
+  const delivered = await broadcastMessageToTab(tab.id, message);
+  if (!delivered) {
+    throw new Error('No content script found in active tab');
+  }
 }
 
 // ─── Message hub ───────────────────────────────────────────────────────────────
@@ -260,6 +279,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       store.clearRuntimeModel()
         .then(async () => {
           await broadcastRuntimeModel(null);
+          sendResponse({ ok: true });
+        })
+        .catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+
+    case 'SET_HIGHLIGHT_MODE':
+    case 'LOAD_CANDIDATE_JSON': {
+      const forward = sender.tab?.id
+        ? broadcastMessageToTab(sender.tab.id, {
+            type: message.type,
+            payload: message.payload || null,
+          })
+        : forwardMessageToActiveTab({
+            type: message.type,
+            payload: message.payload || null,
+          });
+      forward
+        .then((delivered) => {
+          if (delivered === false) {
+            throw new Error('No content script found in target tab');
+          }
           sendResponse({ ok: true });
         })
         .catch((e) => sendResponse({ ok: false, error: e.message }));

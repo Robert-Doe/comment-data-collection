@@ -129,6 +129,12 @@ async function loadCandidates(tab) {
   } catch (_) {}
 
   const list = document.getElementById('candidate-list');
+  setCandidateJsonSectionVisible(candidates.length === 0);
+  setCandidatePanelMessage(
+    candidates.length === 0
+      ? 'No candidates detected yet. Load selectors JSON if you want a manual fallback.'
+      : 'Candidates detected. Click a card to highlight it on the page.'
+  );
   if (candidates.length === 0) return; // leave default empty state
 
   list.innerHTML = '';
@@ -167,6 +173,67 @@ async function highlightCandidateOnPage(tab, candidateId) {
       args: [candidateId],
     });
   } catch (_) {}
+}
+
+async function setHighlightMode(enabled) {
+  const response = await bgMessage({ type: 'SET_HIGHLIGHT_MODE', payload: { enabled } });
+  if (!response || response.ok !== true) {
+    throw new Error(response?.error || 'Could not update highlight mode');
+  }
+  setCandidatePanelMessage(enabled ? 'Highlight mode is on.' : 'Highlight mode is off.');
+}
+
+function setCandidateJsonSectionVisible(visible) {
+  const section = document.getElementById('candidate-json-section');
+  if (section) {
+    section.style.display = visible ? 'block' : 'none';
+  }
+}
+
+function setCandidatePanelMessage(message) {
+  const el = document.getElementById('candidate-panel-message');
+  if (el) {
+    el.textContent = message;
+  }
+}
+
+function normalizeCandidateJsonSelectors(parsed) {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (parsed && Array.isArray(parsed.selectors)) {
+    return parsed.selectors;
+  }
+  return null;
+}
+
+async function loadCandidateJsonFromFile() {
+  const input = document.getElementById('candidate-json-file');
+  if (!input || !input.files || !input.files[0]) {
+    setCandidatePanelMessage('Choose a JSON file first.');
+    return;
+  }
+
+  try {
+    const text = await input.files[0].text();
+    const parsed = JSON.parse(text);
+    const selectors = normalizeCandidateJsonSelectors(parsed);
+    if (!selectors || !selectors.every((selector) => typeof selector === 'string' && selector.trim())) {
+      throw new Error('Expected a JSON array of non-empty CSS selectors or an object with a selectors array.');
+    }
+
+    const response = await bgMessage({
+      type: 'LOAD_CANDIDATE_JSON',
+      payload: { selectors },
+    });
+    if (!response || response.ok !== true) {
+      throw new Error(response?.error || 'Could not load candidate selectors');
+    }
+
+    setCandidatePanelMessage(`Loaded ${selectors.length} selectors from ${input.files[0].name}.`);
+  } catch (error) {
+    setCandidatePanelMessage(error.message || String(error));
+  }
 }
 
 function getCandidatesFromPage() {
@@ -393,4 +460,28 @@ document.getElementById('btn-clear-runtime-model').addEventListener('click', asy
   } catch (error) {
     if (messageEl) messageEl.textContent = error.message || String(error);
   }
+});
+
+// Auto-highlight is on by default — reflect that in the checkbox.
+document.getElementById('highlight-toggle').checked = true;
+
+document.getElementById('highlight-toggle').addEventListener('change', async (event) => {
+  const enabled = event.target.checked;
+  try {
+    await setHighlightMode(enabled);
+  } catch (_) {
+    // If the content script isn't reachable (e.g. tab opened before extension was loaded),
+    // keep the toggle in the requested state and show a friendly hint instead of an error.
+    setCandidatePanelMessage(
+      'Could not reach this page — reload the tab to activate the extension, then try again.'
+    );
+  }
+});
+
+document.getElementById('btn-load-candidate-json').addEventListener('click', async () => {
+  await loadCandidateJsonFromFile();
+});
+
+document.getElementById('candidate-json-file').addEventListener('change', async () => {
+  await loadCandidateJsonFromFile();
 });
