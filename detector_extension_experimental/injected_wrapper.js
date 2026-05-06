@@ -1786,23 +1786,42 @@
    * DOMContentLoaded: seed PseudoDOM from live DOM (SSR pages), then
    * run initial UGC classification.
    */
-  document.addEventListener('DOMContentLoaded', () => {
+  function _initClassify() {
     PseudoDOM.seedFromLiveDOM();
     void HeuristicClassifier.classify();
-
-    // Export PseudoDOM snapshot to background for data collection
     _sendToBackground('PSEUDO_DOM_SNAPSHOT', PseudoDOM.serialize());
-  });
+  }
+
+  // If the wrapper script loaded after DOMContentLoaded already fired (common on
+  // fast-loading or cached pages where the async <script src> fetch finishes late),
+  // run immediately instead of waiting for the listener that will never fire.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initClassify);
+  } else {
+    _scheduleClassify(200); // DOM ready — seed + classify after a short settle delay
+    PseudoDOM.seedFromLiveDOM();
+  }
 
   /**
    * MutationObserver: supplementary post-mutation region tracking.
    * Used to detect new UGC regions that emerge during SPA transitions.
    * Does NOT block mutations — that is the prototype wrapper's job.
+   *
+   * Watches both childList (new nodes added) and a limited attribute set
+   * (style/class/hidden) so that "reveal by CSS" comment sections — where
+   * the site just removes display:none from an existing container — also
+   * trigger reclassification.
    */
   const _observer = new MutationObserver((_mutations) => {
     let needsReclassify = false;
     for (const m of _mutations) {
       if (m.addedNodes.length > 0) {
+        needsReclassify = true;
+        break;
+      }
+      // Reveal-by-CSS pattern: a style/class/hidden change on an element that
+      // already has children may mean a comment section was just un-hidden.
+      if (m.type === 'attributes' && m.target.children.length >= 3) {
         needsReclassify = true;
         break;
       }
@@ -1817,8 +1836,10 @@
   });
 
   _observer.observe(document.documentElement, {
-    childList: true,
-    subtree:   true,
+    childList:       true,
+    subtree:         true,
+    attributes:      true,
+    attributeFilter: ['style', 'class', 'hidden', 'aria-hidden', 'open'],
   });
 
   /**
