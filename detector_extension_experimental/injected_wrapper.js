@@ -963,9 +963,10 @@
           try {
             const runtimeScore = scoreCandidateWithRuntime(candidate, domNode, featureExtractor, snapshot);
             if (Number.isFinite(runtimeScore)) {
-              // Model is the sole source of truth when loaded — use its score directly.
-              // The heuristic stays as the fallback path (useRuntime === false branch).
-              score = runtimeScore;
+              // Take the higher of heuristic and model — the runtime model may under-score
+              // elements whose unit-level signals are hidden inside shadow roots (e.g. YouTube
+              // custom elements). The heuristic acts as a safety floor.
+              score = Math.max(score, runtimeScore);
             }
           } catch (error) {
             console.warn('[PseudoDOM Guard] Runtime scoring failed:', error?.message || error);
