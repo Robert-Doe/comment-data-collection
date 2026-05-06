@@ -140,6 +140,14 @@
     flushPendingPushes();
   });
 
+  // injected_wrapper.js is now declared as a world:"MAIN" content script in
+  // manifest.json — the browser injects it at document_start before any page
+  // script, bypassing page CSP.  Do NOT inject it again here.
+
+  // feature_extractor_runtime.js is a ES-module and must still be injected
+  // as a <script type="module">.  It may be blocked on strict-CSP sites
+  // (e.g. Walmart) but that only disables ML scoring; heuristic fallback
+  // keeps candidate detection working on those pages.
   injectScript('feature_extractor_runtime.js', {
     module: true,
     onLoad: () => {
@@ -150,6 +158,4 @@
       featureExtractorReady = false;
     },
   });
-
-  injectScript('injected_wrapper.js');
 })();
