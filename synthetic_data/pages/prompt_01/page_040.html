@@ -1,0 +1,261 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>VintageComputingForum.net - Commodore 64 SID chip repair - no sound</title>
+</head>
+<body bgcolor="#4040CC" text="#CCCCFF" link="#FFFF00" vlink="#AAAAFF">
+
+<!-- Retro C64 color scheme - intentional blue background like C64 startup screen -->
+<table width="720" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr>
+  <td bgcolor="#2020AA" height="42">
+  <font face="Courier New" size="3" color="#CCCCFF"><b>&nbsp;&nbsp;VINTAGE COMPUTING FORUM.NET</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">&nbsp;&nbsp;C64, Amiga, Atari, ZX Spectrum, BBC Micro &amp; More</font>
+  </td>
+</tr>
+<tr bgcolor="#3030BB">
+  <td height="18">
+  <font face="Courier New" size="1" color="#CCCCFF">&nbsp;&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">HOME</a>&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">C64</a>&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">AMIGA</a>&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">ATARI</a>&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">SPECTRUM</a>&nbsp;
+  &gt;<a href="#" style="color:#FFFF00">REPAIR</a>
+  </font>
+  </td>
+</tr>
+</table>
+
+<table width="720" border="0" cellpadding="10" cellspacing="0" align="center" bgcolor="#3030AA">
+<tr><td>
+<font face="Courier New" size="3" color="#FFFF00"><b>COMMODORE 64 - SID CHIP DEAD - NO AUDIO AT ALL</b></font><br>
+<font face="Courier New" size="1" color="#8888FF">C64 HARDWARE REPAIR :: POSTED BY SIDLESS_SAM :: NOVEMBER 2002</font>
+<br><br>
+<font face="Courier New" size="2" color="#CCCCFF">
+MY C64 (BREADBIN CASE, PRODUCED 1984 BASED ON THE BOARD STAMP) PRODUCES NO AUDIO WHATSOEVER.
+VIDEO IS FINE. BASIC IS FINE. GAMES LOAD AND PLAY BUT WITH COMPLETE SILENCE. I HAVE REPLACED THE
+AUDIO CABLE AND TESTED ON THREE DIFFERENT TVS. IS THE SID CHIP (6581) ALMOST CERTAINLY DEAD?
+IS THERE ANY OTHER CAUSE OF TOTAL AUDIO LOSS BEFORE I DESOLDER THE SID?
+</font>
+</td></tr>
+</table>
+
+<table width="720" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr><td bgcolor="#FFFF00" height="20">
+<font face="Courier New" size="2" color="#2020AA"><b>&nbsp;&nbsp;REPLIES: 9</b></font>
+</td></tr>
+</table>
+
+<!-- Retro computing aesthetic, all-caps users, monospace font, no classes -->
+<table width="720" border="0" cellpadding="0" cellspacing="1" align="center" bgcolor="#2020AA">
+
+<tr>
+<td bgcolor="#3030BB">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2020AA" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>CHIPMASTER_ROB</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">POSTS: 4201</font><br>
+  <font face="Courier New" size="1" color="#FFFF00">SID WIZARD</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 14, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  BEFORE DESOLDERING THE SID, CHECK THESE THINGS FIRST:
+  1) AUDIO FILTER CAPS (C38-C42 ON MOST BREADBIN BOARDS) - THEY GO DRY AND BLOCK AUDIO
+  2) THE VOLUME REGISTER - OPEN MONITOR, TYPE POKE 54296,15 AND SEE IF ANY SOUND APPEARS
+  3) THE AUDIO OUTPUT TRANSISTOR (Q9) - OFTEN FAILS AND IS MUCH EASIER TO REPLACE THAN THE SID
+  IF POKE 54296,15 PRODUCES NOTHING, THE SID IS SUSPECT. IF IT PRODUCES NOISE BUT NO MUSIC,
+  THE PROBLEM IS DOWNSTREAM (CAPS OR TRANSISTOR).
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3838CC">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2828BB" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>BREADBIN_BETTY</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">POSTS: 1887</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 14, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  ROB IS RIGHT - CHECK Q9 FIRST. A FAILED Q9 TRANSISTOR IS A KNOWN FAILURE MODE ON BREADBIN BOARDS
+  AND IS A CHEAP COMMON BC547 TRANSISTOR. I'VE FIXED FOUR SILENT C64S THIS WAY WITHOUT TOUCHING THE SID.
+  THE SID ITSELF RARELY FAILS COMPLETELY - PARTIAL FAILURE (ONLY SOME VOICES DEAD) IS MORE COMMON.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3030BB">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2020AA" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>SIDLESS_SAM</b></font><br>
+  <font face="Courier New" size="1" color="#FFFF00"><i>OP</i></font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 14, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  TRIED POKE 54296,15 - ABSOLUTE SILENCE. NOT EVEN A CLICK OR POP. DOES THAT CONFIRM THE SID IS DEAD?
+  ALSO - THE CAPS ROB MENTIONED, WHAT DO I REPLACE THEM WITH? SAME VALUE OR MODERN EQUIVALENTS?
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3838CC">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2828BB" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>CHIPMASTER_ROB</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">POSTS: 4201</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 15, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  SILENCE FROM POKE IS BAD - STRONGLY SUGGESTS SID IS NOT GENERATING AUDIO.
+  BUT BEFORE DESOLDERING: CAREFULLY MEASURE VOLTAGE ON SID PIN 28 (VCC) - SHOULD BE 12V.
+  IF YOU'RE GETTING 12V ON PIN 28 AND STILL SILENCE FROM THE POKE COMMAND, THE SID IS ALMOST
+  CERTAINLY FAILED. SOURCE A REPLACEMENT 6581 OR CONSIDER THE MODERN FPGASID OR SID2SID REPLACEMENT.
+  THE CAPS: REPLACE WITH SAME VALUE ELECTROLYTICS (47UF/25V IS TYPICAL). LOW ESR MODERN CAPS ARE FINE.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3030BB">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2020AA" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>RETROtronics_EU</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">POSTS: 3012</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 15, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  I SELL TESTED 6581 CHIPS SOURCED FROM SCRAP BOARDS IN EASTERN EUROPE. PRICES ARE STILL REASONABLE
+  IN 2002 BUT RISING FAST AS C64 RESTORATION BECOMES MORE POPULAR. IF YOU NEED ONE CONTACT ME
+  VIA THE EMAIL IN MY PROFILE. ALSO: THE FPGASID IS AN EXCELLENT MODERN ALTERNATIVE IF YOU DON'T
+  MIND SPENDING MORE - IT EMULATES BOTH 6581 AND 8580 AND HAS NO CAPACITOR DEGRADATION ISSUES.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3838CC">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2828BB" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>ANONYMOUS</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">GUEST</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 17, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  THE 6581 AND 8580 ARE DIFFERENT CHIPS WITH DIFFERENT FILTER CHARACTERISTICS - THE 8580 HAS
+  EXTERNAL FILTER CAPS ON THE BOARD WHILE THE 6581 HAS THEM INTERNALLY. MAKE SURE YOU SOURCE
+  THE CORRECT REVISION FOR YOUR BOARD (ASSY NUMBER ON PCB TELLS YOU WHICH SID REVISION IT EXPECTS).
+  MIXING THEM CAN WORK BUT FILTER RESPONSE WILL DIFFER.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3030BB">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2020AA" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>SIDLESS_SAM</b></font><br>
+  <font face="Courier New" size="1" color="#FFFF00"><i>OP</i></font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 18, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  MEASURED PIN 28: 12.1V - CONFIRMED. CONTACTED RETROTRONICS_EU, REPLACEMENT 6581 ON THE WAY FROM GERMANY.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3838CC">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2828BB" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>SIDLESS_SAM</b></font><br>
+  <font face="Courier New" size="1" color="#FFFF00"><i>OP</i></font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 28, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  CHIP ARRIVED. DESOLDERED OLD SID (USED DESOLDERING PUMP + FLUX - TOOK 25 MINUTES).
+  NEW CHIP INSTALLED. TYPED POKE 54296,15. THEN RAN COMMANDO. THE SID CHIP SANG.
+  THIS FORUM IS ABSOLUTELY THE BEST PLACE ON THE INTERNET FOR C64 REPAIRS.
+  THANK YOU CHIPMASTER ROB, BREADBIN BETTY, RETROTRONICS_EU AND ALL.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+<tr>
+<td bgcolor="#3030BB">
+<table width="100%" border="0" cellpadding="8" cellspacing="0">
+<tr>
+  <td width="110" valign="top" bgcolor="#2020AA" align="center">
+  <font face="Courier New" size="1" color="#FFFF00"><b>CHIPMASTER_ROB</b></font><br>
+  <font face="Courier New" size="1" color="#8888FF">POSTS: 4201</font>
+  </td>
+  <td valign="top">
+  <font face="Courier New" size="1" color="#8888FF">NOV 28, 2002</font><br>
+  <font face="Courier New" size="2" color="#CCCCFF">
+  FANTASTIC! THE SID CHIP SINGING AGAIN IS ALWAYS A GOOD DAY. WELCOME BACK TO THE SCENE.
+  COMMANDO ON A REAL SID NEVER GETS OLD.
+  </font>
+  </td>
+</tr>
+</table>
+</td>
+</tr>
+
+</table>
+
+<br>
+<table width="720" border="0" cellpadding="8" cellspacing="0" align="center" bgcolor="#2020AA">
+<tr><td bgcolor="#FFFF00"><font face="Courier New" size="2" color="#2020AA"><b>POST A REPLY</b></font></td></tr>
+<tr><td>
+<font face="Courier New" size="2" color="#CCCCFF">HANDLE: </font><input type="text" name="handle" size="22" style="background:#3030BB;color:#FFFF00;border:1px solid #FFFF00;font-family:Courier New;">&nbsp;&nbsp;
+<font face="Courier New" size="2" color="#CCCCFF">MACHINE: </font><input type="text" name="machine" size="16" style="background:#3030BB;color:#FFFF00;border:1px solid #FFFF00;font-family:Courier New;"><br><br>
+<textarea name="post" rows="5" cols="64" style="background:#3030BB;color:#CCCCFF;border:1px solid #FFFF00;font-family:Courier New;"></textarea><br><br>
+<input type="submit" value="POST" style="background:#FFFF00;color:#2020AA;font-family:Courier New;font-weight:bold;border:0;padding:4px 16px;">
+</td></tr>
+</table>
+
+</body>
+</html>
