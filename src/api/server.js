@@ -2204,6 +2204,107 @@ function createApp(config = getConfig()) {
 
   // ── End Crawler API ───────────────────────────────────────────────────────────
 
+  // ── Synthetic Data Bank ───────────────────────────────────────────────────────
+  // Serves the 2,000 synthetic HTML comment pages under /synthetic/<prompt_id>/<page>.html
+  // Pages live in: synthetic_data/pages/prompt_NN/
+  // Index listing: GET /synthetic  →  HTML directory of all prompt sets + pages
+  const syntheticRoot = require('path').resolve(__dirname, '../../synthetic_data/pages');
+  app.use('/synthetic', express.static(syntheticRoot, {
+    index: false,         // Do not auto-serve index.html — we handle the listing ourselves
+    extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
+    setHeaders(res) {
+      // Allow the scanner/crawler to fetch these pages cross-origin
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    },
+  }));
+
+  // Directory index: GET /synthetic  →  list all prompt sets
+  app.get('/synthetic', async (_req, res, next) => {
+    try {
+      const fsSync = require('fs');
+      const path = require('path');
+      const promptDirs = fsSync.readdirSync(syntheticRoot)
+        .filter((d) => d.startsWith('prompt_'))
+        .sort();
+      const rows = promptDirs.map((dir) => {
+        const dirPath = path.join(syntheticRoot, dir);
+        const pages = fsSync.readdirSync(dirPath).filter((f) => f.endsWith('.html'));
+        return `<tr>
+          <td><a href="/synthetic/${dir}/">${dir}</a></td>
+          <td>${pages.length} / 100</td>
+          <td>${pages.map((p) => `<a href="/synthetic/${dir}/${p}">${p}</a>`).join(' · ')}</td>
+        </tr>`;
+      });
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Synthetic Comment Bank — Index</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p { color: #666; margin-bottom: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+    th { text-align: left; padding: 8px 12px; background: #f3f4f6; border-bottom: 2px solid #e5e7eb; }
+    td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    td:last-child { word-break: break-all; color: #6b7280; }
+    a { color: #2563eb; }
+    .total { font-weight: bold; color: #111; }
+  </style>
+</head>
+<body>
+  <h1>Synthetic Comment Section Bank</h1>
+  <p>2,000 target HTML pages across 20 prompt sets · All pages label: <strong>positive</strong> (comment section present)</p>
+  <table>
+    <thead><tr><th>Prompt Set</th><th>Pages Generated</th><th>Files</th></tr></thead>
+    <tbody>${rows.join('\n')}</tbody>
+  </table>
+  <p class="total">Total: ${promptDirs.reduce((sum, dir) => {
+    const fsSync = require('fs');
+    const path = require('path');
+    return sum + fsSync.readdirSync(path.join(syntheticRoot, dir)).filter((f) => f.endsWith('.html')).length;
+  }, 0)} / 2,000 pages generated</p>
+</body>
+</html>`);
+    } catch (err) { next(err); }
+  });
+
+  // Prompt-level index: GET /synthetic/prompt_01/  →  list pages for that prompt
+  app.get('/synthetic/:promptId', async (req, res, next) => {
+    try {
+      const fsSync = require('fs');
+      const path = require('path');
+      const { promptId } = req.params;
+      const dirPath = path.join(syntheticRoot, promptId);
+      if (!fsSync.existsSync(dirPath)) { res.status(404).json({ error: 'Prompt set not found' }); return; }
+      const pages = fsSync.readdirSync(dirPath).filter((f) => f.endsWith('.html')).sort();
+      const items = pages.map((p) => `<li><a href="/synthetic/${promptId}/${p}">${p}</a></li>`).join('\n');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${promptId} — Synthetic Comment Bank</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    p { color: #666; }
+    ul { columns: 3; column-gap: 2rem; }
+    li { margin-bottom: 0.25rem; font-size: 0.875rem; }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <p><a href="/synthetic">← All prompt sets</a></p>
+  <h1>${promptId} — ${pages.length} / 100 pages generated</h1>
+  <ul>${items}</ul>
+</body>
+</html>`);
+    } catch (err) { next(err); }
+  });
+  // ── End Synthetic Data Bank ───────────────────────────────────────────────────
+
   app.use((error, _req, res, _next) => {
     console.error(error);
     res.status(500).json({

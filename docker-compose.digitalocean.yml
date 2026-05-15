@@ -48,6 +48,7 @@ services:
     volumes:
       - artifact-data:/data/comment-data/artifacts
       - ./src:/app/src
+      - ./synthetic_data:/app/synthetic_data
 
   worker:
     build:
