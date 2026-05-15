@@ -523,6 +523,124 @@ function createApp(config = getConfig()) {
     }
   });
 
+  // ── Enqueue all generated synthetic pages as a scan job ──────────────────────
+  // POST /api/jobs/from-synthetic
+  //   Optional body (JSON): { scanDelayMs, screenshotDelayMs, candidateMode, promptFilter }
+  //   promptFilter: string like "prompt_01,prompt_02" to limit which prompt sets are included.
+  //   If omitted, all generated prompt sets are included.
+  //
+  // Discovers every *.html file under synthetic_data/pages/ at request time,
+  // creates a job with all discovered URLs, then primes the queue.
+  app.post('/api/jobs/from-synthetic', async (req, res, next) => {
+    try {
+      const fsSync = require('fs');
+      const path = require('path');
+
+      const syntheticPagesRoot = path.resolve(__dirname, '../../synthetic_data/pages');
+
+      // Build the base URL from the incoming request so it works on any host/port
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      // Optional filter: comma-separated prompt IDs e.g. "prompt_01,prompt_03"
+      const rawFilter = String((req.body && req.body.promptFilter) || '').trim();
+      const promptFilter = rawFilter
+        ? new Set(rawFilter.split(',').map((s) => s.trim()).filter(Boolean))
+        : null;
+
+      // Walk synthetic_data/pages/ and collect every *.html path
+      const promptDirs = fsSync.readdirSync(syntheticPagesRoot)
+        .filter((d) => d.startsWith('prompt_') && fsSync.statSync(path.join(syntheticPagesRoot, d)).isDirectory())
+        .filter((d) => !promptFilter || promptFilter.has(d))
+        .sort();
+
+      if (!promptDirs.length) {
+        res.status(404).json({ error: 'No synthetic prompt directories found under synthetic_data/pages/' });
+        return;
+      }
+
+      const records = [];
+      const promptSummary = {};
+
+      for (const promptDir of promptDirs) {
+        const dirPath = path.join(syntheticPagesRoot, promptDir);
+        const pages = fsSync.readdirSync(dirPath)
+          .filter((f) => f.endsWith('.html'))
+          .sort();
+        promptSummary[promptDir] = pages.length;
+        for (const page of pages) {
+          const url = `${baseUrl}/synthetic/${promptDir}/${page}`;
+          records.push({
+            __row_number: records.length + 1,
+            __input_url: url,
+            __normalized_url: url,
+          });
+        }
+      }
+
+      if (!records.length) {
+        res.status(404).json({ error: 'No HTML pages found in synthetic_data/pages/' });
+        return;
+      }
+
+      const jobSettings = normalizeJobScanSettings({
+        scanDelayMs: req.body && req.body.scanDelayMs,
+        screenshotDelayMs: req.body && req.body.screenshotDelayMs,
+        candidateMode: req.body && req.body.candidateMode,
+      }, {
+        scanDelayMs: config.postLoadDelayMs,
+        screenshotDelayMs: config.preScreenshotDelayMs,
+        candidateMode: 'default',
+      });
+
+      const job = await createJob({
+        sourceFilename: 'synthetic-pages',
+        sourceColumn: 'url',
+        records,
+        batchSize: config.ingestBatchSize,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
+      }, config.databaseUrl);
+
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        job.id,
+        Math.min(config.initialQueueFill, job.totalUrls),
+        config.databaseUrl,
+        queue,
+      );
+
+      await appendJobEvent({
+        jobId: job.id,
+        scope: 'job',
+        eventType: 'job_created',
+        eventKey: 'job_created',
+        message: `Synthetic scan job created: ${job.totalUrls} page(s) across ${promptDirs.length} prompt set(s).`,
+        details: {
+          total_urls: job.totalUrls,
+          source_filename: 'synthetic-pages',
+          source_column: 'url',
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+          prompt_summary: promptSummary,
+        },
+      }).catch(() => {});
+
+      res.status(202).json({
+        jobId: job.id,
+        totalUrls: job.totalUrls,
+        promptsIncluded: promptDirs.length,
+        promptSummary,
+        scanDelayMs: job.scanDelayMs,
+        screenshotDelayMs: job.screenshotDelayMs,
+        candidateMode: job.candidateMode,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  // ── End from-synthetic ────────────────────────────────────────────────────────
+
   app.get('/api/backups/export.json', async (_req, res, next) => {
     try {
       const backup = await buildProjectBackup(config.databaseUrl);
