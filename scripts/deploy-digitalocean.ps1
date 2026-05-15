@@ -111,7 +111,7 @@ ensure_numeric_env_relationships() {
   fi
 }
 
-if [ ! -d "$AppDir/.git" ]; then
+if [ ! -e "$AppDir/.git" ]; then
   if [ -z "$Repository" ]; then
     echo "Repository is required for first deploy."
     exit 1
