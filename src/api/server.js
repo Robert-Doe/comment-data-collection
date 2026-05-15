@@ -2209,20 +2209,31 @@ function createApp(config = getConfig()) {
   // Pages live in: synthetic_data/pages/prompt_NN/
   // Index listing: GET /synthetic  →  HTML directory of all prompt sets + pages
   const syntheticRoot = require('path').resolve(__dirname, '../../synthetic_data/pages');
-  app.use('/synthetic', express.static(syntheticRoot, {
-    index: false,         // Do not auto-serve index.html — we handle the listing ourselves
-    extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
-    setHeaders(res) {
-      // Allow the scanner/crawler to fetch these pages cross-origin
-      res.setHeader('Access-Control-Allow-Origin', '*');
-    },
-  }));
+
+  // Route handlers must be registered BEFORE the static middleware so they are
+  // reached before serve-static can intercept the directory requests.
 
   // Directory index: GET /synthetic  →  list all prompt sets
   app.get('/synthetic', async (_req, res, next) => {
     try {
       const fsSync = require('fs');
       const path = require('path');
+      if (!fsSync.existsSync(syntheticRoot)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Synthetic Comment Bank — Index</title>
+  <style>body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }</style>
+</head>
+<body>
+  <h1>Synthetic Comment Section Bank</h1>
+  <p style="color:#888">No synthetic pages have been generated yet. Run the generation script to populate this bank.</p>
+</body>
+</html>`);
+        return;
+      }
       const promptDirs = fsSync.readdirSync(syntheticRoot)
         .filter((d) => d.startsWith('prompt_'))
         .sort();
@@ -2303,6 +2314,16 @@ function createApp(config = getConfig()) {
 </html>`);
     } catch (err) { next(err); }
   });
+
+  // Static file serving last — catches /synthetic/<promptId>/<page>.html requests.
+  // Must come after the route handlers above so those are not shadowed.
+  app.use('/synthetic', express.static(syntheticRoot, {
+    index: false,         // Do not auto-serve index.html — we handle the listing ourselves
+    extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
+    setHeaders(res) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    },
+  }));
   // ── End Synthetic Data Bank ───────────────────────────────────────────────────
 
   app.use((error, _req, res, _next) => {
