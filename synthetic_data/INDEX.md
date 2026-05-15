@@ -37,28 +37,28 @@
 
 | Prompt | Pages Generated | Droplet Route |
 |--------|----------------|---------------|
-| 01 | 0 / 100 | `/synthetic/prompt_01/` |
-| 02 | 0 / 100 | `/synthetic/prompt_02/` |
-| 03 | 0 / 100 | `/synthetic/prompt_03/` |
-| 04 | 0 / 100 | `/synthetic/prompt_04/` |
-| 05 | 0 / 100 | `/synthetic/prompt_05/` |
-| 06 | 0 / 100 | `/synthetic/prompt_06/` |
-| 07 | 0 / 100 | `/synthetic/prompt_07/` |
-| 08 | 0 / 100 | `/synthetic/prompt_08/` |
-| 09 | 0 / 100 | `/synthetic/prompt_09/` |
-| 10 | 0 / 100 | `/synthetic/prompt_10/` |
-| 11 | 0 / 100 | `/synthetic/prompt_11/` |
-| 12 | 0 / 100 | `/synthetic/prompt_12/` |
-| 13 | 0 / 100 | `/synthetic/prompt_13/` |
-| 14 | 0 / 100 | `/synthetic/prompt_14/` |
-| 15 | 0 / 100 | `/synthetic/prompt_15/` |
-| 16 | 0 / 100 | `/synthetic/prompt_16/` |
-| 17 | 0 / 100 | `/synthetic/prompt_17/` |
-| 18 | 0 / 100 | `/synthetic/prompt_18/` |
-| 19 | 0 / 100 | `/synthetic/prompt_19/` |
-| 20 | 0 / 100 | `/synthetic/prompt_20/` |
+| 01 | 100 / 100 | `/synthetic/prompt_01/` |
+| 02 | 100 / 100 | `/synthetic/prompt_02/` |
+| 03 | 100 / 100 | `/synthetic/prompt_03/` |
+| 04 | 100 / 100 | `/synthetic/prompt_04/` |
+| 05 | 100 / 100 | `/synthetic/prompt_05/` |
+| 06 | 100 / 100 | `/synthetic/prompt_06/` |
+| 07 | 100 / 100 | `/synthetic/prompt_07/` |
+| 08 | 100 / 100 | `/synthetic/prompt_08/` |
+| 09 | 100 / 100 | `/synthetic/prompt_09/` |
+| 10 | 100 / 100 | `/synthetic/prompt_10/` |
+| 11 | 100 / 100 | `/synthetic/prompt_11/` |
+| 12 | 100 / 100 | `/synthetic/prompt_12/` |
+| 13 | 100 / 100 | `/synthetic/prompt_13/` |
+| 14 | 100 / 100 | `/synthetic/prompt_14/` |
+| 15 | 100 / 100 | `/synthetic/prompt_15/` |
+| 16 | 100 / 100 | `/synthetic/prompt_16/` |
+| 17 | 100 / 100 | `/synthetic/prompt_17/` |
+| 18 | 100 / 100 | `/synthetic/prompt_18/` |
+| 19 | 100 / 100 | `/synthetic/prompt_19/` |
+| 20 | 100 / 100 | `/synthetic/prompt_20/` |
 
-**Total:** 0 / 2,000
+**Total:** 2000 / 2,000
 
 ---
 

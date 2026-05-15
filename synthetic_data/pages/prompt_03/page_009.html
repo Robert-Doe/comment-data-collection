@@ -1,0 +1,329 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>RouterRoom - Router overheats when more than two people are online</title>
+<style type="text/css">
+body {
+  background: #eef2ee;
+  color: #1f2623;
+  margin: 0;
+  font-family: Verdana, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link { color: #436b58; }
+a:visited { color: #436b58; }
+h1, h2, h3, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+.sep { color: #c8d4cb; }
+.story { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #c8d4cb; }
+.crumbs { font-size: 11px; margin-bottom: 10px; }
+.crumbs li { display: inline; margin-right: 6px; }
+.heading-wrap { margin-bottom: 10px; }
+.heading { font-size: 20px; margin-bottom: 6px; }
+.lede { font-size: 12px; color: #436b58; }
+.page { width: 760px; margin: 0 auto; padding: 18px 0 36px; }
+.story { background: #ffffff; border: 1px solid #c8d4cb; padding: 14px 16px;  }
+.crumbs { font-size: 11px; margin-bottom: 10px; }
+.crumbs li { display: inline; margin-right: 6px; }
+.heading-wrap { margin-bottom: 10px; }
+.heading { font-size: 20px; margin-bottom: 6px; }
+.lede { font-size: 12px; color: #436b58; }
+.stream { margin-top: 14px; }
+.entry { background: #ffffff; border: 1px solid #c8d4cb; padding: 10px; margin-bottom: 10px;  }
+.meta { display: block; margin-bottom: 8px; overflow: hidden; }
+.author { font-weight: bold; }
+.badge { margin-left: 8px; padding: 1px 5px; background: #edf6f0; border: 1px solid #c8d4cb; font-size: 11px; }
+.stamp { float: right; color: #436b58; font-size: 11px; }
+.body p { margin: 0 0 8px 0; }
+.avatar { float: left; width: 48px; height: 48px; margin-right: 10px; border: 1px solid #c8d4cb; overflow: hidden; text-align: center; line-height: 48px; background: #edf6f0; }
+.avatar img { display: block; width: 48px; height: 48px; }
+.avatar-text { font-weight: bold; color: #436b58; }
+.body { overflow: hidden; }
+.undefined { margin-top: 8px; font-size: 11px; color: #436b58; }
+.children { margin-top: 10px; border-left: 3px solid #436b58; padding-left: 10px; }
+.replybox { background: #ffffff; border: 1px solid #c8d4cb; padding: 12px 14px; margin-top: 14px;  }
+.field { margin-top: 8px; }
+.label { display: block; font-size: 12px; }
+.label input, .label textarea { display: block; width: 96%; margin-top: 4px; border: 1px solid #c8d4cb; padding: 5px; font-family: inherit; font-size: 13px; background: #fff; }
+.captcha { margin-top: 8px; }
+.captcha img { vertical-align: middle; border: 1px solid #c8d4cb; }
+.captcha input { width: 130px; margin-left: 8px; border: 1px solid #c8d4cb; padding: 4px; }
+.footer { margin-top: 10px; }
+.footer button { border: 1px solid #c8d4cb; background: #edf6f0; padding: 5px 12px; font-family: inherit; }
+.note { margin-top: 8px; color: #436b58; }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="thread">
+<div class="story">
+<div class="crumbs">
+<ul>
+<li><a href="#">Home</a></li>
+<li><a href="#">Tech</a></li>
+<li><a href="#">Networking</a></li>
+</ul>
+</div>
+<div class="heading-wrap">
+<h1>RouterRoom</h1>
+<h2>Router overheats when more than two people are online</h2>
+</div>
+<p class="lede">The comments bounce between vents, firmware, and load.</p>
+</div>
+<div class="heading-wrap">
+<h3 class="heading">14 Comments</h3>
+</div>
+<div class="stream">
+<div class="entry" id="entry-9-1">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Nina</span>
+<span class="badge">Moderator</span>
+<span class="stamp">19 May 08</span>
+</div>
+</div>
+<div class="body">
+<p>This feels like the wrappers changed under the page. <b>the airflow needs to improve</b> is the clue I would chase first.</p>
+<p>The visible break can look random, but the cause is often very repeatable.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+<div class="children">
+<div class="entry reply" style="padding-left:22px" id="entry-9-3">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Rex</span>
+<span class="badge">Member</span>
+<span class="stamp">21 Jul 04</span>
+</div>
+</div>
+<div class="body">
+<p>I agree on the heat under load part. <em>the airflow needs to improve</em> is the quickest test here.</p>
+<p>If the page only breaks after the new wrapper loads, that is the real clue.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+<div class="children">
+<div class="entry reply" style="padding-left:44px" id="entry-9-5">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Nate</span>
+<span class="badge">Moderator</span>
+<span class="stamp">23 Sep 06</span>
+</div>
+</div>
+<div class="body">
+<p>Agreed, but I would also check the parent box. <strong>heat under load</strong> tends to collapse from the outside in.</p>
+<p>The safest move is to make one layer boring again before adding anything else.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-7">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Iris</span>
+<span class="badge">Guest</span>
+<span class="stamp">2008-11-25 12:10</span>
+</div>
+</div>
+<div class="body">
+<p>I agree on the heat under load part. <em>the airflow needs to improve</em> is the quickest test here.</p>
+<p>If the page only breaks after the new wrapper loads, that is the real clue.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-8">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Eli</span>
+<span class="badge">Member</span>
+<span class="stamp">December 26, 2009 at 3:23 pm</span>
+</div>
+</div>
+<div class="body">
+<p>The quick proof is to simplify the page one layer at a time. <b>the airflow needs to improve</b> should be obvious after that.</p>
+<p>A small change often explains the whole thread.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-9">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Rex</span>
+<span class="badge">Member</span>
+<span class="stamp">27 Jan 04</span>
+</div>
+</div>
+<div class="body">
+<p>Short version: this still looks like the wrapper level to me.<br><i>the airflow needs to improve is where I would start.</i></p>
+<p>If the browser view changes, the layout issue follows right away.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-10">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Vera</span>
+<span class="badge">Reader</span>
+<span class="stamp">2005-02-28 21:49</span>
+</div>
+</div>
+<div class="body">
+<p>That matches what I saw too. <strong>the airflow needs to improve</strong> cleared it up once the layout settled.</p>
+<p>I would still check the outer box before touching the content.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-11">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Anonymous</span>
+<span class="badge">Contributor</span>
+<span class="stamp">March 1, 2006 at 12:02 am</span>
+</div>
+</div>
+<div class="body">
+<p>I agree on the heat under load part. <em>the airflow needs to improve</em> is the quickest test here.</p>
+<p>If the page only breaks after the new wrapper loads, that is the real clue.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-12">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Arlo</span>
+<span class="badge">Admin</span>
+<span class="stamp">2 Apr 07</span>
+</div>
+</div>
+<div class="body">
+<p>The quick proof is to simplify the page one layer at a time. <b>the airflow needs to improve</b> should be obvious after that.</p>
+<p>A small change often explains the whole thread.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-13">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Iris</span>
+<span class="badge">Guest</span>
+<span class="stamp">2008-05-03 06:28</span>
+</div>
+</div>
+<div class="body">
+<p>Short version: this still looks like the wrapper level to me.<br><i>the airflow needs to improve is where I would start.</i></p>
+<p>If the browser view changes, the layout issue follows right away.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry reply" style="padding-left:22px" id="entry-9-14">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Eli</span>
+<span class="badge">Member</span>
+<span class="stamp">June 4, 2009 at 9:41 am</span>
+</div>
+</div>
+<div class="body">
+<p>That matches what I saw too. <strong>the airflow needs to improve</strong> cleared it up once the layout settled.</p>
+<p>I would still check the outer box before touching the content.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+</div>
+</div>
+<div class="entry" id="entry-9-2">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Sana</span>
+<span class="badge">Admin</span>
+<span class="stamp">2009-06-20 21:05</span>
+</div>
+</div>
+<div class="body">
+<p>The symptoms are small, but the cause is bigger.<br><i>the airflow needs to improve needs a closer look.</i></p>
+<p>I would keep the fix narrow until the basic shape is stable again.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+<div class="children">
+<div class="entry reply" style="padding-left:22px" id="entry-9-4">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Reader</span>
+<span class="badge">Reader</span>
+<span class="stamp">2005-08-22 03:31</span>
+</div>
+</div>
+<div class="body">
+<p>The quick proof is to simplify the page one layer at a time. <b>the airflow needs to improve</b> should be obvious after that.</p>
+<p>A small change often explains the whole thread.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+<div class="children">
+<div class="entry reply" style="padding-left:44px" id="entry-9-6">
+<div class="meta">
+<div class="meta-core">
+<span class="author">Dina</span>
+<span class="badge">Guest</span>
+<span class="stamp">2007-10-24 09:57</span>
+</div>
+</div>
+<div class="body">
+<p>I would keep the fix small and repeatable. <em>the airflow needs to improve</em> beats a larger rewrite in this case.</p>
+<p>Once the baseline holds, the rest of the page is easier to read.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="replybox">
+<h3>Leave a Comment</h3>
+<form action="#" method="post">
+<div class="field">
+<label class="label">Message <textarea name="message" rows="7" cols="56"></textarea></label>
+</div>
+<div class="field">
+<label class="label"><input type="checkbox" name="notify"> Notify me of followup comments via e-mail</label>
+</div>
+<div class="footer">
+<button type="submit">Post</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</body>
+</html>

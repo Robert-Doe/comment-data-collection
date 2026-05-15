@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BuildBench - Router reset advice becomes a troubleshooting chain</title>
+<style type="text/css">
+body {
+  background: #eef4f1;
+  color: #223028;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link, a:visited { color: #4f7b63; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+.page { width: 860px; margin: 0 auto; padding: 18px 0 32px; }
+.story { background: #ffffff; border: 1px solid #c9d8cf; padding: 16px 18px; margin-bottom: 16px; }
+.story header { margin-bottom: 10px; }
+.story .kicker { font-size: 11px; letter-spacing: 0; color: #4f7b63; margin-bottom: 4px; text-transform: uppercase; }
+.story h1 { font-size: 26px; margin-bottom: 6px; }
+.story .lede { font-size: 12px; color: #4f7b63; }
+.comments-header { font-size: 13px; }
+.sort-controls { margin-top: 6px; font-size: 11px; }
+.comment-badge, .badge { display: inline-block; padding: 1px 6px; margin-left: 4px; border-radius: 10px; font-size: 10px; line-height: 1.4; background: #e7f0ea; color: #4f7b63; }
+.pinned-badge { background: #fff2a8; color: #5b4a00; }
+.author-response-badge { background: #dff0d8; color: #285b2f; }
+.user-badge { background: #e7f0ea; }
+.new-comment { background: #ffffd0; }
+.loading-spinner { margin-top: 10px; }
+.loading-spinner img { vertical-align: middle; }
+.comment-template, #comment-preview { display: none; }
+.error-msg { display: none; color: #a33; font-size: 11px; margin-left: 6px; }
+.vote-count { display: inline-block; min-width: 22px; text-align: center; }
+.reply-toggle { font-size: 11px; }
+.reply-link, .edit-link, .report-link { font-size: 11px; }
+.comment-actions { white-space: nowrap; }
+.comment-actions a { margin-right: 6px; }
+.comment-main { overflow: hidden; }
+.comment-body p { margin-bottom: 8px; }
+.comment-form label { display: block; font-size: 12px; margin-bottom: 3px; }
+.comment-form .form-row { margin-bottom: 8px; }
+.comment-form .ui-state-default { background: #fff; }
+.comments-closed { background: #e7f0ea; border: 1px solid #c9d8cf; padding: 10px 12px; margin-top: 12px; }
+.comment.new-comment { box-shadow: inset 0 0 0 1px rgba(255, 238, 102, 0.55); }
+.comment-item, .comment-row, .comment { transition: all 0.3s ease; }
+.comment-shell { width: 860px; margin: 0 auto 24px; }
+.commentlist { list-style: none; margin: 0; padding: 0 12px 12px; background: #ffffff; border: 1px solid #c9d8cf; border-top: 0; }
+.comment { border-top: 1px solid #c9d8cf; padding: 12px 0; overflow: hidden; }
+.comment:first-child { border-top: 0; }
+.avatar { float: left; width: 38px; height: 38px; margin-right: 10px; line-height: 38px; text-align: center; background: #e7f0ea; color: #4f7b63; font-weight: bold; border-radius: 3px; }
+.comment-main { overflow: hidden; }
+.comment-meta { font-size: 12px; margin-bottom: 6px; }
+.comment-body p { margin: 0 0 8px; }
+.comment-actions { font-size: 11px; margin-top: 6px; }
+.children { margin-top: 8px; margin-left: 32px; padding-left: 10px; border-left: 2px solid #c9d8cf; }
+.comment-form { margin-top: 12px; background: #ffffff; border: 1px solid #c9d8cf; padding: 12px; }
+.comment-input, .comment-textarea { width: 100%; max-width: 540px; border: 1px solid #c9d8cf; padding: 5px 6px; font-family: inherit; font-size: 12px; }
+.comment-textarea { min-height: 84px; }
+.comment-table .comment-row .comment-body p, .commentlist .comment-body p, .jq-comment-item .comment-body p, .comment-item .comment-body p { max-width: 680px; }
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.x.x/jquery.min.js"></script>
+<script>
+$(document).ready(function() {
+  var $form = $("#comment-form");
+  var $count = $("#comment-count");
+  function updateCount(delta) {
+    var current = parseInt($count.text(), 10) || 0;
+    $count.text(current + delta);
+  }
+  $(".js-toggle-replies").on("click", function(e) {
+    e.preventDefault();
+    var target = $(this).data("target");
+    var $target = $("#" + target);
+    if ($target.is(":visible")) {
+      $target.slideUp(180);
+      $(this).text("Show replies");
+    } else {
+      $target.slideDown(180);
+      $(this).text("Hide replies");
+    }
+  });
+  $(".js-vote-up, .js-vote-down").on("click", function(e) {
+    e.preventDefault();
+    var $countNode = $(this).siblings(".vote-count");
+    var value = parseInt($countNode.text(), 10) || 0;
+    if ($(this).hasClass("js-vote-up")) {
+      $countNode.text(value + 1);
+    } else {
+      $countNode.text(Math.max(0, value - 1));
+    }
+  });
+  $(".js-preview").on("click", function(e) {
+    e.preventDefault();
+    var value = $("#comment-text").val() || "Preview will appear here.";
+    $("#comment-preview").html("<p>" + value + "</p>").show();
+  });
+  $(".js-load-more").on("click", function(e) {
+    e.preventDefault();
+    $(this).text("Loading more comments...");
+  });
+  $(".js-edit-comment").on("click", function(e) {
+    e.preventDefault();
+    $(this).closest(".comment-item, .comment, .comment-row, article").find(".comment-body").first().toggleClass("editing");
+  });
+  $(".js-reply-btn").on("click", function(e) {
+    e.preventDefault();
+  });
+  if ($form.length) {
+    $form.on("submit", function(e) {
+      e.preventDefault();
+      $(".loading-spinner").show();
+      var payload = {
+        name: $("#comment-name").val(),
+        email: $("#comment-email").val(),
+        website: $("#comment-website").val(),
+        comment: $("#comment-text").val()
+      };
+      $.ajax({
+        type: "POST",
+        url: "/comments/ajax",
+        data: payload,
+        success: function() {
+          updateCount(1);
+          $(".loading-spinner").hide();
+        },
+        error: function() {
+          $(".loading-spinner").hide();
+        }
+      });
+    });
+  }
+});
+</script>
+</head>
+<body>
+<div class="page">
+<div class="story">
+<header>
+<p class="kicker">BuildBench</p>
+<h1>Router reset advice becomes a troubleshooting chain</h1>
+<p class="lede">A DIY thread shows the old forum habit of adding small hooks to a page that still works without JavaScript.</p>
+</header>
+<p>The page is built to show how jQuery-era teams wrapped behavior around meaningful static HTML.</p>
+<p>It keeps the comment block parseable without JavaScript while still exposing ids, data attributes, and hook classes for enhancement.</p>
+</div>
+<div id="comments" class="comment-shell">
+<form id="comment-form" class="comment-form" action="#" method="post">
+<div class="form-row">
+<label for="comment-name">Name</label>
+<input type="text" id="comment-name" name="name" class="comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-email">Email</label>
+<input type="email" id="comment-email" name="email" class="comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-website">Website</label>
+<input type="url" id="comment-website" name="website" class="comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-text">Comment</label>
+<textarea id="comment-text" name="comment" class="comment-textarea js-preview-source"></textarea>
+</div>
+<div class="form-row"><button id="submit-btn" type="submit" class="js-submit submit-btn">Post Comment</button> <button type="button" class="js-preview ui-state-default">Preview</button></div>
+</form>
+<div class="loading-spinner" style="display:none"><img src="spinner.gif" alt="" /></div>
+<div id="comment-preview" class="comment-preview" style="display:none">Preview will appear here.</div>
+<div class="comments-header"><strong>Comments</strong> <span id="comment-count">8</span> Comments</div>
+<ul id="comment-list" class="commentlist">
+<li id="comment-67-1" class="comment byuser depth-0 even pinned" data-id="1" data-author="Sam Carter" data-timestamp="1299633000" data-depth="0">
+<span class="avatar" aria-hidden="true">SC</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Sam Carter</span> <span class="badge pinned-badge">Pinned</span> <span class="comment-time">Mar 09, 2011 1:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies comment-reply-link" data-target="replies-67-1">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">14</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ul class="children" id="replies-67-1"><li id="comment-67-6" class="comment byuser depth-1 even" data-id="6" data-author="Owen Price" data-timestamp="1299654600" data-depth="1">
+<span class="avatar" aria-hidden="true">OP</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Owen Price</span> <span class="comment-time">Mar 09, 2011 7:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">20</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ul>
+</div>
+</li>
+<li id="comment-67-2" class="comment byuser depth-0 odd" data-id="2" data-author="Alex Romero" data-timestamp="1299637200" data-depth="0">
+<span class="avatar" aria-hidden="true">AR</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Alex Romero</span> <span class="badge user-badge">Editor</span> <span class="comment-time">Mar 09, 2011 2:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies comment-reply-link" data-target="replies-67-2">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">15</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ul class="children" id="replies-67-2"><li id="comment-67-7" class="comment byuser depth-1 even" data-id="7" data-author="Mina Shah" data-timestamp="1299658800" data-depth="1">
+<span class="avatar" aria-hidden="true">MS</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Mina Shah</span> <span class="comment-time">Mar 09, 2011 8:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">21</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ul>
+</div>
+</li>
+<li id="comment-67-3" class="comment byuser depth-0 even" data-id="3" data-author="Ben Howard" data-timestamp="1299641400" data-depth="0">
+<span class="avatar" aria-hidden="true">BH</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Ben Howard</span> <span class="comment-time">Mar 09, 2011 3:30 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies comment-reply-link" data-target="replies-67-3">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">16</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ul class="children" id="replies-67-3"><li id="comment-67-8" class="comment byuser depth-1 even" data-id="8" data-author="Drew Kim" data-timestamp="1299663000" data-depth="1">
+<span class="avatar" aria-hidden="true">DK</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Drew Kim</span> <span class="badge user-badge">Verified</span> <span class="comment-time">Mar 09, 2011 9:30 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">3</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ul>
+</div>
+</li>
+<li id="comment-67-4" class="comment byuser depth-0 odd" data-id="4" data-author="Owen Price" data-timestamp="1299645600" data-depth="0">
+<span class="avatar" aria-hidden="true">OP</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Owen Price</span> <span class="comment-time">Mar 09, 2011 4:40 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">17</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li>
+<li id="comment-67-5" class="comment byuser depth-0 even" data-id="5" data-author="Iris Cole" data-timestamp="1299649800" data-depth="0">
+<span class="avatar" aria-hidden="true">IC</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="fn">Iris Cole</span> <span class="comment-time">Mar 09, 2011 5:50 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-report report-link">Report</a> | <div class="comment-votes"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">18</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li>
+</ul>
+<div class="load-more-wrap"><button type="button" class="js-load-more load-more">Load 10 more</button></div>
+</div>
+</div>
+</body>
+</html>

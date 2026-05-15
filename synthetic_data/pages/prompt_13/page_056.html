@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guestbook - A classic guestbook with linear entries</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #faf7f2; color: #2a241d; }
+.page { width: min(920px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.story { background: #fff; border: 1px solid #ddd3c5; padding: 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.story .lede { margin: 0; color: #6d5f52; }
+.guestbook, .comments, .feed { background: #fff; border: 1px solid #ddd3c5; padding: 18px; }
+.item { margin-bottom: 14px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.author { font-weight: 700; }
+.pin, .featured { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #fff2c6; font-size: 11px; }
+.compose { margin-bottom: 16px; display: grid; gap: 10px; max-width: 520px; }
+.compose input, .compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b4; padding: 8px 10px; font: inherit; }
+.policy, .approval { margin: 0 0 12px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; }
+table { width: 100%; border-collapse: collapse; }
+th, td { vertical-align: top; padding: 10px 8px; border-top: 1px solid #e6ddd1; text-align: left; }
+dl dt { margin-top: 12px; font-weight: 700; }
+dl dd { margin: 4px 0 0 0; padding-bottom: 12px; border-bottom: 1px solid #e6ddd1; }
+.item .content { display: block; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Guestbook</p>
+<h1>A classic guestbook with linear entries</h1>
+<p class="lede">The list is intentionally linear, with no replies or branches anywhere in the structure.</p>
+</section>
+<section class="guestbook">
+<h2>Guestbook (8)</h2>
+<div class="approval">Your entry has been received and is awaiting approval.</div>
+<div class="feed"><p><b>Maya:</b> The page keeps the conversation readable without any extra chrome. <time datetime="2016-05-24T16:26:00.000Z">May 24, 2016</time></p>
+<p><b>Maya:</b> The page reads like a server-rendered snapshot. <time datetime="2016-12-02T07:43:00.000Z">Dec 2, 2016</time></p>
+<p><b>Milo:</b> This feels like the output of a component-first rendering pipeline. <time datetime="2016-10-21T02:26:00.000Z">Oct 20, 2016</time></p>
+<p><b>Theo:</b> This feels like the output of a component-first rendering pipeline. <time datetime="2016-12-14T19:41:00.000Z">Dec 14, 2016</time></p>
+<p><b>Ari:</b> The content fits the static shell well. <time datetime="2016-02-05T10:42:00.000Z">Feb 5, 2016</time></p>
+<p><b>Noel:</b> The structure is clean enough to be hydrated later. <time datetime="2016-11-13T14:47:00.000Z">Nov 13, 2016</time></p>
+<p><b>Mina:</b> The nested branch is there, but it does not overwhelm the layout. <time datetime="2016-05-16T09:53:00.000Z">May 16, 2016</time></p>
+<p><b>Owen:</b> The comments are easy to scan because the spacing stays consistent. </p></div>
+<form class="compose">
+
+
+<label>Message <textarea rows="4"></textarea></label>
+<button type="button">Send</button>
+</form>
+</section>
+</div>
+</body>
+</html>

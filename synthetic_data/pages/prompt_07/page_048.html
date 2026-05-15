@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Journal - A tutorial with structured replies and citations</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+@media (prefers-color-scheme: dark) { body { background: #121315; color: #e9e7e2; } .story, #comments, .comments-section, .subscription-box, .comment-compose { background: #1a1d22; border-color: #353a43; } .lede, .comment__footer, .comments__footer, .comment__figure figcaption { color: #9aa3b2; } .comment__replies, .comments__replies { border-left-color: #373e49; } }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">Code Journal</p>
+<h1>A tutorial with structured replies and citations</h1>
+<p class="lede">The markup uses time, cite, and mark to keep the history readable.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<nav class="comment-navigation"><a href="#">Previous</a> <a href="#">Next</a></nav>
+<section id="comments" class="comments-section">
+<article id="comment-48-1" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Nadia</cite>
+<time datetime="2012-02-27T23:48:00.000Z" itemprop="datePublished">February 27, 2012 at 4:48 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I used the same pattern in a theme migration last year.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-1-1" class="comment" data-depth="1"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Elsa</cite>
+<time datetime="2012-10-15T23:01:00.000Z" itemprop="datePublished">October 15, 2012 at 4:01 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I used the same pattern in a theme migration last year.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-1-1-1" class="comment" data-depth="2"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Harriet</cite>
+<time datetime="2012-05-17T02:18:00.000Z" itemprop="datePublished">May 16, 2012 at 7:18 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print. The nested reply stays semantically correct.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article>
+<article id="comment-48-1-2" class="comment" data-depth="1"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Harriet</cite>
+<time datetime="2012-12-16T11:31:00.000Z" itemprop="datePublished">December 16, 2012 at 4:31 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-1-2-1" class="comment" data-depth="2"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Mira</cite>
+<time datetime="2012-08-14T22:58:00.000Z" itemprop="datePublished">August 14, 2012 at 3:58 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print. The nested reply stays semantically correct.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article></div>
+</article>
+<article id="comment-48-2" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Jonah</cite>
+<time datetime="2012-06-24T13:24:00.000Z" itemprop="datePublished">June 24, 2012 at 6:24 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">That time element makes the archive much easier to understand.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-2-1" class="comment" data-depth="1"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Saul</cite>
+<time datetime="2012-01-03T16:52:00.000Z" itemprop="datePublished">January 3, 2012 at 9:52 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-2-1-1" class="comment" data-depth="2"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Cora</cite>
+<time datetime="2012-04-25T07:05:00.000Z" itemprop="datePublished">April 25, 2012 at 12:05 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly. The nested reply stays semantically correct.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-2-1-1-1" class="comment" data-depth="3"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Vera</cite>
+<time datetime="2012-07-07T04:25:00.000Z" itemprop="datePublished">July 6, 2012 at 9:25 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread. The nested reply stays semantically correct.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article></div>
+</article></div>
+</article>
+<article id="comment-48-3" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Pia</cite>
+<time datetime="2012-02-25T09:41:00.000Z" itemprop="datePublished">February 25, 2012 at 2:41 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-48-3-1" class="comment" data-depth="1"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Ivy</cite>
+<time datetime="2012-03-27T16:36:00.000Z" itemprop="datePublished">March 27, 2012 at 9:36 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-48-3-2" class="comment" data-depth="1"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Dylan</cite>
+<time datetime="2012-05-28T22:52:00.000Z" itemprop="datePublished">May 28, 2012 at 3:52 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article>
+<aside class="subscription-box"><h2>Subscribe</h2><p>Get new posts by email.</p><input type="email" placeholder="Email address"><button type="button">Subscribe</button></aside>
+</section>
+</div>
+</body>
+</html>

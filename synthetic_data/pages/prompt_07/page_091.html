@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Notes - A field guide to HTML5 article nesting</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+@media print { .comment-compose { display: none; } }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">Semantic Notes</p>
+<h1>A field guide to HTML5 article nesting</h1>
+<p class="lede">The page leans hard into article, section, header, and footer semantics.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<section id="comments" class="comments-section">
+<article id="comment-91-1" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Jonah%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234b8f72%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EJO%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Jonah"><figcaption>Jonah</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Jonah</cite>
+<time datetime="2012-04-11T01:37:00.000Z" itemprop="datePublished">April 10, 2012 at 6:37 PM</time>
+<span class="badge">Author reply</span>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-2" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Omar%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%23a05d8c%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EOM%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Omar"><figcaption>Omar</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Omar</cite>
+<time datetime="2012-11-05T11:00:00.000Z" itemprop="datePublished">November 5, 2012 at 4:00 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">That time element makes the archive much easier to understand.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-3" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Saul%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238c5a3c%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ESA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Saul"><figcaption>Saul</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Saul</cite>
+<time datetime="2012-01-12T19:13:00.000Z" itemprop="datePublished">January 12, 2012 at 12:13 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-4" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234b8f72%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tina"><figcaption>Tina</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Tina</cite>
+<time datetime="2012-01-19T14:17:00.000Z" itemprop="datePublished">January 19, 2012 at 7:17 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-5" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234b8f72%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tina"><figcaption>Tina</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Tina</cite>
+<time datetime="2012-06-08T17:43:00.000Z" itemprop="datePublished">June 8, 2012 at 10:43 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-6" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%23a05d8c%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tina"><figcaption>Tina</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Tina</cite>
+<time datetime="2012-03-03T13:56:00.000Z" itemprop="datePublished">March 3, 2012 at 6:56 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-7" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Aiden%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234b8f72%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EAI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Aiden"><figcaption>Aiden</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Aiden</cite>
+<time datetime="2012-02-21T17:51:00.000Z" itemprop="datePublished">February 21, 2012 at 10:51 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-91-8" class="comment" data-depth="0"><figure class="comment__figure"><img src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Rafael%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%235470a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ERA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Rafael"><figcaption>Rafael</figcaption></figure><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Rafael</cite>
+<time datetime="2012-07-11T09:18:00.000Z" itemprop="datePublished">July 11, 2012 at 2:18 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<section class="comment-compose">
+<h2>Leave a note</h2>
+<form>
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Website <input type="url" name="website"></label>
+<label>Message <textarea rows="5"></textarea></label>
+<button type="submit">Post</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

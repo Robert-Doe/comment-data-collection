@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ByteLine - AJAX comments make the launch post feel alive</title>
+<link rel="stylesheet" href="icons.css">
+<style type="text/css">
+body {
+  background: #f5f7f2;
+  color: #24291f;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link, a:visited { color: #6f8c44; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+.page { width: 860px; margin: 0 auto; padding: 18px 0 32px; }
+.story { background: #ffffff; border: 1px solid #d2dbc8; padding: 16px 18px; margin-bottom: 16px; }
+.story header { margin-bottom: 10px; }
+.story .kicker { font-size: 11px; letter-spacing: 0; color: #6f8c44; margin-bottom: 4px; text-transform: uppercase; }
+.story h1 { font-size: 26px; margin-bottom: 6px; }
+.story .lede { font-size: 12px; color: #6f8c44; }
+.comments-header { font-size: 13px; }
+.sort-controls { margin-top: 6px; font-size: 11px; }
+.comment-badge, .badge { display: inline-block; padding: 1px 6px; margin-left: 4px; border-radius: 10px; font-size: 10px; line-height: 1.4; background: #edf2e5; color: #6f8c44; }
+.pinned-badge { background: #fff2a8; color: #5b4a00; }
+.author-response-badge { background: #dff0d8; color: #285b2f; }
+.user-badge { background: #edf2e5; }
+.new-comment { background: #ffffd0; }
+.loading-spinner { margin-top: 10px; }
+.loading-spinner img { vertical-align: middle; }
+.comment-template, #comment-preview { display: none; }
+.error-msg { display: none; color: #a33; font-size: 11px; margin-left: 6px; }
+.vote-count { display: inline-block; min-width: 22px; text-align: center; }
+.reply-toggle { font-size: 11px; }
+.reply-link, .edit-link, .report-link { font-size: 11px; }
+.comment-actions { white-space: nowrap; }
+.comment-actions a { margin-right: 6px; }
+.comment-main { overflow: hidden; }
+.comment-body p { margin-bottom: 8px; }
+.comment-form label { display: block; font-size: 12px; margin-bottom: 3px; }
+.comment-form .form-row { margin-bottom: 8px; }
+.comment-form .ui-state-default { background: #fff; }
+.comments-closed { background: #edf2e5; border: 1px solid #d2dbc8; padding: 10px 12px; margin-top: 12px; }
+.comment.new-comment { box-shadow: inset 0 0 0 1px rgba(255, 238, 102, 0.55); }
+.comment-item, .comment-row, .comment { transition: all 0.3s ease; }
+.jq-comments { width: 860px; margin: 0 auto 24px; }
+.comment-wrapper { background: #ffffff; border: 1px solid #d2dbc8; border-top: 0; }
+.comment-item { border-top: 1px solid #d2dbc8; padding: 12px; overflow: hidden; }
+.comment-item:first-child { border-top: 0; }
+.avatar { float: left; width: 38px; height: 38px; margin-right: 10px; line-height: 38px; text-align: center; background: #edf2e5; color: #6f8c44; font-weight: bold; border-radius: 3px; }
+.comment-meta { font-size: 12px; margin-bottom: 6px; }
+.comment-body p { margin: 0 0 8px; }
+.comment-actions { font-size: 11px; margin-top: 6px; }
+.comment-children { margin-top: 8px; margin-left: 32px; padding-left: 10px; border-left: 2px solid #d2dbc8; }
+.comment-form { margin-top: 12px; background: #ffffff; border: 1px solid #d2dbc8; padding: 12px; }
+.comment-input, .comment-textarea { width: 100%; max-width: 540px; border: 1px solid #d2dbc8; padding: 5px 6px; font-family: inherit; font-size: 12px; }
+.comment-textarea { min-height: 84px; }
+.icon-reply, .icon-edit, .icon-vote { font-style: normal; }
+.comment-table .comment-row .comment-body p, .commentlist .comment-body p, .jq-comment-item .comment-body p, .comment-item .comment-body p { max-width: 680px; }
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.x.x/jquery.min.js"></script>
+<script>
+$(document).ready(function() {
+  var $form = $("#comment-form");
+  var $count = $("#comment-count");
+  function updateCount(delta) {
+    var current = parseInt($count.text(), 10) || 0;
+    $count.text(current + delta);
+  }
+  $(".js-toggle-replies").on("click", function(e) {
+    e.preventDefault();
+    var target = $(this).data("target");
+    var $target = $("#" + target);
+    if ($target.is(":visible")) {
+      $target.slideUp(180);
+      $(this).text("Show replies");
+    } else {
+      $target.slideDown(180);
+      $(this).text("Hide replies");
+    }
+  });
+  $(".js-vote-up, .js-vote-down").on("click", function(e) {
+    e.preventDefault();
+    var $countNode = $(this).siblings(".vote-count");
+    var value = parseInt($countNode.text(), 10) || 0;
+    if ($(this).hasClass("js-vote-up")) {
+      $countNode.text(value + 1);
+    } else {
+      $countNode.text(Math.max(0, value - 1));
+    }
+  });
+  $(".js-preview").on("click", function(e) {
+    e.preventDefault();
+    var value = $("#comment-text").val() || "Preview will appear here.";
+    $("#comment-preview").html("<p>" + value + "</p>").show();
+  });
+  $(".js-load-more").on("click", function(e) {
+    e.preventDefault();
+    $(this).text("Loading more comments...");
+  });
+  $(".js-edit-comment").on("click", function(e) {
+    e.preventDefault();
+    $(this).closest(".comment-item, .comment, .comment-row, article").find(".comment-body").first().toggleClass("editing");
+  });
+  $(".js-reply-btn").on("click", function(e) {
+    e.preventDefault();
+  });
+  if ($form.length) {
+    $form.on("submit", function(e) {
+      e.preventDefault();
+      $(".loading-spinner").show();
+      var payload = {
+        name: $("#comment-name").val(),
+        email: $("#comment-email").val(),
+        website: $("#comment-website").val(),
+        comment: $("#comment-text").val()
+      };
+      $.ajax({
+        type: "POST",
+        url: "/comments/ajax",
+        data: payload,
+        success: function() {
+          updateCount(1);
+          $(".loading-spinner").hide();
+        },
+        error: function() {
+          $(".loading-spinner").hide();
+        }
+      });
+    });
+  }
+});
+</script>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<header>
+<p class="kicker">ByteLine</p>
+<h1>AJAX comments make the launch post feel alive</h1>
+<p class="lede">The thread sits beneath a product update and keeps the conversation moving with small jQuery hooks.</p>
+</header>
+<p>The page is built to show how jQuery-era teams wrapped behavior around meaningful static HTML.</p>
+<p>It keeps the comment block parseable without JavaScript while still exposing ids, data attributes, and hook classes for enhancement.</p>
+</section>
+<section id="comments" class="jq-comments comment-wrapper">
+<div class="comments-header"><strong>Comments</strong> <span id="comment-count">7</span> Comments <div class="sort-controls">Sort: <a href="#">Top</a> | <a href="#">Newest</a> | <a href="#">Oldest</a></div></div>
+<div id="comment-list" class="comment-wrapper">
+<article id="comment-6-1" class="comment-item jq-comment-item depth-0 even" data-id="1" data-author="Tara Nguyen" data-timestamp="1294362600" data-depth="0">
+<span class="avatar" aria-hidden="true">TN</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Tara Nguyen</span> <span class="comment-time">Jan 07, 2011 1:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-6-1">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+<div class="comment-children" id="replies-6-1"><article id="comment-6-5" class="comment-item jq-comment-item depth-1 even" data-id="5" data-author="Iris Cole" data-timestamp="1294380000" data-depth="1">
+<span class="avatar" aria-hidden="true">IC</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Iris Cole</span> <span class="comment-time">Jan 07, 2011 6:00 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+
+</div>
+</article></div>
+</div>
+</article>
+<article id="comment-6-2" class="comment-item jq-comment-item depth-0 odd" data-id="2" data-author="Leah Morris" data-timestamp="1294366800" data-depth="0">
+<span class="avatar" aria-hidden="true">LM</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Leah Morris</span> <span class="badge user-badge">Top Commenter</span> <span class="comment-time">Jan 07, 2011 2:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-6-2">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+<div class="comment-children" id="replies-6-2"><article id="comment-6-6" class="comment-item jq-comment-item depth-1 even" data-id="6" data-author="Drew Kim" data-timestamp="1294384200" data-depth="1">
+<span class="avatar" aria-hidden="true">DK</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Drew Kim</span> <span class="comment-time">Jan 07, 2011 7:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+
+</div>
+</article></div>
+</div>
+</article>
+<article id="comment-6-3" class="comment-item jq-comment-item depth-0 even" data-id="3" data-author="Mina Shah" data-timestamp="1294371000" data-depth="0">
+<span class="avatar" aria-hidden="true">MS</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Mina Shah</span> <span class="comment-time">Jan 07, 2011 3:30 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-6-3">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+<div class="comment-children" id="replies-6-3"><article id="comment-6-7" class="comment-item jq-comment-item depth-1 even" data-id="7" data-author="Zoe Wallace" data-timestamp="1294388400" data-depth="1">
+<span class="avatar" aria-hidden="true">ZW</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Zoe Wallace</span> <span class="comment-time">Jan 07, 2011 8:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+
+</div>
+</article></div>
+</div>
+</article>
+<article id="comment-6-4" class="comment-item jq-comment-item depth-0 odd" data-id="4" data-author="Drew Kim" data-timestamp="1294375200" data-depth="0">
+<span class="avatar" aria-hidden="true">DK</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Drew Kim</span> <span class="comment-time">Jan 07, 2011 4:40 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a></div>
+
+</div>
+</article>
+</div>
+<div class="comments-closed">Comments are closed. Existing comments remain below.</div>
+</section>
+</div>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lit Studio - A Lit page with template markers</title>
+<style>body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f7fa; color: #1d2430; }
+.page { width: min(960px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.hero .lede { margin: 0; color: #586575; }
+.comment-shell, .CommentSection_comments__3xK9p, .comment-app, .svelte-1a2b3c.comments { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 16px; }
+.comment-item { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.comment-item:first-child { border-top: 0; padding-top: 0; }
+.comment-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: 12px; color: #667; }
+.comment-body { line-height: 1.5; }
+.comment-children { margin-top: 12px; margin-left: 24px; padding-left: 12px; border-left: 2px solid #e4e8ef; }
+.skeleton-list { display: grid; gap: 10px; }
+.skeleton { height: 54px; border-radius: 12px; background: linear-gradient(90deg, #edf1f6, #f7f9fc, #edf1f6); }
+.error-boundary { margin-bottom: 14px; padding: 12px 14px; background: #fff8e5; border: 1px solid #ead29b; border-radius: 10px; color: #745400; }
+.virtual-scroll-spacer { background: transparent; }</style>
+<!--lit-part-->
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Lit / Polymer</p>
+<h1>Lit Studio</h1>
+<p class="lede">A Lit page with template markers</p>
+</section>
+<div class="comment-app" data-lit-root="true" __litHtml>
+<div class="comments-root"><article class="comment-item" data-id="5-1" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Tess</span> <time class="comment-time">Yesterday</time></div>
+<div class="comment-body">The author note is concise and stays close to the text.</div>
+</article>
+<article class="comment-item" data-id="5-2" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Rae</span> <time class="comment-time">3 days ago</time></div>
+<div class="comment-body">The structure is clean enough to be hydrated later.</div>
+</article>
+<article class="comment-item" data-id="5-3" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Tess</span> <time class="comment-time">3 days ago</time></div>
+<div class="comment-body">This feels like the output of a component-first rendering pipeline.</div>
+</article>
+<article class="comment-item" data-id="5-4" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Theo</span> <time class="comment-time">1 hour ago</time></div>
+<div class="comment-body">The last branch is intentionally a little deeper than the rest.</div>
+</article>
+<article class="comment-item" data-id="5-5" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Nora</span> <time class="comment-time">1 hour ago</time></div>
+<div class="comment-body">The page reads like a server-rendered snapshot.</div>
+</article>
+<article class="comment-item" data-id="5-6" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Jules</span> <time class="comment-time">3 days ago</time></div>
+<div class="comment-body">The structure is clean enough to be hydrated later. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-7" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Nora</span> <time class="comment-time">Yesterday</time></div>
+<div class="comment-body">The visual hierarchy does most of the work here. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-8" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Pia</span> <time class="comment-time">3 days ago</time></div>
+<div class="comment-body">The content fits the static shell well. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-9" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Theo</span> <time class="comment-time">1 hour ago</time></div>
+<div class="comment-body">The content fits the static shell well. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-10" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Milo</span> <time class="comment-time">Yesterday</time></div>
+<div class="comment-body">The content fits the static shell well. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-11" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Maya</span> <time class="comment-time">2 days ago</time></div>
+<div class="comment-body">The comments are easy to scan because the spacing stays consistent.</div>
+</article>
+<article class="comment-item" data-id="5-12" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Drew</span> <time class="comment-time">1 hour ago</time></div>
+<div class="comment-body">The visual hierarchy does most of the work here. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-13" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Owen</span> <time class="comment-time">2 days ago</time></div>
+<div class="comment-body">The structure is clean enough to be hydrated later. The framework output keeps the markup very stable.</div>
+</article>
+<article class="comment-item" data-id="5-14" data-depth="0" data-lit-part="">
+<div class="comment-meta"><span class="comment-author">Cal</span> <time class="comment-time">1 hour ago</time></div>
+<div class="comment-body">The nested branch is there, but it does not overwhelm the layout.</div>
+</article></div>
+</div>
+</div>
+</body>
+</html>

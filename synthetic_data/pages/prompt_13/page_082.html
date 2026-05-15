@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Letters - A minimal reader letters page</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #faf7f2; color: #2a241d; }
+.page { width: min(920px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.story { background: #fff; border: 1px solid #ddd3c5; padding: 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.story .lede { margin: 0; color: #6d5f52; }
+.guestbook, .comments, .feed { background: #fff; border: 1px solid #ddd3c5; padding: 18px; }
+.item { margin-bottom: 14px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.author { font-weight: 700; }
+.pin, .featured { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #fff2c6; font-size: 11px; }
+.compose { margin-bottom: 16px; display: grid; gap: 10px; max-width: 520px; }
+.compose input, .compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b4; padding: 8px 10px; font: inherit; }
+.policy, .approval { margin: 0 0 12px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; }
+table { width: 100%; border-collapse: collapse; }
+th, td { vertical-align: top; padding: 10px 8px; border-top: 1px solid #e6ddd1; text-align: left; }
+dl dt { margin-top: 12px; font-weight: 700; }
+dl dd { margin: 4px 0 0 0; padding-bottom: 12px; border-bottom: 1px solid #e6ddd1; }
+.item .content { display: block; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Letters</p>
+<h1>A minimal reader letters page</h1>
+<p class="lede">The list is intentionally linear, with no replies or branches anywhere in the structure.</p>
+</section>
+<section class="guestbook">
+<form class="compose">
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Message <textarea rows="4"></textarea></label>
+<button type="button">Send</button>
+</form>
+<h2>Letters (5)</h2>
+<dl><dt><span class="author">Noel</span> <span class="pin">Pinned</span> <time datetime="2016-02-03T04:10:00.000Z">Feb 2, 2016</time></dt>
+<dd><div class="body">The visual hierarchy does most of the work here. The linear order is the whole point.</div></dd>
+<dt><span class="author">Ivy</span>  <time datetime="2016-06-27T04:46:00.000Z">Jun 26, 2016</time></dt>
+<dd><div class="body">The last branch is intentionally a little deeper than the rest. The linear order is the whole point.</div></dd>
+<dt><span class="author">Rae</span>  <time datetime="2016-01-13T06:09:00.000Z">Jan 12, 2016</time></dt>
+<dd><div class="body">The page keeps the conversation readable without any extra chrome. The linear order is the whole point.</div></dd>
+<dt><span class="author">Rae</span>  <time datetime="2016-10-15T15:45:00.000Z">Oct 15, 2016</time></dt>
+<dd><div class="body">The last branch is intentionally a little deeper than the rest. The linear order is the whole point.</div></dd>
+<dt><span class="author">Nora</span>  <time datetime="2016-09-28T12:40:00.000Z">Sep 28, 2016</time></dt>
+<dd><div class="body">The last branch is intentionally a little deeper than the rest. The linear order is the whole point.</div></dd></dl>
+</section>
+</div>
+</body>
+</html>

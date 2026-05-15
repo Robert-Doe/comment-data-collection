@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Archive - Why the author bio moved into an aside</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+@media (prefers-color-scheme: dark) { body { background: #121315; color: #e9e7e2; } .story, #comments, .comments-section, .subscription-box, .comment-compose { background: #1a1d22; border-color: #353a43; } .lede, .comment__footer, .comments__footer, .comment__figure figcaption { color: #9aa3b2; } .comment__replies, .comments__replies { border-left-color: #373e49; } }
+@media print { .comment-compose { display: none; } }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">Studio Archive</p>
+<h1>Why the author bio moved into an aside</h1>
+<p class="lede">This one keeps the conversation adjacent to a long editorial post.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<nav class="comment-navigation"><a href="#">Previous</a> <a href="#">Next</a></nav>
+<section id="comments" class="comments-section">
+<article id="comment-52-1" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Quinn</cite>
+<time datetime="2012-07-12T23:47:00.000Z" itemprop="datePublished">July 12, 2012 at 4:47 PM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comments__replies"><article id="comment-52-1-1" class="comments__item comments__item--depth-1" data-depth="1"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Dylan</cite>
+<time datetime="2012-08-17T18:53:00.000Z" itemprop="datePublished">August 17, 2012 at 11:53 AM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article>
+<article id="comment-52-2" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Asha</cite>
+<time datetime="2012-11-01T02:23:00.000Z" itemprop="datePublished">October 31, 2012 at 7:23 PM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-52-3" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Omar</cite>
+<time datetime="2012-04-15T10:01:00.000Z" itemprop="datePublished">April 15, 2012 at 3:01 AM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">I used the same pattern in a theme migration last year.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-52-4" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Harriet</cite>
+<time datetime="2012-01-02T12:05:00.000Z" itemprop="datePublished">January 2, 2012 at 5:05 AM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-52-5" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Quinn</cite>
+<time datetime="2012-07-04T00:20:00.000Z" itemprop="datePublished">July 3, 2012 at 5:20 PM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comments__replies"><article id="comment-52-5-1" class="comments__item comments__item--depth-1" data-depth="1"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Ivy</cite>
+<time datetime="2012-03-10T04:34:00.000Z" itemprop="datePublished">March 9, 2012 at 9:34 PM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">I used the same pattern in a theme migration last year.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article>
+<article id="comment-52-6" class="comments__item comments__item--depth-0" data-depth="0"><header class="comments__header">
+<p class="comments__meta">
+<cite class="comments__author" itemprop="author">Vera</cite>
+<time datetime="2012-04-08T02:57:00.000Z" itemprop="datePublished">April 7, 2012 at 7:57 PM</time>
+</p>
+</header>
+<div class="comments__body" itemprop="text">I used the same pattern in a theme migration last year.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+<footer class="comments__footer">
+<nav class="comments__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<aside class="subscription-box"><h2>Subscribe</h2><p>Get new posts by email.</p><input type="email" placeholder="Email address"><button type="button">Subscribe</button></aside>
+<section class="comment-compose">
+<h2>Leave a note</h2>
+<form>
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Website <input type="url" name="website"></label>
+<label>Message <textarea rows="5"></textarea></label>
+<button type="submit">Post</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

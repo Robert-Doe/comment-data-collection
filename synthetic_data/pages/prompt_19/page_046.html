@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-assisted modern minimalist comment UI</title>
+<style>@layer base, components, utilities;
+@layer base {
+  :root { --color-surface-comment: oklch(98% 0.015 250); --color-border: oklch(86% 0.02 250); --color-text-secondary: oklch(44% 0.03 250); --color-focus: oklch(65% 0.16 250); --radius-avatar: 999px; --spacing-comment-gap: 16px; }
+  body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: oklch(98% 0.01 250); color: oklch(22% 0.03 250); }
+  button, input, textarea { font: inherit; }
+  button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+}
+@layer components {
+  .page { width: min(960px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+  .hero { background: white; border: 1px solid var(--color-border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .hero h1 { margin: 4px 0 8px; font-size: 28px; }
+  .comment-shell { container-name: comments; container-type: inline-size; background: var(--color-surface-comment); border: 1px solid var(--color-border); border-radius: 12px; padding: 18px; }
+  .comment-card { border-top: 1px solid var(--color-border); padding-block: 14px; padding-inline: 0; }
+  .comment-card:first-child { border-top: 0; padding-top: 0; }
+  .comment-header { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; min-width: 0; }
+  .avatar { width: 40px; height: 40px; border-radius: var(--radius-avatar); }
+  .identity { min-width: 0; }
+  .comment-body { overflow-wrap: break-word; word-break: break-word; }
+  .comment-children { border-inline-start: 2px solid var(--color-border); margin-inline-start: 24px; padding-inline-start: 12px; margin-block-start: 12px; }
+  .reactions { margin-block-start: 8px; color: var(--color-text-secondary); font-size: 12px; }
+  .comment-form { margin-block-start: 18px; display: grid; gap: 12px; }
+  .comment-form textarea, .comment-form input { width: 100%; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 12px; padding: 12px; }
+  .comment-form .form-actions { display: flex; gap: 10px; }
+  .comment-form button { border: 1px solid var(--color-border); background: white; border-radius: 999px; padding: 8px 14px; }
+  .sort-filter { display: flex; gap: 8px; margin-bottom: 14px; }
+  .sort-filter button { border: 1px solid var(--color-border); background: white; border-radius: 999px; padding: 6px 12px; }
+  .sort-filter .active { background: oklch(36% 0.06 250); color: white; }
+  .pagination { display: flex; gap: 8px; margin-top: 16px; }
+  .pagination a { text-decoration: none; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 8px; }
+  .error-message { color: oklch(52% 0.16 20); margin: 0; }
+}
+@layer utilities {
+  @container comments (min-width: 520px) { .comment-card { padding-inline: 4px; } .avatar { width: 48px; height: 48px; } }
+  @media (prefers-color-scheme: dark) { :root { --color-surface-comment: oklch(20% 0.02 250); --color-border: oklch(35% 0.02 250); --color-text-secondary: oklch(70% 0.02 250); } body { background: oklch(16% 0.02 250); color: oklch(94% 0.02 250); } .hero, .comment-shell, .comment-form textarea, .comment-form input, .sort-filter button, .comment-form button, .pagination a { background: oklch(20% 0.02 250); color: inherit; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto; transition-duration: 0.01ms !important; } }
+}</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">AI-assisted UI</p>
+<h1>Modern minimalist comments</h1>
+<p class="lede">The layout uses logical properties, container queries, and clean aria markup.</p>
+</section>
+<section class="comment-shell" role="region" aria-label="Comments section" aria-live="polite" aria-atomic="true" aria-busy="false">
+<article class="comment-card" data-depth="0" aria-describedby="meta-46-1">
+<header class="comment-header" id="meta-46-1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Milo%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%236ea8fe%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Milo">
+<div class="identity"><strong>Milo</strong>  <time>Oct 25, 2025</time></div>
+</header>
+<div class="comment-body">I appreciate the way the reply form stays available without crowding the list.</div>
+</article>
+<article class="comment-card" data-depth="0" aria-describedby="meta-46-2">
+<header class="comment-header" id="meta-46-2">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Theo%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%236ea8fe%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETH%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Theo">
+<div class="identity"><strong>Theo</strong>  <time>Aug 18, 2025</time></div>
+</header>
+<div class="comment-body">The container query makes the layout adapt without a lot of fuss.</div>
+<pre><code class="language-javascript">const score = comments.length &gt; 0 ? comments.length : 1;</code></pre>
+<div class="reactions">👍 12 · ❤️ 4 · 💡 2</div>
+</article>
+<article class="comment-card" data-depth="0" aria-describedby="meta-46-3">
+<header class="comment-header" id="meta-46-3">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Eli%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%236ea8fe%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EEL%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Eli">
+<div class="identity"><strong>Eli</strong>  <time>Jul 1, 2025</time></div>
+</header>
+<div class="comment-body">The code snippet is a nice touch for a technical thread.</div>
+<div class="reactions">👍 12 · ❤️ 4 · 💡 2</div>
+</article>
+<article class="comment-card" data-depth="0" aria-describedby="meta-46-4">
+<header class="comment-header" id="meta-46-4">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Maya%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%236ea8fe%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Maya">
+<div class="identity"><strong>Maya</strong>  <time>Feb 18, 2025</time></div>
+</header>
+<div class="comment-body">The container query makes the layout adapt without a lot of fuss.</div>
+</article>
+<article class="comment-card" data-depth="0" aria-describedby="meta-46-5">
+<header class="comment-header" id="meta-46-5">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Owen%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%236ea8fe%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EOW%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Owen">
+<div class="identity"><strong>Owen</strong>  <time>Nov 3, 2025</time></div>
+</header>
+<div class="comment-body">The container query makes the layout adapt without a lot of fuss.</div>
+</article>
+<form class="comment-form">
+
+
+
+<label>Name <input type="text" name="name"></label><label>Email <input type="email" name="email"></label><label>Website <input type="url" name="url"></label><label>Message <textarea rows="4"></textarea></label>
+<div class="form-actions"><button type="button">Post</button><button type="button" class="secondary">Cancel</button></div>
+
+
+</form>
+<nav class="pagination"><a href="#">&laquo;</a><a href="#" class="active">1</a><a href="#">2</a><a href="#">3</a><a href="#">&raquo;</a></nav>
+</section>
+</div>
+</body>
+</html>

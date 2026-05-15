@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Maps - A restaurant review stream with elite badges</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.review-section { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.review { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reviewer-name { font-weight: 700; }
+.review-title { margin: 0 0 8px; font-size: 18px; }
+.review-body { line-height: 1.55; }
+.badge--verified, .helpful { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.seller-response { margin-top: 10px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; border-radius: 10px; }
+.pros-cons { margin-top: 10px; display: grid; gap: 8px; }
+.review-photo { display: block; width: 100%; max-width: 260px; border-radius: 10px; margin-top: 10px; }
+.summary, .distribution { margin-bottom: 14px; }
+.distribution .bar { height: 8px; background: #d9e2f2; border-radius: 999px; margin-bottom: 8px; }
+.write-review form { display: grid; gap: 10px; max-width: 540px; }
+.write-review input, .write-review textarea, .write-review select { width: 100%; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 8px 10px; font: inherit; }
+.tabs { margin-bottom: 12px; display: flex; gap: 10px; }
+.tabs a { text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: #245; }
+.tabs a.active { background: #245; color: #fff; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Google Maps</p>
+<h1>A restaurant review stream with elite badges</h1>
+<p class="lede">The page mixes ratings, review titles, helpful votes, and structured metadata.</p>
+</section>
+<section class="review-section">
+<div class="distribution"><div class="bar" style="width:68%"></div><div class="bar" style="width:18%"></div><div class="bar" style="width:8%"></div></div>
+<article class="review review--maps" data-rating="3.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cal</span>  <time itemprop="datePublished">Jul 8, 2023</time></div><span class="rating rating--stars">★★★★☆</span></header>
+<div class="review-body" itemprop="reviewBody">The value is good, but the setup could be easier.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<span class="helpful">Helpful (31)</span>
+<meta itemprop="ratingValue" content="3.5"><meta itemprop="author" content="Cal"><meta itemprop="datePublished" content="2023-07-09">
+</article>
+<article class="review review--maps" data-rating="5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Noah</span>  <time itemprop="datePublished">Oct 24, 2023</time></div><span class="rating rating--stars">★★★★★</span></header>
+<h3 class="review-title">Solid choice</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+<span class="helpful">Helpful (8)</span>
+</article>
+<article class="review review--maps" data-rating="1" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Milo</span>  <time itemprop="datePublished">Jan 11, 2023</time></div><span class="rating rating--stars">★☆☆☆☆</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+</article>
+<article class="review review--maps" data-rating="5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span>  <time itemprop="datePublished">Jul 16, 2023</time></div><span class="rating rating--stars">★★★★★</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Pretty good</h3>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/55-3.jpg" alt="">
+</article>
+<article class="review review--maps" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Zia</span>  <time itemprop="datePublished">Jul 27, 2023</time></div><span class="rating rating--stars">★★☆☆☆</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">The product feels well made and the packaging was careful.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+</article>
+</section>
+</div>
+</body>
+</html>

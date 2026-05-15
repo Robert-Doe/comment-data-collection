@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staticman - Staticman-backed build-time comments</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(960px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.comments-section, .commento-root, .hyvor-talk-comments, .remark42 { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.comment-item, .hyvor-comment, .remark42-comment, .commento-comment { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.comment-item:first-child, .hyvor-comment:first-child, .remark42-comment:first-child, .commento-comment:first-child { border-top: 0; padding-top: 0; }
+.comment-meta, .hyvor-meta, .remark42-meta, .commento-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: #667; margin-bottom: 8px; }
+.comment-avatar, .hyvor-author, .remark42-author, .commento-author { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.comment-body, .hyvor-body, .remark42-body, .commento-body { line-height: 1.55; }
+.comment-children, .hyvor-replies, .remark42-replies, .commento-replies { margin-top: 12px; margin-left: 24px; padding-left: 12px; border-left: 2px solid #e1e6ee; }
+.author-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.skeleton-stack { display: grid; gap: 10px; }
+.skeleton { height: 54px; border-radius: 12px; background: linear-gradient(90deg, #edf1f6, #f7f9fc, #edf1f6); }
+.build-note { margin-bottom: 14px; color: #667; font-size: 12px; }
+.dark .comments-section, .dark .commento-root, .dark .hyvor-talk-comments, .dark .remark42 { background: #151a22; border-color: #2a323e; color: #e8edf4; }
+.dark .comment-item, .dark .hyvor-comment, .dark .remark42-comment, .dark .commento-comment { border-color: #2a323e; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Staticman</p>
+<h1>Staticman-backed build-time comments</h1>
+<p class="lede">The comments are pre-rendered or hydrated from a compact static shell.</p>
+</section>
+<section class="comments-section" aria-live="polite">
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Maya%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Maya">
+<div class="comment-main">
+<div class="comment-meta"><span>Maya</span>  <time>Dec 5, 2025</time></div>
+<div class="comment-content">The seller response clarified the one issue I had.</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Avery%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EAV%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Avery">
+<div class="comment-main">
+<div class="comment-meta"><span>Avery</span>  <time>Mar 6, 2025</time></div>
+<div class="comment-content">The picture quality is better than expected for the price.</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Eli%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EEL%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Eli">
+<div class="comment-main">
+<div class="comment-meta"><span>Eli</span> <span class="author-badge">Author</span> <time>Jul 7, 2025</time></div>
+<div class="comment-content">After using this for six months, I still think the build is solid. The build-time output keeps the list visible before hydration.</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Finn%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EFI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Finn">
+<div class="comment-main">
+<div class="comment-meta"><span>Finn</span>  <time>Jan 20, 2025</time></div>
+<div class="comment-content">The room was clean and the staff handled everything quickly.</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Drew%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EDR%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Drew">
+<div class="comment-main">
+<div class="comment-meta"><span>Drew</span>  <time>Nov 22, 2025</time></div>
+<div class="comment-content">The picture quality is better than expected for the price. The build-time output keeps the list visible before hydration.</div>
+<div class="reactions">👍 12 · ❤️ 4 · 🎉 2</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Pia%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EPI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Pia">
+<div class="comment-main">
+<div class="comment-meta"><span>Pia</span>  <time>Aug 25, 2025</time></div>
+<div class="comment-content">The room was clean and the staff handled everything quickly.</div>
+</div>
+</article>
+<article class="comment-item" data-depth="0">
+<img class="comment-avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Avery%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EAV%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Avery">
+<div class="comment-main">
+<div class="comment-meta"><span>Avery</span>  <time>Jun 30, 2025</time></div>
+<div class="comment-content">I bought this as a gift and it was a hit. The build-time output keeps the list visible before hydration.</div>
+</div>
+</article>
+<form method="POST" action="https://staticman.example/entry"><input type="hidden" name="redirect" value="/thank-you"><label>Name <input type="text" name="name"></label><label>Message <textarea rows="4" name="message"></textarea></label><button type="submit">Publish</button></form>
+</section>
+</div>
+</body>
+</html>

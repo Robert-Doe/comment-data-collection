@@ -1,0 +1,247 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>LayoutLab - Sidebar jumps below the article after the new ad slot</title>
+<style type="text/css">
+body {
+  background: #eef2ee;
+  color: #1f2623;
+  margin: 0;
+  font-family: Verdana, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link { color: #436b58; }
+a:visited { color: #436b58; }
+h1, h2, h3, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+.sep { color: #c8d4cb; }
+.story { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #c8d4cb; }
+.crumbs { font-size: 11px; margin-bottom: 10px; }
+.crumbs li { display: inline; margin-right: 6px; }
+.heading-wrap { margin-bottom: 10px; }
+.heading { font-size: 20px; margin-bottom: 6px; }
+.lede { font-size: 12px; color: #436b58; }
+.page { width: 760px; margin: 0 auto; padding: 18px 0 36px; }
+.story { background: #ffffff; border: 1px solid #c8d4cb; padding: 14px 16px;  }
+.crumbs { font-size: 11px; margin-bottom: 10px; }
+.crumbs li { display: inline; margin-right: 6px; }
+.heading-wrap { margin-bottom: 10px; }
+.heading { font-size: 20px; margin-bottom: 6px; }
+.lede { font-size: 12px; color: #436b58; }
+.stream { margin-top: 14px; }
+.entry { background: #ffffff; border: 1px solid #c8d4cb; padding: 10px; margin-bottom: 10px;  }
+.meta { display: block; margin-bottom: 8px; overflow: hidden; }
+.author { font-weight: bold; }
+.badge { margin-left: 8px; padding: 1px 5px; background: #edf6f0; border: 1px solid #c8d4cb; font-size: 11px; }
+.stamp { float: right; color: #436b58; font-size: 11px; }
+.body p { margin: 0 0 8px 0; }
+.avatar { float: left; width: 48px; height: 48px; margin-right: 10px; border: 1px solid #c8d4cb; overflow: hidden; text-align: center; line-height: 48px; background: #edf6f0; }
+.avatar img { display: block; width: 48px; height: 48px; }
+.avatar-text { font-weight: bold; color: #436b58; }
+.body { overflow: hidden; }
+.undefined { margin-top: 8px; font-size: 11px; color: #436b58; }
+.children { margin-top: 10px; border-left: 3px solid #436b58; padding-left: 10px; }
+.replybox { background: #ffffff; border: 1px solid #c8d4cb; padding: 12px 14px; margin-top: 14px;  }
+.field { margin-top: 8px; }
+.label { display: block; font-size: 12px; }
+.label input, .label textarea { display: block; width: 96%; margin-top: 4px; border: 1px solid #c8d4cb; padding: 5px; font-family: inherit; font-size: 13px; background: #fff; }
+.captcha { margin-top: 8px; }
+.captcha img { vertical-align: middle; border: 1px solid #c8d4cb; }
+.captcha input { width: 130px; margin-left: 8px; border: 1px solid #c8d4cb; padding: 4px; }
+.footer { margin-top: 10px; }
+.footer button { border: 1px solid #c8d4cb; background: #edf6f0; padding: 5px 12px; font-family: inherit; }
+.note { margin-top: 8px; color: #436b58; }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="thread">
+<div class="story">
+<div class="crumbs">
+<ul>
+<li><a href="#">Home</a></li>
+<li><a href="#">Web Design</a></li>
+<li><a href="#">Layout</a></li>
+</ul>
+</div>
+<div class="heading-wrap">
+<h1>LayoutLab</h1>
+<h2>Sidebar jumps below the article after the new ad slot</h2>
+</div>
+<p class="lede">The thread keeps circling floats, clears, and old browser quirks.</p>
+</div>
+<div class="heading-wrap">
+<h3 class="heading">Join the discussion</h3>
+</div>
+<div class="stream">
+<div class="entry" id="entry-1-1">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/f13e3db04b13a64f9d97974efef6f5d9?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Eli</span>
+<span class="badge">Reader</span>
+<span class="stamp">2006-05-07 10:24</span>
+</div>
+</div>
+<div class="body">
+<p>This feels like the wrappers changed under the page. <b>the container needs a clear</b> is the clue I would chase first.</p>
+<p>The visible break can look random, but the cause is often very repeatable.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-2">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/8cdcb5ba828d418e9e6bee9e6e18de67?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Rex</span>
+<span class="badge">Contributor</span>
+<span class="stamp">June 8, 2007 at 1:37 pm</span>
+</div>
+</div>
+<div class="body">
+<p>The symptoms are small, but the cause is bigger.<br><i>the container needs a clear needs a closer look.</i></p>
+<p>I would keep the fix narrow until the basic shape is stable again.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-3">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/63d20d8c1cc795c589c25afd0bae2ba9?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Vera</span>
+<span class="badge">Moderator</span>
+<span class="stamp">9 Jul 08</span>
+</div>
+</div>
+<div class="body">
+<p>I have seen float clearing show up exactly when the container needs a clear. <strong>That is the first thing I would verify.</strong></p>
+<p>For sidebar jumps below the article after the new ad slot, the visible symptom is usually smaller than the layout change behind it.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-4">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/35912f56422e99d8ef4c8f7b40a0f95d?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Zoe</span>
+<span class="badge">Guest</span>
+<span class="stamp">2009-08-10 19:03</span>
+</div>
+</div>
+<div class="body">
+<p>The page reads like a float clearing problem rather than a content problem. <em>the container needs a clear</em> explains most of it.</p>
+<p>Once the outer wrapper shifts, the rest of the thread tends to follow the same path.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-5">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/8831c4f07fb45d9637343b6ee3812a54?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Arlo</span>
+<span class="badge">Member</span>
+<span class="stamp">September 11, 2004 at 10:16 pm</span>
+</div>
+</div>
+<div class="body">
+<p>This feels like the wrappers changed under the page. <b>the container needs a clear</b> is the clue I would chase first.</p>
+<p>The visible break can look random, but the cause is often very repeatable.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-6">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/956f2828f395515097e141f4db94e84c?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Visitor</span>
+<span class="badge">Member</span>
+<span class="stamp">12 Oct 05</span>
+</div>
+</div>
+<div class="body">
+<p>The symptoms are small, but the cause is bigger.<br><i>the container needs a clear needs a closer look.</i></p>
+<p>I would keep the fix narrow until the basic shape is stable again.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-7">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/bac175444fc34bf1054dcd07e3cbd4d2?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Eli</span>
+<span class="badge">Reader</span>
+<span class="stamp">2006-11-13 04:42</span>
+</div>
+</div>
+<div class="body">
+<p>I have seen float clearing show up exactly when the container needs a clear. <strong>That is the first thing I would verify.</strong></p>
+<p>For sidebar jumps below the article after the new ad slot, the visible symptom is usually smaller than the layout change behind it.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-8">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/5de7f095ea18e4d76a539392ec3a8a35?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Rex</span>
+<span class="badge">Contributor</span>
+<span class="stamp">December 14, 2007 at 7:55 am</span>
+</div>
+</div>
+<div class="body">
+<p>The page reads like a float clearing problem rather than a content problem. <em>the container needs a clear</em> explains most of it.</p>
+<p>Once the outer wrapper shifts, the rest of the thread tends to follow the same path.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+<div class="entry" id="entry-1-9">
+<div class="meta">
+<div class="avatar"><img src="https://www.gravatar.com/avatar/836cba4fd9fa0dea6dfced942d1f892a?s=48" width="48" height="48" alt=""></div>
+<div class="meta-core">
+<span class="author">Vera</span>
+<span class="badge">Moderator</span>
+<span class="stamp">15 Jan 08</span>
+</div>
+</div>
+<div class="body">
+<p>This feels like the wrappers changed under the page. <b>the container needs a clear</b> is the clue I would chase first.</p>
+<p>The visible break can look random, but the cause is often very repeatable.</p>
+</div>
+<div class="tools">
+<a href="#">Reply</a> <span class="sep">|</span> <a href="#">Quote</a>
+</div>
+</div>
+</div>
+<div class="replybox">
+<h3>Add Your Reply</h3>
+<form action="#" method="post">
+<div class="field">
+<label class="label">Message <textarea name="message" rows="7" cols="56"></textarea></label>
+</div>
+<div class="footer">
+<button type="submit">Post</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</body>
+</html>

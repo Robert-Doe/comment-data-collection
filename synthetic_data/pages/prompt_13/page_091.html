@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guestbook - A classic guestbook with linear entries</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #faf7f2; color: #2a241d; }
+.page { width: min(920px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.story { background: #fff; border: 1px solid #ddd3c5; padding: 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.story .lede { margin: 0; color: #6d5f52; }
+.guestbook, .comments, .feed { background: #fff; border: 1px solid #ddd3c5; padding: 18px; }
+.item { margin-bottom: 14px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.author { font-weight: 700; }
+.pin, .featured { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #fff2c6; font-size: 11px; }
+.compose { margin-bottom: 16px; display: grid; gap: 10px; max-width: 520px; }
+.compose input, .compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b4; padding: 8px 10px; font: inherit; }
+.policy, .approval { margin: 0 0 12px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; }
+table { width: 100%; border-collapse: collapse; }
+th, td { vertical-align: top; padding: 10px 8px; border-top: 1px solid #e6ddd1; text-align: left; }
+dl dt { margin-top: 12px; font-weight: 700; }
+dl dd { margin: 4px 0 0 0; padding-bottom: 12px; border-bottom: 1px solid #e6ddd1; }
+.item .content { display: block; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Guestbook</p>
+<h1>A classic guestbook with linear entries</h1>
+<p class="lede">The list is intentionally linear, with no replies or branches anywhere in the structure.</p>
+</section>
+<section class="guestbook">
+<form class="compose">
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Message <textarea rows="4"></textarea></label>
+<button type="button">Send</button>
+</form>
+<h2>Guestbook (9)</h2>
+<div class="feed"><p><b>Lena:</b> The last branch is intentionally a little deeper than the rest. <time datetime="2016-11-20T16:16:00.000Z">Nov 20, 2016</time></p>
+<p><b>Pia:</b> The structure is clean enough to be hydrated later. <time datetime="2016-11-04T13:02:00.000Z">Nov 4, 2016</time></p>
+<p><b>Rae:</b> The page reads like a server-rendered snapshot. <time datetime="2016-05-06T09:57:00.000Z">May 6, 2016</time></p>
+<p><b>Rae:</b> The page reads like a server-rendered snapshot. </p>
+<p><b>Jules:</b> The content fits the static shell well. <time datetime="2016-02-25T10:20:00.000Z">Feb 25, 2016</time></p>
+<p><b>Pia:</b> The page reads like a server-rendered snapshot. <time datetime="2016-08-27T07:10:00.000Z">Aug 27, 2016</time></p>
+<p><b>Milo:</b> The comments are easy to scan because the spacing stays consistent. <time datetime="2016-08-19T20:17:00.000Z">Aug 19, 2016</time></p>
+<p><b>Ivy:</b> The content fits the static shell well. <time datetime="2016-06-25T22:34:00.000Z">Jun 25, 2016</time></p>
+<p><b>Lena:</b> This feels like the output of a component-first rendering pipeline. <time datetime="2016-02-12T05:53:00.000Z">Feb 11, 2016</time></p></div>
+</section>
+</div>
+</body>
+</html>

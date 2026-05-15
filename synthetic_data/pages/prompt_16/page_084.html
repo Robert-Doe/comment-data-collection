@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booking.com - A hotel listing with pros and cons</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.review-section { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.review { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reviewer-name { font-weight: 700; }
+.review-title { margin: 0 0 8px; font-size: 18px; }
+.review-body { line-height: 1.55; }
+.badge--verified, .helpful { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.seller-response { margin-top: 10px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; border-radius: 10px; }
+.pros-cons { margin-top: 10px; display: grid; gap: 8px; }
+.review-photo { display: block; width: 100%; max-width: 260px; border-radius: 10px; margin-top: 10px; }
+.summary, .distribution { margin-bottom: 14px; }
+.distribution .bar { height: 8px; background: #d9e2f2; border-radius: 999px; margin-bottom: 8px; }
+.write-review form { display: grid; gap: 10px; max-width: 540px; }
+.write-review input, .write-review textarea, .write-review select { width: 100%; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 8px 10px; font: inherit; }
+.tabs { margin-bottom: 12px; display: flex; gap: 10px; }
+.tabs a { text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: #245; }
+.tabs a.active { background: #245; color: #fff; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Booking.com</p>
+<h1>A hotel listing with pros and cons</h1>
+<p class="lede">The page mixes ratings, review titles, helpful votes, and structured metadata.</p>
+</section>
+<section class="review-section">
+<article class="review review--booking" data-rating="3.5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Lena</span>  <time itemprop="datePublished">Jul 11, 2023</time></div><span class="rating rating--numeric">3.5 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">I bought this as a gift and it was a hit.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/84-0.jpg" alt="">
+</article>
+<article class="review review--booking" data-rating="2.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Avery</span>  <time itemprop="datePublished">Oct 25, 2023</time></div><span class="rating rating--numeric">2.5 / 5</span></header>
+<h3 class="review-title">Pretty good</h3>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/84-1.jpg" alt="">
+<meta itemprop="ratingValue" content="2.5"><meta itemprop="author" content="Avery"><meta itemprop="datePublished" content="2023-10-26">
+</article>
+<article class="review review--booking" data-rating="4.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span>  <time itemprop="datePublished">Sep 12, 2023</time></div><span class="rating rating--numeric">4.5 / 5</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid.</div>
+<img class="review-photo" src="https://example.invalid/review/84-2.jpg" alt="">
+<span class="helpful">Helpful (35)</span>
+</article>
+<article class="review review--booking" data-rating="3" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Maya</span>  <time itemprop="datePublished">Feb 25, 2023</time></div><span class="rating rating--numeric">3.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Solid choice</h3>
+<div class="review-body" itemprop="reviewBody">I bought this as a gift and it was a hit.</div>
+</article>
+<article class="review review--booking" data-rating="2" data-verified="true" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Rae</span>  <time itemprop="datePublished">Feb 16, 2023</time></div><span class="rating rating--numeric">2.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<meta itemprop="ratingValue" content="2"><meta itemprop="author" content="Rae"><meta itemprop="datePublished" content="2023-02-17">
+</article>
+<article class="review review--booking" data-rating="5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Avery</span>  <time itemprop="datePublished">May 17, 2023</time></div><span class="rating rating--numeric">5.0 / 5</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<span class="helpful">Helpful (46)</span>
+</article>
+<article class="review review--booking" data-rating="4" data-verified="true" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Rae</span>  <time itemprop="datePublished">Aug 15, 2023</time></div><span class="rating rating--numeric">4.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">I bought this as a gift and it was a hit.</div>
+<span class="helpful">Helpful (70)</span>
+<meta itemprop="ratingValue" content="4"><meta itemprop="author" content="Rae"><meta itemprop="datePublished" content="2023-08-16">
+</article>
+<article class="review review--booking" data-rating="4" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Rae</span>  <time itemprop="datePublished">Sep 26, 2023</time></div><span class="rating rating--numeric">4.0 / 5</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid.</div>
+<span class="helpful">Helpful (83)</span>
+<meta itemprop="ratingValue" content="4"><meta itemprop="author" content="Rae"><meta itemprop="datePublished" content="2023-09-27">
+</article>
+<article class="review review--booking" data-rating="4.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Rae</span> <span class="reviewer-location">Sydney, AU</span> <time itemprop="datePublished">Apr 1, 2023</time></div><span class="rating rating--numeric">4.5 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The room was clean and the staff handled everything quickly.</div>
+<span class="helpful">Helpful (19)</span>
+</article>
+<article class="review review--booking" data-rating="3.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Drew</span> <span class="reviewer-location">Sydney, AU</span> <time itemprop="datePublished">Jun 27, 2023</time></div><span class="rating rating--numeric">3.5 / 5</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<span class="helpful">Helpful (75)</span>
+<meta itemprop="ratingValue" content="3.5"><meta itemprop="author" content="Drew"><meta itemprop="datePublished" content="2023-06-28">
+</article>
+<article class="review review--booking" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Rae</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Feb 28, 2023</time></div><span class="rating rating--numeric">2.0 / 5</span></header>
+<h3 class="review-title">Solid choice</h3>
+<div class="review-body" itemprop="reviewBody">The product feels well made and the packaging was careful.</div>
+</article>
+</section>
+</div>
+</body>
+</html>

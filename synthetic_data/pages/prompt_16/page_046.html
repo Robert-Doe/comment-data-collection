@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trustpilot - A travel review board with bubble scores</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.review-section { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.review { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reviewer-name { font-weight: 700; }
+.review-title { margin: 0 0 8px; font-size: 18px; }
+.review-body { line-height: 1.55; }
+.badge--verified, .helpful { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.seller-response { margin-top: 10px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; border-radius: 10px; }
+.pros-cons { margin-top: 10px; display: grid; gap: 8px; }
+.review-photo { display: block; width: 100%; max-width: 260px; border-radius: 10px; margin-top: 10px; }
+.summary, .distribution { margin-bottom: 14px; }
+.distribution .bar { height: 8px; background: #d9e2f2; border-radius: 999px; margin-bottom: 8px; }
+.write-review form { display: grid; gap: 10px; max-width: 540px; }
+.write-review input, .write-review textarea, .write-review select { width: 100%; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 8px 10px; font: inherit; }
+.tabs { margin-bottom: 12px; display: flex; gap: 10px; }
+.tabs a { text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: #245; }
+.tabs a.active { background: #245; color: #fff; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Trustpilot</p>
+<h1>A travel review board with bubble scores</h1>
+<p class="lede">The page mixes ratings, review titles, helpful votes, and structured metadata.</p>
+</section>
+<section class="review-section">
+<nav class="tabs"><a href="#" class="active">Top Reviews</a> <a href="#">All Reviews</a></nav>
+<div class="summary"><strong>3.2 / 5</strong> based on 16 reviews.</div>
+<div class="distribution"><div class="bar" style="width:68%"></div><div class="bar" style="width:18%"></div><div class="bar" style="width:8%"></div></div>
+<article class="review review--trustpilot" data-rating="1" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cal</span>  <time itemprop="datePublished">Jun 18, 2023</time></div><span class="rating rating--numeric">1.0 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+</article>
+<article class="review review--trustpilot" data-rating="1.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Milo</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Sep 27, 2023</time></div><span class="rating rating--numeric">1.5 / 5</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+</article>
+<article class="review review--trustpilot" data-rating="1.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cal</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Nov 10, 2023</time></div><span class="rating rating--numeric">1.5 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+<img class="review-photo" src="https://example.invalid/review/46-2.jpg" alt="">
+<span class="helpful">Helpful (53)</span>
+</article>
+<article class="review review--trustpilot" data-rating="3.5" data-verified="true" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Nov 22, 2023</time></div><span class="rating rating--numeric">3.5 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Pretty good</h3>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<span class="helpful">Helpful (19)</span>
+<meta itemprop="ratingValue" content="3.5"><meta itemprop="author" content="Eli"><meta itemprop="datePublished" content="2023-11-23">
+</article>
+<article class="review review--trustpilot" data-rating="4" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Milo</span>  <time itemprop="datePublished">Apr 13, 2023</time></div><span class="rating rating--numeric">4.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<span class="helpful">Helpful (74)</span>
+</article>
+<article class="review review--trustpilot" data-rating="5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Noah</span>  <time itemprop="datePublished">Sep 20, 2023</time></div><span class="rating rating--numeric">5.0 / 5</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+</article>
+<article class="review review--trustpilot" data-rating="3.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Noah</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Jun 18, 2023</time></div><span class="rating rating--numeric">3.5 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<span class="helpful">Helpful (34)</span>
+</article>
+<article class="review review--trustpilot" data-rating="1" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Tess</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Apr 30, 2023</time></div><span class="rating rating--numeric">1.0 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The product feels well made and the packaging was careful.</div>
+<meta itemprop="ratingValue" content="1"><meta itemprop="author" content="Tess"><meta itemprop="datePublished" content="2023-05-01">
+</article>
+<article class="review review--trustpilot" data-rating="5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Avery</span>  <time itemprop="datePublished">Feb 5, 2023</time></div><span class="rating rating--numeric">5.0 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<span class="helpful">Helpful (64)</span>
+</article>
+<article class="review review--trustpilot" data-rating="5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Nora</span>  <time itemprop="datePublished">Jan 12, 2023</time></div><span class="rating rating--numeric">5.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">The room was clean and the staff handled everything quickly.</div>
+<img class="review-photo" src="https://example.invalid/review/46-9.jpg" alt="">
+</article>
+<article class="review review--trustpilot" data-rating="2.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Maya</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Nov 11, 2023</time></div><span class="rating rating--numeric">2.5 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<span class="helpful">Helpful (29)</span>
+</article>
+<article class="review review--trustpilot" data-rating="3" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Ivy</span>  <time itemprop="datePublished">Jul 11, 2023</time></div><span class="rating rating--numeric">3.0 / 5</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+</article>
+<article class="review review--trustpilot" data-rating="4" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cora</span> <span class="reviewer-location">Sydney, AU</span> <time itemprop="datePublished">May 17, 2023</time></div><span class="rating rating--numeric">4.0 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">The value is good, but the setup could be easier.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/46-12.jpg" alt="">
+</article>
+<article class="review review--trustpilot" data-rating="3.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Tess</span> <span class="reviewer-location">Toronto, ON</span> <time itemprop="datePublished">Jul 15, 2023</time></div><span class="rating rating--numeric">3.5 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The value is good, but the setup could be easier.</div>
+<meta itemprop="ratingValue" content="3.5"><meta itemprop="author" content="Tess"><meta itemprop="datePublished" content="2023-07-16">
+</article>
+<article class="review review--trustpilot" data-rating="4.5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Finn</span>  <time itemprop="datePublished">Jan 9, 2023</time></div><span class="rating rating--numeric">4.5 / 5</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">The product feels well made and the packaging was careful.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/46-14.jpg" alt="">
+<span class="helpful">Helpful (28)</span>
+</article>
+<article class="review review--trustpilot" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Pia</span>  <time itemprop="datePublished">Jan 24, 2023</time></div><span class="rating rating--numeric">2.0 / 5</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+<span class="helpful">Helpful (19)</span>
+</article>
+<section class="write-review">
+<h2>Write a review</h2>
+<form>
+<label>Rating <select><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></label>
+<label>Title <input type="text" name="title"></label>
+<label>Review <textarea rows="4" name="body"></textarea></label>
+<button type="button">Submit review</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

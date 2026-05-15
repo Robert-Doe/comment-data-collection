@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>MetroFeed - New comment likes spread across news stories</title>
+<style type="text/css">
+body {
+  background: #f7f7f7;
+  color: #1f252d;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link, a:visited { color: #3b5998; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+.story { width: 760px; margin: 0 auto; padding: 18px 0 14px; }
+.story h1 { font-size: 26px; margin-bottom: 4px; }
+.story h2 { font-size: 18px; margin-bottom: 6px; }
+.lede { font-size: 12px; color: #3b5998; }
+.profile-pic, .avatar, img { border-radius: 3px; }
+.avatar-wrap { float: left; width: 48px; margin-right: 10px; }
+.comment-main { overflow: hidden; }
+.iframe-shell { width: 760px; margin: 0 auto 18px; border: 1px solid #d7dce2; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.iframe-bar { background: #eef2f8; border-bottom: 1px solid #d7dce2; padding: 6px 10px; font-size: 11px; color: #3b5998; }
+.iframe-body { padding: 12px; }
+.comments-header { margin-bottom: 10px; }
+.people-like { margin-top: 4px; font-size: 12px; color: #3b5998; }
+.sort-toggle { margin-top: 6px; font-size: 11px; }
+.comment-list { margin-top: 12px; }
+.comment-item { border-top: 1px solid #d7dce2; padding: 10px 0; overflow: hidden; }
+.comment-item:first-child { border-top: 0; }
+.avatar-wrap { float: left; width: 48px; margin-right: 10px; }
+.profile-pic { display: block; width: 48px; height: 48px; }
+.comment-main { overflow: hidden; }
+.comment-meta { font-size: 12px; margin-bottom: 6px; }
+.comment-author { font-weight: bold; }
+.comment-time { color: #3b5998; font-size: 11px; }
+.reply-link { font-size: 11px; }
+.comment-body p { margin: 0 0 8px 0; }
+.comment-actions { font-size: 11px; margin-top: 6px; }
+.replies { margin-top: 8px; margin-left: 36px; padding-left: 10px; border-left: 2px solid #d7dce2; }
+.reply-count { margin-top: 4px; font-size: 11px; color: #3b5998; }
+.comment-form { margin: 10px 0 0; border-top: 1px solid #d7dce2; padding-top: 10px; }
+.composer-row { margin-top: 6px; }
+.composer-input { width: 100%; max-width: 560px; border: 1px solid #d7dce2; padding: 4px 6px; font-family: inherit; font-size: 12px; }
+.load-more { margin-top: 8px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="story">
+<h1>MetroFeed</h1>
+<h2>New comment likes spread across news stories</h2>
+<p class="lede">A breaking-news post picks up the early social comment patterns.</p>
+</div>
+<div class="iframe-shell">
+<div class="iframe-bar">Embedded social comments</div>
+<div class="iframe-body">
+<section id="comments">
+<h2>Add a comment...</h2>
+<div class="people-like">7 people like this</div>
+<div class="comment-list">
+<div class="comment-item" id="c-1-1">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/0256411d06ac67f9eabb896fef11c6e4?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/nina-lopez" class="comment-author">Nina Lopez</a> &middot; <span class="comment-time">6 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>I like the tone here. The people started treating comments like a mini feed detail makes the whole comment block feel more immediate.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">13</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-2">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/439ee7702b8bee769eff196c673a7f9d?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/theo-ward" class="comment-author">Theo Ward</a> &middot; <span class="comment-time">1 hour ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>Not sure about the profile identity, but the social style fits this page really well.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">16</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-3">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/bbbe562083796fa9fc72e7410b0d9374?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/ava-miller" class="comment-author">Ava Miller</a> &middot; <span class="comment-time">Just now</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>Short version: the like count and the profile photo do most of the work.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">19</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-4">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/ed726bab56cddf7b43f86ffdd83f9a97?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/ethan-reed" class="comment-author">Ethan Reed</a> &middot; <span class="comment-time">3 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>This feels like the old tech rollout pattern again. The like count is the first thing I noticed.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">22</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-5">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/c0b22456c7d6b7297491974c5152b7f2?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/chloe-turner" class="comment-author">Chloe Turner</a> &middot; <span class="comment-time">2 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>The news feed part works, but the profile identity still feels a little shaky.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">25</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-6">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/65d90258a83f14815b8586d74b798f3b?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/visitor" class="comment-author">Visitor</a> &middot; <span class="comment-time">4 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>I like the tone here. The people started treating comments like a mini feed detail makes the whole comment block feel more immediate.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">1</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-7">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/6258e766629f81d97f28ef1ad21c95f4?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/mia-patel" class="comment-author">Mia Patel</a> &middot; <span class="comment-time">6 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>Not sure about the profile identity, but the social style fits this page really well.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">4</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-8">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/a610416edda8f5000dae5927d77c5880?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/lucas-chen" class="comment-author">Lucas Chen</a> &middot; <span class="comment-time">1 hour ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>Short version: the like count and the profile photo do most of the work.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">7</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-9">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/d9fb98475b84fd1dfb3c2f33ecdd609c?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/ivy-ross" class="comment-author">Ivy Ross</a> &middot; <span class="comment-time">Just now</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>This feels like the old tech rollout pattern again. The like count is the first thing I noticed.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">10</span></div>
+</div>
+</div>
+<div class="comment-item" id="c-1-10">
+<div class="avatar-wrap"><img src="https://www.gravatar.com/avatar/a91e59a5652f1f2efd7bf9d5dbe33a26?s=48" width="48" height="48" alt="" class="profile-pic"></div>
+<div class="comment-main">
+<div class="comment-meta"><a href="/profile/riley-fox" class="comment-author">Riley Fox</a> &middot; <span class="comment-time">3 hours ago</span> &middot; <a href="#" class="reply-link">Reply</a></div>
+<div class="comment-body"><p>The news feed part works, but the profile identity still feels a little shaky.</p></div>
+<div class="comment-actions"><a href="#" class="like-btn">Like</a> &middot; <span class="like-count">13</span></div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+</body>
+</html>
