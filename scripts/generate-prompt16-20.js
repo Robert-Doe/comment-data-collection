@@ -1161,7 +1161,7 @@ function main() {
   generatePages(path.join(pagesRoot, 'prompt_18'), buildPrompt18Page);
   generatePages(path.join(pagesRoot, 'prompt_19'), buildPrompt19Page);
   generatePages(path.join(pagesRoot, 'prompt_20'), buildPrompt20Page);
-  syncIndexCounts(indexPath, pagesRoot, 20);
+  syncIndexCounts(indexPath, pagesRoot, 40);
   console.log(`Updated ${indexPath}`);
 }
 

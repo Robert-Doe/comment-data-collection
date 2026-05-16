@@ -97,7 +97,7 @@ function countHtmlFiles(dir) {
     .length;
 }
 
-function syncIndexCounts(indexPath, pageRoot, maxPrompt = 20) {
+function syncIndexCounts(indexPath, pageRoot, maxPrompt = 40) {
   const counts = {};
   for (let id = 1; id <= maxPrompt; id += 1) {
     const promptId = pad2(id);

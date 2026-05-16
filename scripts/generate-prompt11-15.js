@@ -932,7 +932,7 @@ function main() {
   generatePages(path.join(pagesRoot, 'prompt_13'), buildPrompt13Page);
   generatePages(path.join(pagesRoot, 'prompt_14'), buildPrompt14Page);
   generatePages(path.join(pagesRoot, 'prompt_15'), buildPrompt15Page);
-  syncIndexCounts(indexPath, pagesRoot, 20);
+  syncIndexCounts(indexPath, pagesRoot, 40);
   console.log(`Updated ${indexPath}`);
 }
 
