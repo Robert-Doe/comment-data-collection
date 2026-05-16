@@ -1250,8 +1250,9 @@
     } else {
       atEnd = currentIndex >= lastIndex;
     }
+    const hasLabelHistory = Array.isArray(state && state.labelHistory) && state.labelHistory.length > 0;
     const atStart = filtering
-      ? findPrevUnreviewedLabelerIndex(state, currentIndex) < 0
+      ? (findPrevUnreviewedLabelerIndex(state, currentIndex) < 0 && !hasLabelHistory)
       : currentIndex <= 0;
     jobLabelerPrevButton.disabled = disabled || transitioning || atStart;
     jobLabelerNextButton.disabled = disabled
@@ -1313,6 +1314,10 @@
       focusEntryKey: String(options.focusEntryKey || ''),
       pendingAdvanceFromIndex: -1,
       serverFilters: options.serverFilters || null,
+      // Stack of entry indices visited just before an auto-advance triggered by
+      // labeling. Lets the Previous button/key return to a just-labeled item even
+      // when it no longer matches the active filter (e.g. "Unlabeled only").
+      labelHistory: [],
     };
   }
 
@@ -2493,6 +2498,21 @@
 
     if (isAnyLabelerFilterActive()) {
       const currentIndex = state.index || 0;
+
+      // Going backward: pop from label history first so the user can verify the
+      // item they just labeled, even though it no longer matches the active filter.
+      if (step < 0 && Array.isArray(state.labelHistory) && state.labelHistory.length > 0) {
+        const historyIndex = state.labelHistory.pop();
+        if (historyIndex !== currentIndex && historyIndex >= 0 && historyIndex < state.entries.length) {
+          state.index = historyIndex;
+          setJobLabelerMessage('', false);
+          showToast('Returned to last labeled item', { tone: 'info' });
+          renderJobLabelerReview();
+          maybePrefetchJobLabelerEntries(jobId);
+          return;
+        }
+      }
+
       const targetIndex = step > 0
         ? findNextUnreviewedLabelerIndex(state, currentIndex + 1)
         : findPrevUnreviewedLabelerIndex(state, currentIndex);
@@ -2616,6 +2636,13 @@
   function advanceJobLabelerAfterSave(state, previousIndex) {
     if (!state || !state.entries.length) return;
     state.pendingAdvanceFromIndex = -1;
+
+    // Record where we were so Previous can return here for verification, even
+    // when the item no longer matches the active filter after being labeled.
+    if (!Array.isArray(state.labelHistory)) state.labelHistory = [];
+    state.labelHistory.push(previousIndex);
+    if (state.labelHistory.length > 25) state.labelHistory.shift(); // bound memory
+
     const startIndex = Math.min(previousIndex + 1, state.entries.length - 1);
     if (jobLabelerAutoAdvance && jobLabelerAutoAdvance.checked) {
       const nextUnreviewed = findNextUnreviewedLabelerIndex(state, startIndex);
@@ -4407,6 +4434,9 @@
   function handleLabelerFilterChange() {
     const state = currentJobLabelerState();
     if (state && state.entries.length) {
+      // Clear label history when filter changes — history indices are no longer
+      // meaningful relative to the new filter view.
+      if (Array.isArray(state.labelHistory)) state.labelHistory = [];
       const currentIndex = Math.max(0, Math.min(state.index || 0, state.entries.length - 1));
       if (isAnyLabelerFilterActive()) {
         if (!entryMatchesLabelerFilters(state, state.entries[currentIndex])) {
@@ -4462,7 +4492,7 @@
     if (activeWorkspaceTab !== 'labeler') return;
     if (isTypingTarget) return;
 
-    if (event.key === 'ArrowLeft') {
+    if (event.key === 'ArrowLeft' || event.key === 'Backspace') {
       event.preventDefault();
       handleJobLabelerStep(-1);
       return;
