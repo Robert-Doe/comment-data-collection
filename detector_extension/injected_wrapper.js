@@ -687,8 +687,18 @@
     function isTableStructure(el) {
       if (!el) return false;
       const tag = (el.tagName || '').toLowerCase();
-      return tag === 'table' || tag === 'tbody' || tag === 'tr' ||
-             el.querySelector?.('tr') !== null;
+      if (tag !== 'table' && tag !== 'tbody' && tag !== 'tr' &&
+          !el.querySelector?.('tr')) return false;
+      // Don't penalize tables whose rows carry substantial text — those are
+      // table-based comment sections (HTML 4.01 era), not data tables.
+      const rows = Array.from(el.querySelectorAll?.('tr') || []);
+      if (rows.length >= 3) {
+        const totalWords = rows.reduce(
+          (sum, r) => sum + (r.textContent || '').trim().split(/\s+/).length, 0
+        );
+        if (totalWords / rows.length >= 15) return false;
+      }
+      return true;
     }
 
     /**
