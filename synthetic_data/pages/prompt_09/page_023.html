@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hacker News - Show HN: a tiny tool for collapsing huge comment trees</title>
+<style>body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #f6f6ef; color: #222; line-height: 1.45; }
+.page { width: min(1000px, calc(100% - 24px)); margin: 0 auto; padding: 18px 0 40px; }
+.story { background: #fff; border: 1px solid #e2e2d5; padding: 16px 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.lede { margin: 0; color: #666; }
+.oldreddit, .shreddit, .lemmy, .thread { background: #fff; border: 1px solid #e2e2d5; padding: 16px 18px; }
+.comment, .Comment, .comment-node, .thread-comment { margin-bottom: 14px; }
+.tagline, .CommentHeader, .comment-meta, .thread-comment__meta { font-size: 12px; color: #666; margin-bottom: 6px; }
+.usertext-body, .CommentContent, .comment-content, .thread-comment__body, .commtext { padding-left: 0; }
+.buttons, .CommentFooter, .comment-actions, .thread-comment__actions { font-size: 12px; margin-top: 6px; }
+.child, .RepliesSection, .comment-branch, .thread-comment__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d9c9; }
+.score { font-weight: 700; margin-right: 8px; }
+.flair, .award { display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #eef3ff; }
+.collapsed { opacity: 0.6; }
+.continue-thread { margin-top: 8px; font-size: 12px; }
+.hn-comments { width: 100%; border-collapse: collapse; }
+.hn-comments td { vertical-align: top; padding: 0; }
+.ind { width: auto; }
+.comtr .comhead { font-size: 12px; color: #666; padding-bottom: 4px; }
+.comtr .commtext { padding: 0 0 12px 0; }
+.load-more { margin-top: 18px; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Hacker News</p>
+<h1>Show HN: a tiny tool for collapsing huge comment trees</h1>
+<p class="lede">The style is deliberately minimalist and score-first.</p>
+</section>
+<table class="hn-comments">
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="20" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">52 points</span> <span class="hnuser">spectrum</span>  <span class="age">Yesterday</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The fan curve can hide a lot of thermal issues.</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="40" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">484 points</span> <span class="hnuser">murmur</span>  <span class="age">3 days ago</span> <span class="award">Wholesome</span></td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The fan curve can hide a lot of thermal issues.</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="60" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">68 points</span> <span class="hnuser">amber</span> <span class="flair">Moderator</span> <span class="age">Yesterday</span> <span class="award">Gold</span></td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The OP flair makes it easier to track who posted the original data.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="80" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">396 points</span> <span class="hnuser">murmur</span>  <span class="age">5 hours ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The fan curve can hide a lot of thermal issues. The nesting is getting hard to read.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="100" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">190 points</span> <span class="hnuser">clockwork</span>  <span class="age">1 week ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>[deleted]</p></td>
+</tr>
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="100" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">428 points</span> <span class="hnuser">kernelpanic</span> <span class="flair">OP</span> <span class="age">5 hours ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>I would collapse that branch until someone confirms the fix. The nesting is getting hard to read.</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="120" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">37 points</span> <span class="hnuser">buildbot</span>  <span class="age">3 days ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>[deleted]</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="140" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">352 points</span> <span class="hnuser">solder</span>  <span class="age">2 hours ago</span> <span class="award">Silver</span></td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>That is the exact point where I would stop and check the logs. The nesting is getting hard to read.</p></td>
+</tr></div></td>
+</tr></div></td>
+</tr>
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="100" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">305 points</span> <span class="hnuser">raven</span>  <span class="age">3 days ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The OP flair makes it easier to track who posted the original data. The nesting is getting hard to read.</p></td>
+</tr></div></div></td>
+</tr></div></div></td>
+</tr>
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="60" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">440 points</span> <span class="hnuser">l0gic</span>  <span class="age">1 week ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The OP flair makes it easier to track who posted the original data.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="80" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">217 points</span> <span class="hnuser">amber</span>  <span class="age">3 days ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The score is not high, but the technical detail is good. The nesting is getting hard to read.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="100" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">98 points</span> <span class="hnuser">vector</span> <span class="flair">CS PhD</span> <span class="age">1 week ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The score is not high, but the technical detail is good. The nesting is getting hard to read.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="120" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">466 points</span> <span class="hnuser">clockwork</span> <span class="flair">OP</span> <span class="age">Yesterday</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The continue link is useful once the tree gets too deep to scan. The nesting is getting hard to read.</p></td>
+</tr></div></div></td>
+</tr></div></div></td>
+</tr></div></div></td>
+</tr>
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="60" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">731 points</span> <span class="hnuser">murmur</span>  <span class="age">3 days ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The discussion shifts after the third level and gets harder to follow.</p><div class="children"><div class="collapsed" aria-hidden="true"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="80" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[+]</a> <span class="score">537 points</span> <span class="hnuser">signalpath</span>  <span class="age">5 hours ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>I would collapse that branch until someone confirms the fix. The nesting is getting hard to read.</p></td>
+</tr></div></div></td>
+</tr></div></td>
+</tr></div></td>
+</tr>
+<tr class="comtr">
+<td class="ind"><img src="s.gif" width="20" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">254 points</span> <span class="hnuser">retrofan</span>  <span class="age">3 days ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>The discussion shifts after the third level and gets harder to follow.</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="40" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">423 points</span> <span class="hnuser">signalpath</span>  <span class="age">3 days ago</span> <span class="award">Helpful</span></td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>That is the exact point where I would stop and check the logs.</p><div class="children"><tr class="comtr">
+<td class="ind"><img src="s.gif" width="60" height="1" alt=""></td>
+<td class="comhead"><a class="togg" href="#">[-]</a> <span class="score">677 points</span> <span class="hnuser">signalpath</span>  <span class="age">2 hours ago</span> </td>
+</tr>
+<tr>
+<td></td>
+<td class="commtext"><p>[deleted]</p></td>
+</tr></div></td>
+</tr></div></td>
+</tr>
+</table>
+<div class="load-more"><button type="button">Load more comments (248)</button></div>
+<section class="compose"><textarea rows="4" placeholder="Add a reply"></textarea><button type="button">Submit</button></section>
+</div>
+</body>
+</html>

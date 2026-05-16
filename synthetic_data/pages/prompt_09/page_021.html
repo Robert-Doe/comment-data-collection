@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>r/techsupport - Deep thread about a BIOS update that broke boot order</title>
+<style>body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: #f6f6ef; color: #222; line-height: 1.45; }
+.page { width: min(1000px, calc(100% - 24px)); margin: 0 auto; padding: 18px 0 40px; }
+.story { background: #fff; border: 1px solid #e2e2d5; padding: 16px 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.lede { margin: 0; color: #666; }
+.oldreddit, .shreddit, .lemmy, .thread { background: #fff; border: 1px solid #e2e2d5; padding: 16px 18px; }
+.comment, .Comment, .comment-node, .thread-comment { margin-bottom: 14px; }
+.tagline, .CommentHeader, .comment-meta, .thread-comment__meta { font-size: 12px; color: #666; margin-bottom: 6px; }
+.usertext-body, .CommentContent, .comment-content, .thread-comment__body, .commtext { padding-left: 0; }
+.buttons, .CommentFooter, .comment-actions, .thread-comment__actions { font-size: 12px; margin-top: 6px; }
+.child, .RepliesSection, .comment-branch, .thread-comment__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d9c9; }
+.score { font-weight: 700; margin-right: 8px; }
+.flair, .award { display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #eef3ff; }
+.collapsed { opacity: 0.6; }
+.continue-thread { margin-top: 8px; font-size: 12px; }
+.hn-comments { width: 100%; border-collapse: collapse; }
+.hn-comments td { vertical-align: top; padding: 0; }
+.ind { width: auto; }
+.comtr .comhead { font-size: 12px; color: #666; padding-bottom: 4px; }
+.comtr .commtext { padding: 0 0 12px 0; }
+.load-more { margin-top: 18px; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">r/techsupport</p>
+<h1>Deep thread about a BIOS update that broke boot order</h1>
+<p class="lede">The original post starts a long nested argument about firmware and recovery steps.</p>
+</section>
+<div class="oldreddit"><div class="comment" data-fullname="t1_c-21-1" data-comment-id="c-21-1" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">nullbyte</a> <span class="flair">Moderator</span> <span class="score">399 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>The OP flair makes it easier to track who posted the original data.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-1-1" data-comment-id="c-21-1-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">bytewave</a>  <span class="score">464 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>The score is not high, but the technical detail is good.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-1-1-1" data-comment-id="c-21-1-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">retrofan</a>  <span class="score">550 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-1-1-2" data-comment-id="c-21-1-1-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">clockwork</a>  <span class="score">245 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-1-2" data-comment-id="c-21-1-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">buildbot</a>  <span class="score">120 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-1-2-1" data-comment-id="c-21-1-2-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">l0gic</a>  <span class="score">151 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>I had the same symptom after the firmware flash.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-1-2-2" data-comment-id="c-21-1-2-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">vector</a>  <span class="score">730 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>The discussion shifts after the third level and gets harder to follow.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-2" data-comment-id="c-21-2" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">bytewave</a>  <span class="score">577 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>The discussion shifts after the third level and gets harder to follow.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-2-1" data-comment-id="c-21-2-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">spectrum</a>  <span class="score">53 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-2-1-1" data-comment-id="c-21-2-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">murmur</a> <span class="flair">Moderator</span> <span class="score">264 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>Someone gilded the wrong message, but the answer is still there.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-2-1-2" data-comment-id="c-21-2-1-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">spectrum</a>  <span class="score">237 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>I would collapse that branch until someone confirms the fix.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-2-1-3" data-comment-id="c-21-2-1-3" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">l0gic</a> <span class="flair">Moderator</span> <span class="score">400 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-2-2" data-comment-id="c-21-2-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">clockwork</a>  <span class="score">197 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>I would collapse that branch until someone confirms the fix.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-2-2-1" data-comment-id="c-21-2-2-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">microcode</a>  <span class="score">483 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-2-3" data-comment-id="c-21-2-3" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">tessellate</a>  <span class="score">488 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>The discussion shifts after the third level and gets harder to follow.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-3" data-comment-id="c-21-3" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">buildbot</a>  <span class="score">632 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-3-1" data-comment-id="c-21-3-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">kernelpanic</a>  <span class="score">465 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>The fan curve can hide a lot of thermal issues.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-3-2" data-comment-id="c-21-3-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">retrofan</a>  <span class="score">298 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-3-3" data-comment-id="c-21-3-3" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">l0gic</a> <span class="flair">OP</span> <span class="score">721 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>The OP flair makes it easier to track who posted the original data.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-3-4" data-comment-id="c-21-3-4" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">raven</a>  <span class="score">764 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>I had the same symptom after the firmware flash.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-4" data-comment-id="c-21-4" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">solder</a>  <span class="score">311 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>The score is not high, but the technical detail is good.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-4-1" data-comment-id="c-21-4-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">horizon</a>  <span class="score">606 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-4-1-1" data-comment-id="c-21-4-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">wren</a>  <span class="score">416 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-4-1-2" data-comment-id="c-21-4-1-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">wren</a> <span class="flair">Contributor</span> <span class="score">301 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-4-2" data-comment-id="c-21-4-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">bytewave</a> <span class="flair">Veteran</span> <span class="score">726 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>[deleted]</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-5" data-comment-id="c-21-5" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">microcode</a> <span class="flair">OP</span> <span class="score">612 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>The continue link is useful once the tree gets too deep to scan.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-5-1" data-comment-id="c-21-5-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">wren</a>  <span class="score">707 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>I had the same symptom after the firmware flash.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-5-1-1" data-comment-id="c-21-5-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">microcode</a> <span class="flair">OP</span> <span class="score">448 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>The OP flair makes it easier to track who posted the original data.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-5-2" data-comment-id="c-21-5-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">oxide</a> <span class="flair">OP</span> <span class="score">321 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-5-2-1" data-comment-id="c-21-5-2-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">amber</a> <span class="flair">CS PhD</span> <span class="score">600 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>That is the exact point where I would stop and check the logs.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-6" data-comment-id="c-21-6" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">solder</a>  <span class="score">155 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>Someone gilded the wrong message, but the answer is still there.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-6-1" data-comment-id="c-21-6-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">spectrum</a>  <span class="score">214 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>The OP flair makes it easier to track who posted the original data.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-6-1-1" data-comment-id="c-21-6-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">buildbot</a>  <span class="score">453 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>The fan curve can hide a lot of thermal issues.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-7" data-comment-id="c-21-7" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">l0gic</a> <span class="flair">Veteran</span> <span class="score">708 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>The score is not high, but the technical detail is good.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-7-1" data-comment-id="c-21-7-1" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">wren</a>  <span class="score">731 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>The discussion shifts after the third level and gets harder to follow.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-7-1-1" data-comment-id="c-21-7-1-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">spectrum</a> <span class="flair">Contributor</span> <span class="score">629 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>[deleted]</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-7-2" data-comment-id="c-21-7-2" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">horizon</a> <span class="flair">OP</span> <span class="score">273 points</span> <time class="age">2 hours ago</time></p>
+<div class="usertext-body"><p>The OP flair makes it easier to track who posted the original data.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-7-2-1" data-comment-id="c-21-7-2-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">microcode</a>  <span class="score">197 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-7-2-2" data-comment-id="c-21-7-2-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">bytewave</a>  <span class="score">753 points</span> <time class="age">3 days ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-7-3" data-comment-id="c-21-7-3" data-depth="1">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">bytewave</a>  <span class="score">778 points</span> <time class="age">Yesterday</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+<div class="child"><div class="comment" data-fullname="t1_c-21-7-3-1" data-comment-id="c-21-7-3-1" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">signalpath</a>  <span class="score">613 points</span> <time class="age">1 week ago</time></p>
+<div class="usertext-body"><p>This is one of those threads where the replies become a reference document.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-7-3-2" data-comment-id="c-21-7-3-2" data-depth="2">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">vector</a>  <span class="score">139 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>I would collapse that branch until someone confirms the fix.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+</div>
+</div></div>
+</div>
+</div>
+<div class="comment" data-fullname="t1_c-21-8" data-comment-id="c-21-8" data-depth="0">
+<div class="entry">
+<p class="tagline"><a class="author" href="#">raven</a>  <span class="score">211 points</span> <time class="age">5 hours ago</time></p>
+<div class="usertext-body"><p>The fan curve can hide a lot of thermal issues.</p></div>
+<p class="buttons"><a href="#">reply</a> <a href="#">share</a> <a href="#">save</a></p>
+</div>
+</div></div>
+
+<section class="compose"><textarea rows="4" placeholder="Add a reply"></textarea><button type="button">Submit</button></section>
+</div>
+</body>
+</html>

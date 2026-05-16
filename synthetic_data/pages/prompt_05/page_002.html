@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ByteLine - AJAX comments make the launch post feel alive</title>
+<style type="text/css">
+body {
+  background: #f8f4eb;
+  color: #2d2419;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+a:link, a:visited { color: #8a5f2c; text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+.page { width: 860px; margin: 0 auto; padding: 18px 0 32px; }
+.story { background: #fffdf8; border: 1px solid #d7c8b0; padding: 16px 18px; margin-bottom: 16px; }
+.story header { margin-bottom: 10px; }
+.story .kicker { font-size: 11px; letter-spacing: 0; color: #8a5f2c; margin-bottom: 4px; text-transform: uppercase; }
+.story h1 { font-size: 26px; margin-bottom: 6px; }
+.story .lede { font-size: 12px; color: #8a5f2c; }
+.comments-header { font-size: 13px; }
+.sort-controls { margin-top: 6px; font-size: 11px; }
+.comment-badge, .badge { display: inline-block; padding: 1px 6px; margin-left: 4px; border-radius: 10px; font-size: 10px; line-height: 1.4; background: #f4ede0; color: #8a5f2c; }
+.pinned-badge { background: #fff2a8; color: #5b4a00; }
+.author-response-badge { background: #dff0d8; color: #285b2f; }
+.user-badge { background: #f4ede0; }
+.new-comment { background: #ffffd0; }
+.loading-spinner { margin-top: 10px; }
+.loading-spinner img { vertical-align: middle; }
+.comment-template, #comment-preview { display: none; }
+.error-msg { display: none; color: #a33; font-size: 11px; margin-left: 6px; }
+.vote-count { display: inline-block; min-width: 22px; text-align: center; }
+.reply-toggle { font-size: 11px; }
+.reply-link, .edit-link, .report-link { font-size: 11px; }
+.comment-actions { white-space: nowrap; }
+.comment-actions a { margin-right: 6px; }
+.comment-main { overflow: hidden; }
+.comment-body p { margin-bottom: 8px; }
+.comment-form label { display: block; font-size: 12px; margin-bottom: 3px; }
+.comment-form .form-row { margin-bottom: 8px; }
+.comment-form .ui-state-default { background: #fff; }
+.comments-closed { background: #f4ede0; border: 1px solid #d7c8b0; padding: 10px 12px; margin-top: 12px; }
+.comment.new-comment { box-shadow: inset 0 0 0 1px rgba(255, 238, 102, 0.55); }
+.comment-item, .comment-row, .comment { transition: all 0.3s ease; }
+.jq-comments { width: 860px; margin: 0 auto 24px; background: #fffdf8; }
+.ui-widget-header { background: #f4ede0; color: #8a5f2c; border-bottom: 1px solid #d7c8b0; padding: 10px 12px; }
+.comment-list { margin: 0; padding: 0 12px 12px; list-style: none; }
+.jq-comment-item { border-top: 1px solid #d7c8b0; padding: 12px 0; overflow: hidden; }
+.jq-comment-item:first-child { border-top: 0; }
+.avatar { float: left; width: 38px; height: 38px; margin-right: 10px; line-height: 38px; text-align: center; background: #f4ede0; color: #8a5f2c; font-weight: bold; border-radius: 3px; }
+.comment-main { overflow: hidden; }
+.comment-meta { font-size: 12px; margin-bottom: 6px; }
+.comment-author { font-weight: bold; }
+.comment-time { font-size: 11px; color: #8a5f2c; }
+.comment-body p { margin: 0 0 8px; }
+.comment-actions { font-size: 11px; margin-top: 6px; }
+.comment-children { margin-top: 8px; margin-left: 34px; padding-left: 10px; border-left: 2px solid #d7c8b0; }
+.comment-form { margin: 12px 12px 0; padding: 12px; }
+.form-row { margin-top: 8px; }
+.comment-input, .comment-textarea { width: 100%; max-width: 560px; border: 1px solid #d7c8b0; padding: 5px 6px; font-family: inherit; font-size: 12px; }
+.comment-textarea { min-height: 84px; }
+.submit-btn, .load-more { margin-top: 8px; font-size: 12px; }
+.comment-table .comment-row .comment-body p, .commentlist .comment-body p, .jq-comment-item .comment-body p, .comment-item .comment-body p { max-width: 680px; }
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.x.x/jquery.min.js"></script>
+<script>
+$(document).ready(function() {
+  var $form = $("#comment-form");
+  var $count = $("#comment-count");
+  function updateCount(delta) {
+    var current = parseInt($count.text(), 10) || 0;
+    $count.text(current + delta);
+  }
+  $(".js-toggle-replies").on("click", function(e) {
+    e.preventDefault();
+    var target = $(this).data("target");
+    var $target = $("#" + target);
+    if ($target.is(":visible")) {
+      $target.slideUp(180);
+      $(this).text("Show replies");
+    } else {
+      $target.slideDown(180);
+      $(this).text("Hide replies");
+    }
+  });
+  $(".js-vote-up, .js-vote-down").on("click", function(e) {
+    e.preventDefault();
+    var $countNode = $(this).siblings(".vote-count");
+    var value = parseInt($countNode.text(), 10) || 0;
+    if ($(this).hasClass("js-vote-up")) {
+      $countNode.text(value + 1);
+    } else {
+      $countNode.text(Math.max(0, value - 1));
+    }
+  });
+  $(".js-preview").on("click", function(e) {
+    e.preventDefault();
+    var value = $("#comment-text").val() || "Preview will appear here.";
+    $("#comment-preview").html("<p>" + value + "</p>").show();
+  });
+  $(".js-load-more").on("click", function(e) {
+    e.preventDefault();
+    $(this).text("Loading more comments...");
+  });
+  $(".js-edit-comment").on("click", function(e) {
+    e.preventDefault();
+    $(this).closest(".comment-item, .comment, .comment-row, article").find(".comment-body").first().toggleClass("editing");
+  });
+  $(".js-reply-btn").on("click", function(e) {
+    e.preventDefault();
+  });
+  if ($form.length) {
+    $form.on("submit", function(e) {
+      e.preventDefault();
+      $(".loading-spinner").show();
+      var payload = {
+        name: $("#comment-name").val(),
+        email: $("#comment-email").val(),
+        website: $("#comment-website").val(),
+        comment: $("#comment-text").val()
+      };
+      $.ajax({
+        type: "POST",
+        url: "/comments/ajax",
+        data: payload,
+        success: function() {
+          updateCount(1);
+          $(".loading-spinner").hide();
+        },
+        error: function() {
+          $(".loading-spinner").hide();
+        }
+      });
+    });
+  }
+});
+</script>
+</head>
+<body>
+<div class="page">
+<div class="story">
+<header>
+<p class="kicker">ByteLine</p>
+<h1>AJAX comments make the launch post feel alive</h1>
+<p class="lede">The thread sits beneath a product update and keeps the conversation moving with small jQuery hooks.</p>
+</header>
+<p>The page is built to show how jQuery-era teams wrapped behavior around meaningful static HTML.</p>
+<p>It keeps the comment block parseable without JavaScript while still exposing ids, data attributes, and hook classes for enhancement.</p>
+</div>
+<section id="comments" class="jq-comments ui-widget ui-widget-content ui-corner-all">
+<div class="comments-header ui-widget-header ui-corner-all"><strong>Comments</strong> <span id="comment-count">7</span> Comments</div>
+<ol id="comment-list" class="comment-list jq-comment-list">
+<li id="comment-2-1" class="comment-item jq-comment-item depth-0 even" data-id="1" data-author="Priya Patel" data-timestamp="1294017000" data-depth="0">
+<span class="avatar" aria-hidden="true">PP</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Priya Patel</span> <span class="comment-time">Jan 03, 2011 1:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-2-1">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">6</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ol class="comment-children" id="replies-2-1"><li id="comment-2-5" class="comment-item jq-comment-item depth-1 even" data-id="5" data-author="Ben Howard" data-timestamp="1294034400" data-depth="1">
+<span class="avatar" aria-hidden="true">BH</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Ben Howard</span> <span class="comment-time">Jan 03, 2011 6:00 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">11</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ol>
+</div>
+</li>
+<li id="comment-2-2" class="comment-item jq-comment-item depth-0 odd" data-id="2" data-author="Nina Flores" data-timestamp="1294021200" data-depth="0">
+<span class="avatar" aria-hidden="true">NF</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Nina Flores</span> <span class="badge user-badge">Verified</span> <span class="comment-time">Jan 03, 2011 2:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-2-2">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">7</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ol class="comment-children" id="replies-2-2"><li id="comment-2-6" class="comment-item jq-comment-item depth-1 even" data-id="6" data-author="Leah Morris" data-timestamp="1294038600" data-depth="1">
+<span class="avatar" aria-hidden="true">LM</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Leah Morris</span> <span class="comment-time">Jan 03, 2011 7:10 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">12</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ol>
+</div>
+</li>
+<li id="comment-2-3" class="comment-item jq-comment-item depth-0 even" data-id="3" data-author="Tara Nguyen" data-timestamp="1294025400" data-depth="0">
+<span class="avatar" aria-hidden="true">TN</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Tara Nguyen</span> <span class="comment-time">Jan 03, 2011 3:30 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-toggle-replies reply-toggle" data-target="replies-2-3">Hide replies</a> | <a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">8</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+<ol class="comment-children" id="replies-2-3"><li id="comment-2-7" class="comment-item jq-comment-item depth-1 even" data-id="7" data-author="Mina Shah" data-timestamp="1294042800" data-depth="1">
+<span class="avatar" aria-hidden="true">MS</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Mina Shah</span> <span class="comment-time">Jan 03, 2011 8:20 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">13</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li></ol>
+</div>
+</li>
+<li id="comment-2-4" class="comment-item jq-comment-item depth-0 odd" data-id="4" data-author="Leah Morris" data-timestamp="1294029600" data-depth="0">
+<span class="avatar" aria-hidden="true">LM</span>
+<div class="comment-main">
+<div class="comment-meta"><span class="comment-author">Leah Morris</span> <span class="comment-time">Jan 03, 2011 4:40 AM</span></div>
+<div class="comment-body"><p>undefined</p></div>
+<div class="comment-actions"><a href="#" class="js-reply-btn reply-link">Reply</a> | <a href="#" class="js-edit-comment edit-link">Edit</a> | <a href="#" class="js-report report-link">Report</a> | <div class="jq-vote"><a href="#" class="js-vote-up" aria-label="Vote up">▲</a><span class="vote-count">9</span><a href="#" class="js-vote-down" aria-label="Vote down">▼</a></div></div>
+
+</div>
+</li>
+</ol>
+<div class="load-more-wrap"><button type="button" class="js-load-more load-more">Load 10 more</button></div>
+<form id="comment-form" class="comment-form jq-reply-form ui-widget ui-widget-content ui-corner-all" action="#" method="post">
+<div class="form-row">
+<label for="comment-name">Name</label>
+<input type="text" id="comment-name" name="name" class="ui-state-default comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-email">Email</label>
+<input type="email" id="comment-email" name="email" class="ui-state-default comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-website">Website</label>
+<input type="url" id="comment-website" name="website" class="ui-state-default comment-input ui-state-default">
+</div>
+<div class="form-row">
+<label for="comment-text">Comment</label>
+<textarea id="comment-text" name="comment" class="ui-state-default comment-textarea js-preview-source"></textarea>
+</div>
+<div class="form-row"><button id="submit-btn" type="submit" class="js-submit ui-state-default submit-btn">Post Comment</button></div>
+</form>
+<div class="loading-spinner" style="display:none"><img src="spinner.gif" alt="" /></div>
+</section>
+</div>
+</body>
+</html>

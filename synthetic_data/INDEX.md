@@ -64,48 +64,48 @@ Organized by structural era, mirroring how prompts 01–20 cover comment section
 
 | Prompt | Pages Generated | Droplet Route |
 |--------|----------------|---------------|
-| 01 | 0 / 100 | `/synthetic/prompt_01/` |
-| 02 | 0 / 100 | `/synthetic/prompt_02/` |
-| 03 | 0 / 100 | `/synthetic/prompt_03/` |
-| 04 | 0 / 100 | `/synthetic/prompt_04/` |
-| 05 | 0 / 100 | `/synthetic/prompt_05/` |
-| 06 | 0 / 100 | `/synthetic/prompt_06/` |
-| 07 | 0 / 100 | `/synthetic/prompt_07/` |
-| 08 | 0 / 100 | `/synthetic/prompt_08/` |
-| 09 | 0 / 100 | `/synthetic/prompt_09/` |
-| 10 | 0 / 100 | `/synthetic/prompt_10/` |
-| 11 | 0 / 100 | `/synthetic/prompt_11/` |
-| 12 | 0 / 100 | `/synthetic/prompt_12/` |
-| 13 | 0 / 100 | `/synthetic/prompt_13/` |
-| 14 | 0 / 100 | `/synthetic/prompt_14/` |
-| 15 | 0 / 100 | `/synthetic/prompt_15/` |
-| 16 | 0 / 100 | `/synthetic/prompt_16/` |
-| 17 | 0 / 100 | `/synthetic/prompt_17/` |
-| 18 | 0 / 100 | `/synthetic/prompt_18/` |
-| 19 | 0 / 100 | `/synthetic/prompt_19/` |
-| 20 | 0 / 100 | `/synthetic/prompt_20/` |
-| 21 | 0 / 100 | `/synthetic/prompt_21/` |
-| 22 | 0 / 100 | `/synthetic/prompt_22/` |
-| 23 | 0 / 100 | `/synthetic/prompt_23/` |
-| 24 | 0 / 100 | `/synthetic/prompt_24/` |
-| 25 | 0 / 100 | `/synthetic/prompt_25/` |
-| 26 | 0 / 100 | `/synthetic/prompt_26/` |
-| 27 | 0 / 100 | `/synthetic/prompt_27/` |
-| 28 | 0 / 100 | `/synthetic/prompt_28/` |
-| 29 | 0 / 100 | `/synthetic/prompt_29/` |
-| 30 | 0 / 100 | `/synthetic/prompt_30/` |
-| 31 | 0 / 100 | `/synthetic/prompt_31/` |
-| 32 | 0 / 100 | `/synthetic/prompt_32/` |
-| 33 | 0 / 100 | `/synthetic/prompt_33/` |
-| 34 | 0 / 100 | `/synthetic/prompt_34/` |
-| 35 | 0 / 100 | `/synthetic/prompt_35/` |
-| 36 | 0 / 100 | `/synthetic/prompt_36/` |
-| 37 | 0 / 100 | `/synthetic/prompt_37/` |
-| 38 | 0 / 100 | `/synthetic/prompt_38/` |
-| 39 | 0 / 100 | `/synthetic/prompt_39/` |
-| 40 | 0 / 100 | `/synthetic/prompt_40/` |
+| 01 | 100 / 100 | `/synthetic/prompt_01/` |
+| 02 | 100 / 100 | `/synthetic/prompt_02/` |
+| 03 | 100 / 100 | `/synthetic/prompt_03/` |
+| 04 | 100 / 100 | `/synthetic/prompt_04/` |
+| 05 | 100 / 100 | `/synthetic/prompt_05/` |
+| 06 | 100 / 100 | `/synthetic/prompt_06/` |
+| 07 | 100 / 100 | `/synthetic/prompt_07/` |
+| 08 | 100 / 100 | `/synthetic/prompt_08/` |
+| 09 | 100 / 100 | `/synthetic/prompt_09/` |
+| 10 | 100 / 100 | `/synthetic/prompt_10/` |
+| 11 | 100 / 100 | `/synthetic/prompt_11/` |
+| 12 | 100 / 100 | `/synthetic/prompt_12/` |
+| 13 | 100 / 100 | `/synthetic/prompt_13/` |
+| 14 | 100 / 100 | `/synthetic/prompt_14/` |
+| 15 | 100 / 100 | `/synthetic/prompt_15/` |
+| 16 | 100 / 100 | `/synthetic/prompt_16/` |
+| 17 | 100 / 100 | `/synthetic/prompt_17/` |
+| 18 | 100 / 100 | `/synthetic/prompt_18/` |
+| 19 | 100 / 100 | `/synthetic/prompt_19/` |
+| 20 | 100 / 100 | `/synthetic/prompt_20/` |
+| 21 | 100 / 100 | `/synthetic/prompt_21/` |
+| 22 | 100 / 100 | `/synthetic/prompt_22/` |
+| 23 | 100 / 100 | `/synthetic/prompt_23/` |
+| 24 | 100 / 100 | `/synthetic/prompt_24/` |
+| 25 | 100 / 100 | `/synthetic/prompt_25/` |
+| 26 | 100 / 100 | `/synthetic/prompt_26/` |
+| 27 | 100 / 100 | `/synthetic/prompt_27/` |
+| 28 | 100 / 100 | `/synthetic/prompt_28/` |
+| 29 | 100 / 100 | `/synthetic/prompt_29/` |
+| 30 | 100 / 100 | `/synthetic/prompt_30/` |
+| 31 | 100 / 100 | `/synthetic/prompt_31/` |
+| 32 | 100 / 100 | `/synthetic/prompt_32/` |
+| 33 | 100 / 100 | `/synthetic/prompt_33/` |
+| 34 | 100 / 100 | `/synthetic/prompt_34/` |
+| 35 | 100 / 100 | `/synthetic/prompt_35/` |
+| 36 | 100 / 100 | `/synthetic/prompt_36/` |
+| 37 | 100 / 100 | `/synthetic/prompt_37/` |
+| 38 | 100 / 100 | `/synthetic/prompt_38/` |
+| 39 | 100 / 100 | `/synthetic/prompt_39/` |
+| 40 | 100 / 100 | `/synthetic/prompt_40/` |
 
-**Total:** 0 / 4,000
+**Total:** 4,000 / 4,000
 
 ---
 

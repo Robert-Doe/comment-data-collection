@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom - A book review panel with helpful votes</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.review-section { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.review { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reviewer-name { font-weight: 700; }
+.review-title { margin: 0 0 8px; font-size: 18px; }
+.review-body { line-height: 1.55; }
+.badge--verified, .helpful { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.seller-response { margin-top: 10px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; border-radius: 10px; }
+.pros-cons { margin-top: 10px; display: grid; gap: 8px; }
+.review-photo { display: block; width: 100%; max-width: 260px; border-radius: 10px; margin-top: 10px; }
+.summary, .distribution { margin-bottom: 14px; }
+.distribution .bar { height: 8px; background: #d9e2f2; border-radius: 999px; margin-bottom: 8px; }
+.write-review form { display: grid; gap: 10px; max-width: 540px; }
+.write-review input, .write-review textarea, .write-review select { width: 100%; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 8px 10px; font: inherit; }
+.tabs { margin-bottom: 12px; display: flex; gap: 10px; }
+.tabs a { text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: #245; }
+.tabs a.active { background: #245; color: #fff; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Custom</p>
+<h1>A book review panel with helpful votes</h1>
+<p class="lede">The page mixes ratings, review titles, helpful votes, and structured metadata.</p>
+</section>
+<section class="review-section">
+<article class="review review--custom" data-rating="3.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Ivy</span> <span class="reviewer-location">Berlin, DE</span> <time itemprop="datePublished">Mar 23, 2023</time></div><span class="rating rating--stars">★★★★☆</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">I bought this as a gift and it was a hit.</div>
+</article>
+<article class="review review--custom" data-rating="3" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Tess</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Feb 28, 2023</time></div><span class="rating rating--stars">★★★☆☆</span></header>
+<h3 class="review-title">Solid choice</h3>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<img class="review-photo" src="https://example.invalid/review/88-1.jpg" alt="">
+<span class="helpful">Helpful (54)</span>
+<meta itemprop="ratingValue" content="3"><meta itemprop="author" content="Tess"><meta itemprop="datePublished" content="2023-03-01">
+</article>
+<article class="review review--custom" data-rating="1.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Milo</span>  <time itemprop="datePublished">Jan 22, 2023</time></div><span class="rating rating--stars">★★☆☆☆</span></header>
+<div class="review-body" itemprop="reviewBody">The room was clean and the staff handled everything quickly.</div>
+<span class="helpful">Helpful (17)</span>
+<meta itemprop="ratingValue" content="1.5"><meta itemprop="author" content="Milo"><meta itemprop="datePublished" content="2023-01-23">
+</article>
+<article class="review review--custom" data-rating="4" data-verified="true" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Noah</span> <span class="reviewer-location">Berlin, DE</span> <time itemprop="datePublished">Sep 11, 2023</time></div><span class="rating rating--stars">★★★★☆</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid.</div>
+<span class="helpful">Helpful (8)</span>
+<meta itemprop="ratingValue" content="4"><meta itemprop="author" content="Noah"><meta itemprop="datePublished" content="2023-09-12">
+</article>
+<article class="review review--custom" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span> <span class="reviewer-location">Berlin, DE</span> <time itemprop="datePublished">Mar 15, 2023</time></div><span class="rating rating--stars">★★☆☆☆</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+<img class="review-photo" src="https://example.invalid/review/88-4.jpg" alt="">
+<span class="helpful">Helpful (58)</span>
+</article>
+<article class="review review--custom" data-rating="2.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Pia</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Jun 7, 2023</time></div><span class="rating rating--stars">★★★☆☆</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The room was clean and the staff handled everything quickly.</div>
+<meta itemprop="ratingValue" content="2.5"><meta itemprop="author" content="Pia"><meta itemprop="datePublished" content="2023-06-08">
+</article>
+<article class="review review--custom" data-rating="5.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Ivy</span> <span class="reviewer-location">Sydney, AU</span> <time itemprop="datePublished">Jan 21, 2023</time></div><span class="rating rating--stars">★★★★★</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review.</div>
+<span class="helpful">Helpful (62)</span>
+<meta itemprop="ratingValue" content="5.5"><meta itemprop="author" content="Ivy"><meta itemprop="datePublished" content="2023-01-22">
+</article>
+<article class="review review--custom" data-rating="5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cora</span>  <time itemprop="datePublished">Jun 8, 2023</time></div><span class="rating rating--stars">★★★★★</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had.</div>
+<img class="review-photo" src="https://example.invalid/review/88-7.jpg" alt="">
+<span class="helpful">Helpful (57)</span>
+<meta itemprop="ratingValue" content="5"><meta itemprop="author" content="Cora"><meta itemprop="datePublished" content="2023-06-09">
+</article>
+<article class="review review--custom" data-rating="1" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Theo</span>  <time itemprop="datePublished">Aug 12, 2023</time></div><span class="rating rating--stars">★☆☆☆☆</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">I bought this as a gift and it was a hit.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+<span class="helpful">Helpful (82)</span>
+</article>
+<article class="review review--custom" data-rating="1.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Cal</span>  <time itemprop="datePublished">Aug 9, 2023</time></div><span class="rating rating--stars">★★☆☆☆</span></header>
+<div class="review-body" itemprop="reviewBody">The product feels well made and the packaging was careful.</div>
+<span class="helpful">Helpful (26)</span>
+</article>
+<article class="review review--custom" data-rating="1" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Mina</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Sep 5, 2023</time></div><span class="rating rating--stars">★☆☆☆☆</span></header>
+<div class="review-body" itemprop="reviewBody">The picture quality is better than expected for the price.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<img class="review-photo" src="https://example.invalid/review/88-10.jpg" alt="">
+</article>
+<section class="write-review">
+<h2>Write a review</h2>
+<form>
+<label>Rating <select><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></label>
+<label>Title <input type="text" name="title"></label>
+<label>Review <textarea rows="4" name="body"></textarea></label>
+<button type="button">Submit review</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

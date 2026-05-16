@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>댓글 - 댓글</title>
+<style>body { margin: 0; background: #f5f7fb; color: #1d2430; line-height: 1.6; }
+.page { width: min(940px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.lang-shell { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.lang-comment { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.lang-comment:first-child { border-top: 0; padding-top: 0; }
+.lang-comment__meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: #667; margin-bottom: 8px; }
+.lang-comment__author { font-weight: 700; }
+.lang-comment__text { line-height: 1.55; }
+.lang-comment__children { margin-top: 12px; margin-left: 24px; padding-left: 12px; border-left: 2px solid #e2e7ef; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.compose { margin-top: 16px; display: grid; gap: 10px; max-width: 540px; }
+.compose textarea, .compose button { font: inherit; }
+.compose textarea { width: 100%; min-height: 90px; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 10px; border-radius: 10px; }
+.compose button { width: fit-content; border: 1px solid #ccd5e1; background: #fff; padding: 8px 14px; border-radius: 999px; }
+body { font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; } .lang-comment__text { word-break: break-all; }
+<link rel="alternate" hreflang="en" href="?lang=en"></style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">댓글</p>
+<h1>댓글</h1>
+<p class="lede">한국어 댓글 영역입니다.</p>
+</section>
+<section class="lang-shell" lang="ko" dir="ltr">
+<article class="lang-comment" data-id="6-1" data-depth="0">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%AF%BC%EC%88%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="민수">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">민수</span> <time datetime="2024-12-20T00:00:00.000Z">2024년 12월 19일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요.</div>
+<div class="lang-comment__children"><article class="lang-comment" data-id="6-1-1" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%8F%84%EC%9C%A4%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="도윤">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">도윤</span> <time datetime="2024-02-23T00:00:00.000Z">2024년 2월 22일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-2" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%ED%95%98%EB%8A%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="하늘">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">하늘</span> <time datetime="2024-02-12T00:00:00.000Z">2024년 2월 11일</time> </div>
+<div class="lang-comment__text">이 의견에 동의합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-3" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%ED%95%98%EB%8A%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237a4f8d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="하늘">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">하늘</span> <time datetime="2024-03-21T00:00:00.000Z">2024년 3월 20일</time> </div>
+<div class="lang-comment__text">이 의견에 동의합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-4" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%AF%BC%EC%88%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237a4f8d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="민수">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">민수</span> <time datetime="2024-03-15T00:00:00.000Z">2024년 3월 14일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-5" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%AF%BC%EC%88%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="민수">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">민수</span> <time datetime="2024-10-12T00:00:00.000Z">2024년 10월 11일</time> </div>
+<div class="lang-comment__text">정리가 잘 되어 있습니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-6" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%ED%95%98%EB%8A%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="하늘">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">하늘</span> <time datetime="2024-04-14T00:00:00.000Z">2024년 4월 13일</time> </div>
+<div class="lang-comment__text">이 의견에 동의합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-7" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%A7%80%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="지연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">지연</span> <time datetime="2024-10-13T00:00:00.000Z">2024년 10월 12일</time> </div>
+<div class="lang-comment__text">정리가 잘 되어 있습니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-1-8" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%84%9C%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="서연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">서연</span> <time datetime="2024-10-28T00:00:00.000Z">2024년 10월 27일</time> </div>
+<div class="lang-comment__text">구조가 아주 깔끔합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article></div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-2" data-depth="0">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%8F%84%EC%9C%A4%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d7ea8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="도윤">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">도윤</span> <time datetime="2024-05-13T00:00:00.000Z">2024년 5월 12일</time> </div>
+<div class="lang-comment__text">구조가 아주 깔끔합니다.</div>
+<div class="lang-comment__children"><article class="lang-comment" data-id="6-2-1" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%98%88%EC%A7%84%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237a4f8d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="예진">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">예진</span> <time datetime="2024-04-01T00:00:00.000Z">2024년 3월 31일</time> </div>
+<div class="lang-comment__text">구조가 아주 깔끔합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-2-2" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%AF%BC%EC%88%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="민수">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">민수</span> <time datetime="2024-08-22T00:00:00.000Z">2024년 8월 21일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-2-3" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%A7%80%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="지연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">지연</span> <time datetime="2024-02-28T00:00:00.000Z">2024년 2월 27일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-2-4" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%8F%84%EC%9C%A4%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237a4f8d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="도윤">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">도윤</span> <time datetime="2024-04-03T00:00:00.000Z">2024년 4월 2일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article></div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-3" data-depth="0">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%8F%84%EC%9C%A4%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="도윤">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">도윤</span> <time datetime="2024-05-16T00:00:00.000Z">2024년 5월 15일</time> </div>
+<div class="lang-comment__text">이 의견에 동의합니다.</div>
+<div class="lang-comment__children"><article class="lang-comment" data-id="6-3-1" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%84%9C%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="서연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">서연</span> <time datetime="2024-03-06T00:00:00.000Z">2024년 3월 5일</time> </div>
+<div class="lang-comment__text">이 의견에 동의합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-3-2" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%A7%80%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237a4f8d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="지연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">지연</span> <time datetime="2024-10-01T00:00:00.000Z">2024년 9월 30일</time> </div>
+<div class="lang-comment__text">단계가 명확해서 읽기 쉽네요. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-3-3" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EB%AF%BC%EC%88%98%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234f8a63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="민수">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">민수</span> <time datetime="2024-04-01T00:00:00.000Z">2024년 3월 31일</time> </div>
+<div class="lang-comment__text">정리가 잘 되어 있습니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article>
+<article class="lang-comment" data-id="6-3-4" data-depth="1">
+<img class="avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22%EC%84%9C%EC%97%B0%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238a5d3f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="서연">
+<div class="lang-comment__body">
+<div class="lang-comment__meta"><span class="lang-comment__author">서연</span> <time datetime="2024-11-07T00:00:00.000Z">2024년 11월 6일</time> </div>
+<div class="lang-comment__text">구조가 아주 깔끔합니다. 구조가 아주 깔끔합니다.</div>
+</div>
+</article></div>
+</div>
+</article>
+<form class="compose">
+<label>댓글 추가 <textarea rows="4" placeholder="댓글 추가"></textarea></label>
+<button type="button">전송</button>
+</form>
+</section>
+</div>
+</body>
+</html>

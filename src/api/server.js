@@ -523,6 +523,128 @@ function createApp(config = getConfig()) {
     }
   });
 
+  // ── Enqueue all generated synthetic pages as a scan job ──────────────────────
+  // POST /api/jobs/from-synthetic
+  //   Optional body (JSON): { scanDelayMs, screenshotDelayMs, candidateMode, promptFilter }
+  //   promptFilter: string like "prompt_01,prompt_02" to limit which prompt sets are included.
+  //   If omitted, all generated prompt sets are included.
+  //
+  // Discovers every *.html file under synthetic_data/pages/ at request time,
+  // creates a job with all discovered URLs, then primes the queue.
+  app.post('/api/jobs/from-synthetic', async (req, res, next) => {
+    try {
+      const fsSync = require('fs');
+      const path = require('path');
+
+      const syntheticPagesRoot = path.resolve(__dirname, '../../synthetic_data/pages');
+
+      // Build the base URL from the incoming request. When running behind a
+      // reverse proxy (Caddy), use X-Forwarded-Host / X-Forwarded-Proto so the
+      // URLs resolve to the public hostname, not localhost:3000.
+      const proto = req.get('x-forwarded-proto') || req.protocol;
+      const fwdHost = req.get('x-forwarded-host') || req.get('host');
+      const baseUrl = `${proto}://${fwdHost}`;
+
+      // Optional filter: comma-separated prompt IDs e.g. "prompt_01,prompt_03"
+      const rawFilter = String((req.body && req.body.promptFilter) || '').trim();
+      const promptFilter = rawFilter
+        ? new Set(rawFilter.split(',').map((s) => s.trim()).filter(Boolean))
+        : null;
+
+      // Walk synthetic_data/pages/ and collect every *.html path
+      const promptDirs = fsSync.readdirSync(syntheticPagesRoot)
+        .filter((d) => d.startsWith('prompt_') && fsSync.statSync(path.join(syntheticPagesRoot, d)).isDirectory())
+        .filter((d) => !promptFilter || promptFilter.has(d))
+        .sort();
+
+      if (!promptDirs.length) {
+        res.status(404).json({ error: 'No synthetic prompt directories found under synthetic_data/pages/' });
+        return;
+      }
+
+      const records = [];
+      const promptSummary = {};
+
+      for (const promptDir of promptDirs) {
+        const dirPath = path.join(syntheticPagesRoot, promptDir);
+        const pages = fsSync.readdirSync(dirPath)
+          .filter((f) => f.endsWith('.html'))
+          .sort();
+        promptSummary[promptDir] = pages.length;
+        for (const page of pages) {
+          const url = `${baseUrl}/synthetic/${promptDir}/${page}`;
+          records.push({
+            __row_number: records.length + 1,
+            __input_url: url,
+            __normalized_url: url,
+          });
+        }
+      }
+
+      if (!records.length) {
+        res.status(404).json({ error: 'No HTML pages found in synthetic_data/pages/' });
+        return;
+      }
+
+      const jobSettings = normalizeJobScanSettings({
+        scanDelayMs: req.body && req.body.scanDelayMs,
+        screenshotDelayMs: req.body && req.body.screenshotDelayMs,
+        candidateMode: req.body && req.body.candidateMode,
+      }, {
+        scanDelayMs: config.postLoadDelayMs,
+        screenshotDelayMs: config.preScreenshotDelayMs,
+        candidateMode: 'default',
+      });
+
+      const job = await createJob({
+        sourceFilename: 'synthetic-pages',
+        sourceColumn: 'url',
+        records,
+        batchSize: config.ingestBatchSize,
+        scanDelayMs: jobSettings.scanDelayMs,
+        screenshotDelayMs: jobSettings.screenshotDelayMs,
+        candidateMode: jobSettings.candidateMode,
+      }, config.databaseUrl);
+
+      const queue = getSharedQueue(config.redisUrl);
+      await fillQueueForJob(
+        job.id,
+        Math.min(config.initialQueueFill, job.totalUrls),
+        config.databaseUrl,
+        queue,
+      );
+
+      await appendJobEvent({
+        jobId: job.id,
+        scope: 'job',
+        eventType: 'job_created',
+        eventKey: 'job_created',
+        message: `Synthetic scan job created: ${job.totalUrls} page(s) across ${promptDirs.length} prompt set(s).`,
+        details: {
+          total_urls: job.totalUrls,
+          source_filename: 'synthetic-pages',
+          source_column: 'url',
+          scan_delay_ms: job.scanDelayMs,
+          screenshot_delay_ms: job.screenshotDelayMs,
+          prompt_summary: promptSummary,
+        },
+      }).catch(() => {});
+
+      res.status(202).json({
+        jobId: job.id,
+        totalUrls: job.totalUrls,
+        promptsIncluded: promptDirs.length,
+        promptSummary,
+        scanDelayMs: job.scanDelayMs,
+        screenshotDelayMs: job.screenshotDelayMs,
+        candidateMode: job.candidateMode,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  // ── End from-synthetic ────────────────────────────────────────────────────────
+
   app.get('/api/backups/export.json', async (_req, res, next) => {
     try {
       const backup = await buildProjectBackup(config.databaseUrl);
@@ -2205,13 +2327,13 @@ function createApp(config = getConfig()) {
   // ── End Crawler API ───────────────────────────────────────────────────────────
 
   // ── Synthetic Data Bank ───────────────────────────────────────────────────────
-  // Serves the 2,000 synthetic HTML comment pages under /synthetic/<prompt_id>/<page>.html
+  // Serves the 4,000 synthetic HTML UGC pages under /synthetic/<prompt_id>/<page>.html
   // Pages live in: synthetic_data/pages/prompt_NN/
   // Index listing: GET /synthetic  →  HTML directory of all prompt sets + pages
-  const syntheticRoot = require('path').resolve(__dirname, '../../synthetic_data/pages');
-
+  //
   // Route handlers must be registered BEFORE the static middleware so they are
   // reached before serve-static can intercept the directory requests.
+  const syntheticRoot = require('path').resolve(__dirname, '../../synthetic_data/pages');
 
   // Directory index: GET /synthetic  →  list all prompt sets
   app.get('/synthetic', async (_req, res, next) => {
@@ -2220,18 +2342,7 @@ function createApp(config = getConfig()) {
       const path = require('path');
       if (!fsSync.existsSync(syntheticRoot)) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Synthetic Comment Bank — Index</title>
-  <style>body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }</style>
-</head>
-<body>
-  <h1>Synthetic Comment Section Bank</h1>
-  <p style="color:#888">No synthetic pages have been generated yet. Run the generation script to populate this bank.</p>
-</body>
-</html>`);
+        res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Synthetic UGC Bank</title></head><body><h1>Synthetic UGC Bank</h1><p style="color:#888">No synthetic pages have been generated yet.</p></body></html>`);
         return;
       }
       const promptDirs = fsSync.readdirSync(syntheticRoot)
@@ -2266,7 +2377,7 @@ function createApp(config = getConfig()) {
 </head>
 <body>
   <h1>Synthetic Comment Section Bank</h1>
-  <p>2,000 target HTML pages across 20 prompt sets · All pages label: <strong>positive</strong> (comment section present)</p>
+  <p>4,000 target HTML pages across 40 prompt sets · All pages label: <strong>positive</strong> (UGC section present)</p>
   <table>
     <thead><tr><th>Prompt Set</th><th>Pages Generated</th><th>Files</th></tr></thead>
     <tbody>${rows.join('\n')}</tbody>
@@ -2275,7 +2386,7 @@ function createApp(config = getConfig()) {
     const fsSync = require('fs');
     const path = require('path');
     return sum + fsSync.readdirSync(path.join(syntheticRoot, dir)).filter((f) => f.endsWith('.html')).length;
-  }, 0)} / 2,000 pages generated</p>
+  }, 0)} / 4,000 pages generated</p>
 </body>
 </html>`);
     } catch (err) { next(err); }
@@ -2316,11 +2427,13 @@ function createApp(config = getConfig()) {
   });
 
   // Static file serving last — catches /synthetic/<promptId>/<page>.html requests.
-  // Must come after the route handlers above so those are not shadowed.
+  // Must come AFTER the route handlers above so the GET /synthetic and
+  // GET /synthetic/:promptId handlers are not shadowed by the static middleware.
   app.use('/synthetic', express.static(syntheticRoot, {
     index: false,         // Do not auto-serve index.html — we handle the listing ourselves
     extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
     setHeaders(res) {
+      // Allow the scanner/crawler to fetch these pages cross-origin
       res.setHeader('Access-Control-Allow-Origin', '*');
     },
   }));

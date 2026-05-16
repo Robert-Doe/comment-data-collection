@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Launch Blog - Bootstrap 3 comments under a product launch post</title>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+<style>body { margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background: #eef2f5; color: #223; line-height: 1.5; }
+.page { width: min(1100px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero, .comments-panel, .sidebar-card { background: #fff; border: 1px solid #d8dee8; }
+.hero { padding: 20px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.lead { margin: 0; color: #556070; }
+.comment-item { margin-bottom: 14px; }
+.comment-meta { margin-bottom: 8px; font-size: 12px; color: #667; }
+.comment-body p { margin: 0 0 8px; }
+.comment-actions .btn { margin-right: 6px; }
+.comment-replies { margin-top: 10px; margin-left: 26px; padding-left: 12px; border-left: 2px solid #e4e8ef; }
+.sidebar-card { padding: 16px; }
+.sidebar-card + .sidebar-card { margin-top: 16px; }
+.progress { margin-bottom: 10px; }
+.modal { display: block; position: relative; }
+.compose-box { padding: 16px; border-top: 1px solid #e2e7ef; }
+.compose-box textarea { width: 100%; min-height: 90px; box-sizing: border-box; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Launch Blog</p>
+<h1>Bootstrap 3 comments under a product launch post</h1>
+<p class="lead">A classic media-object layout with panel wrappers and clean buttons.</p>
+</section>
+<div class="row">
+<div class="col-md-8"><div class="comments-panel">
+<span class="badge">12 responses</span>
+<div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Helena%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234c7b63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EHE%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Helena"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Helena</span> <span class="comment-time">1 hour ago</span></div>
+<p>The list-group version is the cleanest of the bunch. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+<div class="comment-replies"><div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Rita%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%2344688f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ERI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Rita"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Rita</span> <span class="comment-time">3 minutes ago</span></div>
+<p>The list-group version is the cleanest of the bunch. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div>
+<div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Helena%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234c7b63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EHE%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Helena"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Helena</span> <span class="comment-time">1 hour ago</span></div>
+<p>The media object is exactly the right fit for avatar + text combinations. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div>
+<div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Clive%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d5b41%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ECL%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Clive"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Clive</span> <span class="comment-time">Just now</span></div>
+<p>The pagination at the bottom makes the archive feel older and more realistic. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div>
+<div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Lia%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d5b41%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ELI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Lia"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Lia</span> <span class="comment-time">18 minutes ago</span></div>
+<p>The media object is exactly the right fit for avatar + text combinations. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div></div>
+</div></div>
+</div>
+<div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tess%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d5b41%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETE%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tess"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Tess</span> <span class="comment-time">2 days ago</span></div>
+<p>That alert notice is doing useful work before the replies start. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+<div class="comment-replies"><div class="media comment-item">
+<div class="media-left"><img class="img-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tess%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237d4c78%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETE%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tess"></div>
+<div class="media-body"><div class="panel-body">
+<div class="comment-meta"><span class="comment-author">Tess</span> <span class="comment-time">2 days ago</span></div>
+<p>I would probably keep the compose box in a modal on a page like this. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div></div>
+</div></div>
+</div>
+<div class="compose-box">
+
+<div class="form-group"><textarea class="form-control" rows="4" placeholder="Share your thoughts"></textarea></div>
+<button type="button" class="btn btn-primary">Post</button>
+</div>
+</div></div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WordPressish - A classic blog theme rebuilt with clean HTML5</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+@media (prefers-color-scheme: dark) { body { background: #121315; color: #e9e7e2; } .story, #comments, .comments-section, .subscription-box, .comment-compose { background: #1a1d22; border-color: #353a43; } .lede, .comment__footer, .comments__footer, .comment__figure figcaption { color: #9aa3b2; } .comment__replies, .comments__replies { border-left-color: #373e49; } }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">WordPressish</p>
+<h1>A classic blog theme rebuilt with clean HTML5</h1>
+<p class="lede">The comments are laid out the way a careful theme author would have done it.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<section id="comments" class="comments-section">
+<article id="comment-45-1" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Elsa</cite>
+<time datetime="2012-07-05T15:49:00.000Z" itemprop="datePublished">July 5, 2012 at 8:49 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+</article>
+<article id="comment-45-2" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Pia</cite>
+<time datetime="2012-05-23T15:54:00.000Z" itemprop="datePublished">May 23, 2012 at 8:54 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+</article>
+<article id="comment-45-3" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Vera</cite>
+<time datetime="2012-11-17T05:42:00.000Z" itemprop="datePublished">November 16, 2012 at 10:42 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+</article>
+<article id="comment-45-4" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Saul</cite>
+<time datetime="2012-07-06T10:18:00.000Z" itemprop="datePublished">July 6, 2012 at 3:18 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<aside class="comment__aside">Editorial note: the author metadata is placed in an aside.</aside>
+</article>
+<section class="comment-compose">
+<h2>Leave a note</h2>
+<form>
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Website <input type="url" name="website"></label>
+<label>Message <textarea rows="5"></textarea></label>
+<button type="submit">Post</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

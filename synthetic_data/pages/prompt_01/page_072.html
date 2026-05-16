@@ -1,0 +1,245 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>TubeAudioForum.com - Dynaco ST-70 channel imbalance after recap - left channel 6dB lower</title>
+</head>
+<body bgcolor="#111111" text="#DDCCAA" link="#BB8833" vlink="#885522">
+
+<table width="750" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr>
+  <td bgcolor="#0A0A0A" height="44">
+  <table width="100%" border="0" cellpadding="8" cellspacing="0">
+  <tr>
+    <td>
+    <font face="Verdana, Arial" size="3" color="#CC9933"><b>TubeAudioForum.com</b></font><br>
+    <font face="Verdana" size="1" color="#665522">Vintage Tube Amplifiers &bull; Restoration &bull; Modification</font>
+    </td>
+    <td align="right" valign="middle">
+    <font face="Verdana" size="1" color="#665522">
+    <a href="#" style="color:#CC9933">Forum</a> &bull;
+    <a href="#" style="color:#CC9933">Schematics</a> &bull;
+    <a href="#" style="color:#CC9933">Tube Charts</a> &bull;
+    <a href="#" style="color:#CC9933">Gallery</a>
+    </font>
+    </td>
+  </tr>
+  </table>
+  </td>
+</tr>
+<tr bgcolor="#1E1A0A">
+  <td height="20">
+  <font face="Verdana" size="1" color="#997733">&nbsp;&nbsp;
+  <a href="#" style="color:#CC9933">Dynaco</a> &bull;
+  <a href="#" style="color:#CC9933">Marantz</a> &bull;
+  <a href="#" style="color:#CC9933">Fisher</a> &bull;
+  <a href="#" style="color:#CC9933">McIntosh</a> &bull;
+  <a href="#" style="color:#CC9933">DIY Kits</a> &bull;
+  <a href="#" style="color:#CC9933">Safety</a>
+  </font>
+  </td>
+</tr>
+</table>
+
+<table width="750" border="0" cellpadding="10" cellspacing="0" align="center" bgcolor="#0D0D0D">
+<tr><td>
+<font face="Verdana" size="3" color="#DDCCAA"><b>Dynaco ST-70 left channel about 6dB low after full recap - bias okay, what else to check?</b></font><br>
+<font face="Verdana" size="1" color="#665522">Dynaco &bull; Posted by VintageAudio_Pete &bull; March 2001</font>
+<br><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Just completed a full recap on my Dynaco ST-70 (original PCB, not a modified unit). Replaced
+all electrolytic caps with Nichicon and Sprague equivalents. Bias is set correctly on both
+channels (per the service manual). But the left channel is noticeably quieter - about 6dB
+by measurement - than the right. Both channels work and sound clean, just imbalanced. I've
+swapped tubes between channels and the imbalance stays with the channel, not the tubes.
+What should I check next?
+</font>
+</td></tr>
+</table>
+
+<table width="750" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr><td bgcolor="#0A0A0A" height="1"></td></tr>
+<tr><td bgcolor="#1E1A0A" height="24">
+<font face="Verdana" size="2" color="#CC9933"><b>&nbsp;&nbsp;Tube Amp Replies (9)</b></font>
+</td></tr>
+<tr><td bgcolor="#0A0A0A" height="1"></td></tr>
+</table>
+
+<!-- Hungarian class names: tblForum / trPost / tdUser / tdMessage, dark tube amp theme -->
+<table class="tblForum" width="750" border="0" cellpadding="0" cellspacing="2" align="center" bgcolor="#0A0A0A">
+
+<tr class="trPost" bgcolor="#161610">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#111108" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>TubeTech_Harold</b></font><br>
+<font face="Verdana" size="1" color="#665522">EE, 35 yrs</font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 9,224</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 8, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Pete, tube swap confirming the fault stays with the channel is valuable diagnostic information.
+It rules out output tubes and points to the small-signal section or a passive component.
+On an ST-70 with a channel 6dB low after recap, check in this order:<br><br>
+<b>1) Signal coupling capacitors:</b> The ST-70 uses a coupling cap (originally 0.1uF) between
+the driver stage and each output tube grid. A wrong-value cap installed during recap will
+attenuate the signal. Verify both coupling caps are correct value and not accidentally swapped
+with different values from your parts kit.<br><br>
+<b>2) Phase inverter resistors:</b> The split-load phase inverter in the ST-70 uses a balanced
+pair of resistors. If one was disturbed or an incorrect value substituted during recap work,
+channel imbalance results.<br><br>
+<b>3) Input sensitivity pot:</b> The ST-70 has individual channel level trimmers. Check that
+these are set symmetrically.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#111110">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#0D0D08" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>DynacoDoctor_Al</b></font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 6,118</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 8, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Harold's list is exactly right. I'll add one more common ST-70 recap error: the cathode
+bypass cap on the driver tube (EL34/KT88 driver). On the original PCB there's a 25uF or
+22uF cap on the V3 driver cathode. If this cap was installed in the wrong polarity or with
+an incorrect value, the driver stage gain changes. A 6dB channel difference is consistent
+with a driver stage gain error. It's worth measuring the cathode voltage on each driver
+tube - they should be equal within a few percent.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#161610">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#111108" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>VintageAudio_Pete</b></font><br>
+<font face="Verdana" size="1" color="#665522"><i>OP</i></font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 9, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Measured cathode voltages on both V3 driver positions. Right channel: 18.2V. Left channel: 9.4V.
+Left channel cathode voltage is about half what it should be. This seems like the smoking gun.
+Harold - could a wrong-value cathode bypass cap cause this voltage difference?
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#111110">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#0D0D08" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>TubeTech_Harold</b></font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 9,224</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 9, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+9.4V on the left driver cathode is definitely wrong - that's pointing directly at a cathode
+resistor issue, not just the bypass cap. The cathode bypass cap doesn't set the DC voltage;
+the cathode resistor does. Check the physical cathode resistor on the left channel V3 position -
+look for a damaged resistor, a cold solder joint, or (less likely) an accidentally wrong value.
+The bypass cap value affects frequency response and gain but not DC operating point. Your
+voltage difference suggests a passive component issue at the cathode resistor, not the cap.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#161610">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#111108" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>OhmWatcher_Frank</b></font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 3,882</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 10, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+When working near the ST-70's cathode resistors during a recap, it's easy to accidentally
+disturb solder joints that were already marginal (old Dynacos often have cold joints from
+the original assembly). The voltage you measured suggests a partial connection - perhaps
+a marginal joint that's conducting but at high resistance. In-circuit resistance measurement
+won't tell you much; you need to physically inspect and reflow the solder joints around
+that cathode resistor position.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#111110">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#0D0D08" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>Anonymous</b></font><br>
+<font face="Verdana" size="1" color="#554422">Guest</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 10, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Safety reminder: even with the ST-70 powered off, the filter capacitors hold lethal voltages
+(400V+) for many minutes after shutdown. Always discharge the caps through a series resistor
+before probing around the power supply section, and never touch the B+ rail nodes without
+confirming zero volts. High-voltage tube work requires respect for the charge storage.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#161610">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#111108" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>VintageAudio_Pete</b></font><br>
+<font face="Verdana" size="1" color="#665522"><i>OP</i></font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 12, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+FOUND IT. Frank was exactly right - cold solder joint on the cathode resistor (R18 on the
+original PCB), probably disturbed when I was reflowing the nearby cap. Joint looked visually
+intact but when I touched the iron to it, it immediately reflowed with a characteristic
+"slump" that indicates a cold joint. Resoldered, powered up: left cathode now 18.0V, right
+18.2V, channels balanced within 0.5dB by measurement. Sounds beautiful.<br><br>
+Thank you Harold, Al, Frank, and the anonymous safety reminder. I'll always discharge the
+filter caps before touching the board from now on - good habit I should have been following.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#111110">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#0D0D08" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>TubeTech_Harold</b></font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 9,224</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 13, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+Classic Dynaco cold joint causing a phantom voltage imbalance - I've seen it dozens of times.
+The systematic measurement approach (cathode voltage comparison) is exactly the right technique.
+Marking solved and adding to the ST-70 FAQ. Enjoy the music, Pete.
+</font>
+</td>
+</tr>
+
+<tr class="trPost" bgcolor="#161610">
+<td class="tdUser" width="130" valign="top" align="center" bgcolor="#111108" style="padding:8px;">
+<font face="Verdana" size="1" color="#CC9933"><b>DynacoDoctor_Al</b></font><br>
+<font face="Verdana" size="1" color="#554422">Posts: 6,118</font>
+</td>
+<td class="tdMessage" valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#665522">Mar 14, 2001</font><br>
+<font face="Verdana" size="2" color="#DDCCAA">
+A balanced ST-70 playing music is one of the finest sounds in audio. A well-maintained
+original PCB Dynaco will outlast most modern equipment. Post your measurements in the
+restoration log thread if you have them - those numbers are useful for others doing the same job.
+</font>
+</td>
+</tr>
+
+</table>
+
+<br>
+<table width="750" border="0" cellpadding="8" cellspacing="0" align="center" bgcolor="#161610">
+<tr><td bgcolor="#0A0A0A"><font face="Verdana" size="2" color="#CC9933"><b>Post a Reply</b></font></td></tr>
+<tr><td>
+<font face="Verdana" size="2" color="#DDCCAA">Name:</font>
+<input type="text" name="name" size="22" style="background:#111108;color:#DDCCAA;border:1px solid #443322;">&nbsp;
+<font face="Verdana" size="2" color="#DDCCAA">Amplifier:</font>
+<input type="text" name="amp" size="28" style="background:#111108;color:#DDCCAA;border:1px solid #443322;"><br><br>
+<textarea name="reply" rows="5" cols="64" style="background:#0D0D0D;color:#DDCCAA;border:1px solid #443322;"></textarea><br><br>
+<input type="submit" value="Post Reply">
+</td></tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TripAdvisor - A mobile app review section with developer replies</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f4f6f9; color: #1f2733; }
+.page { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.review-section { background: #fff; border: 1px solid #d9dfe8; border-radius: 12px; padding: 18px; }
+.review { border-top: 1px solid #e2e7ef; padding: 14px 0; }
+.review:first-child { border-top: 0; padding-top: 0; }
+.review-header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reviewer-name { font-weight: 700; }
+.review-title { margin: 0 0 8px; font-size: 18px; }
+.review-body { line-height: 1.55; }
+.badge--verified, .helpful { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.seller-response { margin-top: 10px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; border-radius: 10px; }
+.pros-cons { margin-top: 10px; display: grid; gap: 8px; }
+.review-photo { display: block; width: 100%; max-width: 260px; border-radius: 10px; margin-top: 10px; }
+.summary, .distribution { margin-bottom: 14px; }
+.distribution .bar { height: 8px; background: #d9e2f2; border-radius: 999px; margin-bottom: 8px; }
+.write-review form { display: grid; gap: 10px; max-width: 540px; }
+.write-review input, .write-review textarea, .write-review select { width: 100%; box-sizing: border-box; border: 1px solid #ccd5e1; padding: 8px 10px; font: inherit; }
+.tabs { margin-bottom: 12px; display: flex; gap: 10px; }
+.tabs a { text-decoration: none; padding: 4px 10px; border-radius: 999px; background: #eef3ff; color: #245; }
+.tabs a.active { background: #245; color: #fff; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">TripAdvisor</p>
+<h1>A mobile app review section with developer replies</h1>
+<p class="lede">The page mixes ratings, review titles, helpful votes, and structured metadata.</p>
+</section>
+<section class="review-section">
+<div class="summary"><strong>3.2 / 5</strong> based on 9 reviews.</div>
+<div class="distribution"><div class="bar" style="width:68%"></div><div class="bar" style="width:18%"></div><div class="bar" style="width:8%"></div></div>
+<article class="review review--tripadvisor" data-rating="3" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span> <span class="reviewer-location">Sydney, AU</span> <time itemprop="datePublished">May 11, 2023</time></div><span class="rating rating--bubbles">●●●○○</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had. The mobile app version behaved as expected.</div>
+<img class="review-photo" src="https://example.invalid/review/91-0.jpg" alt="">
+<span class="helpful">Helpful (28)</span>
+<meta itemprop="ratingValue" content="3"><meta itemprop="author" content="Eli"><meta itemprop="datePublished" content="2023-05-12">
+</article>
+<article class="review review--tripadvisor" data-rating="5.5" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Zia</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Jun 16, 2023</time></div><span class="rating rating--bubbles">●●●●●</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid. The mobile app version behaved as expected.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div></div>
+<img class="review-photo" src="https://example.invalid/review/91-1.jpg" alt="">
+<span class="helpful">Helpful (64)</span>
+<div class="seller-response"><strong>Seller response:</strong> Thanks for the detailed feedback. We have shared this with the team.</div>
+</article>
+<article class="review review--tripadvisor" data-rating="4" data-verified="true" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Ivy</span>  <time itemprop="datePublished">Aug 13, 2023</time></div><span class="rating rating--bubbles">●●●●○</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review. The mobile app version behaved as expected.</div>
+<meta itemprop="ratingValue" content="4"><meta itemprop="author" content="Ivy"><meta itemprop="datePublished" content="2023-08-14">
+</article>
+<article class="review review--tripadvisor" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Mina</span> <span class="reviewer-location">Berlin, DE</span> <time itemprop="datePublished">May 9, 2023</time></div><span class="rating rating--bubbles">●●○○○</span></header>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review. The mobile app version behaved as expected.</div>
+<span class="helpful">Helpful (53)</span>
+</article>
+<article class="review review--tripadvisor" data-rating="2.5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span>  <time itemprop="datePublished">May 6, 2023</time></div><span class="rating rating--bubbles">●●●○○</span><span class="badge badge--verified">Verified Purchase</span></header>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid. The mobile app version behaved as expected.</div>
+<span class="helpful">Helpful (57)</span>
+</article>
+<article class="review review--tripadvisor" data-rating="2" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Avery</span> <span class="reviewer-location">Austin, TX</span> <time itemprop="datePublished">Nov 4, 2023</time></div><span class="rating rating--bubbles">●●○○○</span></header>
+<h3 class="review-title">Mixed but useful</h3>
+<div class="review-body" itemprop="reviewBody">After using this for six months, I still think the build is solid. The mobile app version behaved as expected.</div>
+<div class="pros-cons"><div class="pros"><strong>Pros:</strong> Easy setup, clean packaging, and a solid finish.</div><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<span class="helpful">Helpful (25)</span>
+</article>
+<article class="review review--tripadvisor" data-rating="3.5" data-verified="false" itemscope itemtype="https://schema.org/Review">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Nora</span> <span class="reviewer-location">Seattle, WA</span> <time itemprop="datePublished">Jul 6, 2023</time></div><span class="rating rating--bubbles">●●●●○</span></header>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had. The mobile app version behaved as expected.</div>
+<div class="pros-cons"><div class="cons"><strong>Cons:</strong> Minor learning curve on the first use.</div></div>
+<meta itemprop="ratingValue" content="3.5"><meta itemprop="author" content="Nora"><meta itemprop="datePublished" content="2023-07-07">
+</article>
+<article class="review review--tripadvisor" data-rating="3.5" data-verified="true">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Eli</span>  <time itemprop="datePublished">Sep 1, 2023</time></div><span class="rating rating--bubbles">●●●●○</span><span class="badge badge--verified">Verified Purchase</span></header>
+<h3 class="review-title">Great value</h3>
+<div class="review-body" itemprop="reviewBody">The seller response clarified the one issue I had. The mobile app version behaved as expected.</div>
+<span class="helpful">Helpful (15)</span>
+</article>
+<article class="review review--tripadvisor" data-rating="3" data-verified="false">
+<header class="review-header"><div class="review-meta"><span class="reviewer-name" itemprop="author">Pia</span> <span class="reviewer-location">Berlin, DE</span> <time itemprop="datePublished">Mar 18, 2023</time></div><span class="rating rating--bubbles">●●●○○</span></header>
+<h3 class="review-title">Worth the money</h3>
+<div class="review-body" itemprop="reviewBody">The app update fixed the crash I mentioned in my earlier review. The mobile app version behaved as expected.</div>
+<span class="helpful">Helpful (60)</span>
+</article>
+<section class="write-review">
+<h2>Write a review</h2>
+<form>
+<label>Rating <select><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></label>
+<label>Title <input type="text" name="title"></label>
+<label>Review <textarea rows="4" name="body"></textarea></label>
+<button type="button">Submit review</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse - A mobile-first feed under a breaking news card</title>
+<style>body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f5f8; color: #1f2733; }
+.page { width: min(720px, calc(100% - 20px)); margin: 0 auto; padding: 16px 0 84px; }
+.hero { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.hero h1 { margin: 4px 0 8px; font-size: 24px; }
+.hero .lede { margin: 0; color: #5d6877; }
+.feed-item { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 12px; }
+.feed-item--pinned { border: 1px solid #d6c27f; box-shadow: 0 0 0 1px rgba(214,194,127,0.2), 0 1px 3px rgba(0,0,0,0.08); }
+.feed-item__row { display: flex; align-items: flex-start; gap: 12px; }
+.feed-item__avatar { width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; }
+.feed-item__body { min-width: 0; flex: 1 1 auto; }
+.feed-item__meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: #66707e; margin-bottom: 8px; }
+.feed-item__name { font-weight: 700; color: #1f2733; }
+.feed-item__text { font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; }
+.feed-item__actions { display: flex; gap: 8px; margin-top: 10px; min-height: 44px; align-items: center; }
+.feed-item__actions button { min-height: 44px; border: 1px solid #d4dbe6; background: #f9fbfd; border-radius: 999px; padding: 0 12px; font: inherit; }
+.feed-item__replies { margin-top: 12px; margin-left: 24px; padding-left: 12px; border-left: 2px solid #e1e6ee; }
+.comment-attachment { display: block; width: 100%; max-width: 220px; border-radius: 10px; margin-top: 10px; }
+.badge, .author-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef3ff; font-size: 11px; }
+.composer { position: sticky; bottom: 0; margin-top: 16px; padding: 12px; background: rgba(243,245,248,0.96); backdrop-filter: blur(8px); border-top: 1px solid #dde3ec; }
+.composer form { display: flex; gap: 10px; align-items: center; }
+.composer textarea { flex: 1 1 auto; min-height: 52px; border-radius: 16px; border: 1px solid #ccd5e1; padding: 12px; font: inherit; resize: none; }
+.composer button { min-height: 44px; border: 1px solid #ccd5e1; background: #fff; border-radius: 999px; padding: 0 14px; font: inherit; }
+.ptr-indicator, .load-more-trigger { text-align: center; color: #66707e; padding: 8px 0; font-size: 12px; }
+@media (min-width: 768px) { .feed-item__avatar { width: 44px; height: 44px; } .feed-item__text { font-size: 15px; } }
+@media (min-width: 1024px) { .page { width: min(720px, calc(100% - 48px)); } .feed-item__avatar { width: 48px; height: 48px; } .feed-item__text { font-size: 16px; } }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Pulse</p>
+<h1>A mobile-first feed under a breaking news card</h1>
+<p class="lede">The layout is optimized for a small screen first and then expands to desktop.</p>
+</section>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Iris%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d6b3b%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EIR%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Iris">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Iris</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">That attachment thumbnail makes the comment feel complete.  #local</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Ivy%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%235b79a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EIV%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Ivy">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Ivy</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">The dark mode state looks more natural on a mobile screen.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Nate%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d8b6d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ENA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Nate">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Nate</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">The dark mode state looks more natural on a mobile screen.  #design</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Juno%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EJU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Juno">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Juno</span> <span class="author-badge">Author</span> <time>2 days ago</time></div>
+<div class="feed-item__text">The avatars still read clearly even at 36px.  #recipes</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Noel%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d8b6d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ENO%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Noel">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Noel</span>  <time>1 hour ago</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.  #launch</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Mina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%235b79a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Mina">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Mina</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Maya%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d8b6d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Maya">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Maya</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">The avatars still read clearly even at 36px.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Sage%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%23a05c55%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ESA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Sage">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Sage</span>  <time>2 days ago</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.  #news</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Avery%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d6b3b%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EAV%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Avery">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Avery</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">This would work well in a news app because the rows are fast to scan.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Zoe%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%23a05c55%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EZO%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Zoe">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Zoe</span>  <time>3 hours ago</time></div>
+<div class="feed-item__text">The dark mode state looks more natural on a mobile screen.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Mina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234d8b6d%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Mina">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Mina</span>  <time>2 days ago</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Tori%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETO%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Tori">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Tori</span>  <time>Just now</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Cal%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ECA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Cal">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Cal</span>  <time>2 days ago</time></div>
+<div class="feed-item__text">The action row is big enough for thumbs without feeling bloated.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Ivy%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EIV%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Ivy">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Ivy</span>  <time>Yesterday</time></div>
+<div class="feed-item__text">I like the compact spacing on this layout.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Nate%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ENA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Nate">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Nate</span>  <time>Yesterday</time></div>
+<div class="feed-item__text">This would work well in a news app because the rows are fast to scan.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Rae%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ERA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Rae">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Rae</span> <span class="author-badge">Author</span> <time>3 minutes ago</time></div>
+<div class="feed-item__text">The avatars still read clearly even at 36px.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Hugo%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EHU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Hugo">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Hugo</span>  <time>2 days ago</time></div>
+<div class="feed-item__text">The pinned item at the top helps set the tone for the rest of the feed.  #recipes</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Juno%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EJU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Juno">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Juno</span>  <time>1 hour ago</time></div>
+<div class="feed-item__text">This would work well in a news app because the rows are fast to scan.  #design</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Cal%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ECA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Cal">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Cal</span>  <time>18 minutes ago</time></div>
+<div class="feed-item__text">This would work well in a news app because the rows are fast to scan.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Mina%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%237058a8%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EMI%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Mina">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Mina</span>  <time>3 minutes ago</time></div>
+<div class="feed-item__text">That attachment thumbnail makes the comment feel complete.  #news</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<article class="feed-item" data-depth="0">
+<div class="feed-item__row">
+<img class="feed-item__avatar" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Juno%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%238d6b3b%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EJU%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Juno">
+<div class="feed-item__body">
+<div class="feed-item__meta"><span class="feed-item__name">Juno</span>  <time>Yesterday</time></div>
+<div class="feed-item__text">The action row is big enough for thumbs without feeling bloated.</div>
+<div class="feed-item__actions"><button type="button">Like</button><button type="button">Reply</button><button type="button">Share</button></div>
+</div>
+</div>
+</article>
+<div class="load-more-trigger">Loading...</div>
+<aside class="hero"><h2>Feed details</h2><p>The mobile cards keep the layout easy to scan with one hand.</p></aside>
+<div class="composer">
+<form>
+<textarea placeholder="Write a comment"></textarea>
+<button type="button">Send</button>
+</form>
+</div>
+</div>
+</body>
+</html>

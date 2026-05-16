@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Notes - A field guide to HTML5 article nesting</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">Semantic Notes</p>
+<h1>A field guide to HTML5 article nesting</h1>
+<p class="lede">The page leans hard into article, section, header, and footer semantics.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<section id="comments" class="comments-section">
+<article id="comment-1-1" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Leo</cite>
+<time datetime="2012-11-13T11:45:00.000Z" itemprop="datePublished">November 13, 2012 at 4:45 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-2" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Mina</cite>
+<time datetime="2012-07-04T10:21:00.000Z" itemprop="datePublished">July 4, 2012 at 3:21 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The author response is highlighted well without breaking the flow.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-3" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Rafael</cite>
+<time datetime="2012-02-22T09:48:00.000Z" itemprop="datePublished">February 22, 2012 at 2:48 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The author response is highlighted well without breaking the flow.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-4" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Jasper</cite>
+<time datetime="2012-01-22T11:47:00.000Z" itemprop="datePublished">January 22, 2012 at 4:47 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-5" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Quinn</cite>
+<time datetime="2012-07-06T20:22:00.000Z" itemprop="datePublished">July 6, 2012 at 1:22 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-6" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Cora</cite>
+<time datetime="2012-11-08T17:48:00.000Z" itemprop="datePublished">November 8, 2012 at 10:48 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-7" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Dylan</cite>
+<time datetime="2012-06-24T16:09:00.000Z" itemprop="datePublished">June 24, 2012 at 9:09 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-8" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Mira</cite>
+<time datetime="2012-11-19T08:56:00.000Z" itemprop="datePublished">November 19, 2012 at 1:56 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-9" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Jasper</cite>
+<time datetime="2012-01-01T16:46:00.000Z" itemprop="datePublished">January 1, 2012 at 9:46 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The aside widget helps explain the context without crowding the thread.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-10" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Leo</cite>
+<time datetime="2012-12-10T15:21:00.000Z" itemprop="datePublished">December 10, 2012 at 8:21 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-11" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Harriet</cite>
+<time datetime="2012-07-23T04:53:00.000Z" itemprop="datePublished">July 22, 2012 at 9:53 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-12" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Elsa</cite>
+<time datetime="2012-02-24T00:16:00.000Z" itemprop="datePublished">February 23, 2012 at 5:16 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-13" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Pia</cite>
+<time datetime="2012-03-10T04:30:00.000Z" itemprop="datePublished">March 9, 2012 at 9:30 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-14" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Harriet</cite>
+<time datetime="2012-02-09T23:19:00.000Z" itemprop="datePublished">February 9, 2012 at 4:19 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-15" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Pia</cite>
+<time datetime="2012-10-19T03:54:00.000Z" itemprop="datePublished">October 18, 2012 at 8:54 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">That time element makes the archive much easier to understand.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-16" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Leo</cite>
+<time datetime="2012-10-05T04:09:00.000Z" itemprop="datePublished">October 4, 2012 at 9:09 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-17" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Mina</cite>
+<time datetime="2012-05-12T21:45:00.000Z" itemprop="datePublished">May 12, 2012 at 2:45 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-18" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Harriet</cite>
+<time datetime="2012-04-19T10:10:00.000Z" itemprop="datePublished">April 19, 2012 at 3:10 AM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-19" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Cora</cite>
+<time datetime="2012-02-18T06:27:00.000Z" itemprop="datePublished">February 17, 2012 at 11:27 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The mark tag draws attention to the important sentence very cleanly.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-1-20" class="comment" data-depth="0"><header class="comment__header">
+<p class="comment__meta">
+<cite class="comment__author" itemprop="author">Elsa</cite>
+<time datetime="2012-07-18T20:00:00.000Z" itemprop="datePublished">July 18, 2012 at 1:00 PM</time>
+</p>
+</header>
+<div class="comment__body" itemprop="text">The author response is highlighted well without breaking the flow.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<aside class="subscription-box"><h2>Subscribe</h2><p>Get new posts by email.</p><input type="email" placeholder="Email address"><button type="button">Subscribe</button></aside>
+<section class="comment-compose">
+<h2>Leave a note</h2>
+<form>
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Website <input type="url" name="website"></label>
+<label>Message <textarea rows="5"></textarea></label>
+<button type="submit">Post</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

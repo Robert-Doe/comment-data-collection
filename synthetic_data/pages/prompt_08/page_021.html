@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Launch Blog - Bootstrap 3 comments under a product launch post</title>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+<style>body { margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background: #eef2f5; color: #223; line-height: 1.5; }
+.page { width: min(1100px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.hero, .comments-panel, .sidebar-card { background: #fff; border: 1px solid #d8dee8; }
+.hero { padding: 20px; margin-bottom: 16px; }
+.hero h1 { margin: 4px 0 8px; font-size: 28px; }
+.lead { margin: 0; color: #556070; }
+.comment-item { margin-bottom: 14px; }
+.comment-meta { margin-bottom: 8px; font-size: 12px; color: #667; }
+.comment-body p { margin: 0 0 8px; }
+.comment-actions .btn { margin-right: 6px; }
+.comment-replies { margin-top: 10px; margin-left: 26px; padding-left: 12px; border-left: 2px solid #e4e8ef; }
+.sidebar-card { padding: 16px; }
+.sidebar-card + .sidebar-card { margin-top: 16px; }
+.progress { margin-bottom: 10px; }
+.modal { display: block; position: relative; }
+.compose-box { padding: 16px; border-top: 1px solid #e2e7ef; }
+.compose-box textarea { width: 100%; min-height: 90px; box-sizing: border-box; }
+.card.comment-item { border: 1px solid #d8dee8; }
+.alert { margin-bottom: 16px; }</style>
+</head>
+<body>
+<div class="page">
+<section class="hero">
+<p class="kicker">Launch Blog</p>
+<h1>Bootstrap 3 comments under a product launch post</h1>
+<p class="lead">A classic media-object layout with panel wrappers and clean buttons.</p>
+</section>
+<div class="row">
+<div class="col-md-8"><div class="comments-panel">
+<div class="alert alert-info">Comments are moderated before publication.</div>
+<span class="badge">12 responses</span>
+<article class="card comment-item" data-depth="0">
+<div class="card-body d-flex gap-3">
+<img class="rounded-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Clive%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234c7b63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ECL%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Clive">
+<div class="flex-grow-1"><div class="card-body">
+<div class="comment-meta"><span class="comment-author">Clive</span> <span class="comment-time">Yesterday</span></div>
+<p>The grid columns make the layout feel more deliberate than the earlier versions. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+<div class="comment-replies"><article class="card comment-item" data-depth="1">
+<div class="card-body d-flex gap-3">
+<img class="rounded-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Theo%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%2344688f%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3ETH%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Theo">
+<div class="flex-grow-1"><div class="card-body">
+<div class="comment-meta"><span class="comment-author">Theo</span> <span class="comment-time">3 hours ago</span></div>
+<p>That alert notice is doing useful work before the replies start. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+<div class="comment-replies"><article class="card comment-item" data-depth="2">
+<div class="card-body d-flex gap-3">
+<img class="rounded-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Jade%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234c7b63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EJA%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Jade">
+<div class="flex-grow-1"><div class="card-body">
+<div class="comment-meta"><span class="comment-author">Jade</span> <span class="comment-time">Just now</span></div>
+<p>The grid columns make the layout feel more deliberate than the earlier versions. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div>
+</article></div>
+</div></div>
+</div>
+</article></div>
+</div></div>
+</div>
+</article>
+<article class="card comment-item" data-depth="0">
+<div class="card-body d-flex gap-3">
+<img class="rounded-circle" src="data:image/svg+xml;utf8,%0A%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22Ari%22%3E%0A%20%20%20%20%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2232%22%20fill%3D%22%234c7b63%22%3E%3C%2Frect%3E%0A%20%20%20%20%20%20%3Ctext%20x%3D%2232%22%20y%3D%2238%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20Helvetica%2C%20sans-serif%22%20font-size%3D%2224%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EAR%3C%2Ftext%3E%0A%20%20%20%20%3C%2Fsvg%3E%0A%20%20" alt="Ari">
+<div class="flex-grow-1"><div class="card-body">
+<div class="comment-meta"><span class="comment-author">Ari</span> <span class="comment-time">1 hour ago</span></div>
+<p>I still prefer the panel styling for dense discussion feeds. The launch thread stays active.</p>
+<div class="comment-actions"><button class="btn btn-xs btn-default" type="button">Reply</button> <button class="btn btn-xs btn-default" type="button">Like</button> <button class="btn btn-xs btn-default" type="button">Report</button></div>
+</div></div>
+</div>
+</article>
+<div class="compose-box">
+<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#composeModal">Add Comment</button>
+<div id="composeModal" class="modal fade">
+<div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h4 class="modal-title">Write a comment</h4></div><div class="modal-body"><textarea class="form-control" rows="4" placeholder="Share your thoughts"></textarea></div><div class="modal-footer"><button type="button" class="btn btn-primary">Post</button></div></div></div>
+</div>
+</div>
+</div></div>
+</div>
+</div>
+</body>
+</html>

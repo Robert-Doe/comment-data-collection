@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Journal - A tutorial with structured replies and citations</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #f4f2ee; color: #222; line-height: 1.6; }
+.page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 48px; }
+.story { background: #fff; border: 1px solid #d8d0c4; padding: 20px; margin-bottom: 18px; }
+.story h1 { margin: 0 0 10px; font-size: 30px; }
+.story .lede { color: #666; margin: 0; }
+#comments, .comments-section { background: #fff; border: 1px solid #d8d0c4; padding: 20px; }
+.comment, .comments__item, .comment-node { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment:first-child, .comments__item:first-child, .comment-node:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.comment__header, .comments__header { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.comment__figure { float: left; margin: 0 12px 8px 0; text-align: center; }
+.comment__figure img { width: 40px; height: 40px; border-radius: 50%; display: block; }
+.comment__figure figcaption { font-size: 11px; color: #6f665c; }
+.comment__body, .comments__body { margin-top: 8px; }
+.comment__footer, .comments__footer { margin-top: 10px; font-size: 12px; color: #6f665c; }
+.comment__actions, .comments__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.comment__replies, .comments__replies { margin-top: 12px; margin-left: 28px; padding-left: 12px; border-left: 2px solid #d9d3c9; }
+.subscription-box { margin-top: 18px; padding: 14px; border: 1px solid #ddd2c2; background: #f9f6f1; }
+.comment-compose { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e3ddd4; }
+.comment-compose form { display: grid; gap: 10px; max-width: 520px; }
+.comment-compose input, .comment-compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc6ba; padding: 8px 10px; font: inherit; }
+.comment-navigation { margin-top: 16px; display: flex; gap: 12px; font-size: 12px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 999px; background: #eef3ff; font-size: 11px; }</style>
+</head>
+<body>
+<div class="page">
+<article class="story">
+<header class="host-header">
+<p class="kicker">Code Journal</p>
+<h1>A tutorial with structured replies and citations</h1>
+<p class="lede">The markup uses time, cite, and mark to keep the history readable.</p>
+</header>
+<p>These semantic pages intentionally use proper article, section, header, footer, time, and aside elements.</p>
+</article>
+<nav class="comment-navigation"><a href="#">Previous</a> <a href="#">Next</a></nav>
+<section id="comments" class="comments-section">
+<article id="comment-88-1" class="comment" data-depth="0" itemscope itemtype="https://schema.org/Comment">
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-88-1-1" class="comment" data-depth="1">
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-88-1-2" class="comment" data-depth="1">
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-88-1-3" class="comment" data-depth="1">
+<div class="comment__body" itemprop="text">This feels like the kind of markup that ages well.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article>
+<article id="comment-88-2" class="comment" data-depth="0" itemscope itemtype="https://schema.org/Comment">
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-88-2-1" class="comment" data-depth="1">
+<div class="comment__body" itemprop="text">That time element makes the archive much easier to understand.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+<div class="comment__replies"><article id="comment-88-2-1-1" class="comment" data-depth="2">
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates. The nested reply stays semantically correct.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article></div>
+</article></div>
+</article>
+<article id="comment-88-3" class="comment" data-depth="0" itemscope itemtype="https://schema.org/Comment">
+<div class="comment__body" itemprop="text">The structure here is easier to scan than the older templates.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-88-4" class="comment" data-depth="0" itemscope itemtype="https://schema.org/Comment">
+<div class="comment__body" itemprop="text">The author response is highlighted well without breaking the flow.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<article id="comment-88-5" class="comment" data-depth="0" itemscope itemtype="https://schema.org/Comment">
+<div class="comment__body" itemprop="text">I like that the replies stay nested but still readable in print.</div>
+<footer class="comment__footer">
+<nav class="comment__actions">
+<a href="#">Reply</a>
+<a href="#">Edit</a>
+<a href="#">Share</a>
+</nav>
+</footer>
+</article>
+<section class="comment-compose">
+<h2>Leave a note</h2>
+<form>
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Website <input type="url" name="website"></label>
+<label>Message <textarea rows="5"></textarea></label>
+<button type="submit">Post</button>
+</form>
+</section>
+</section>
+</div>
+</body>
+</html>

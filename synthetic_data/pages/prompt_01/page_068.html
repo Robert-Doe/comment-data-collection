@@ -1,0 +1,233 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>SynthRepair.net - Roland Juno-106 voice chip failure - all voices silent after recap</title>
+</head>
+<body bgcolor="#111122" text="#DDDDEE" link="#8888FF" vlink="#5555CC">
+
+<table width="740" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr>
+  <td bgcolor="#0A0A18" height="42">
+  <table width="100%" border="0" cellpadding="8" cellspacing="0">
+  <tr>
+    <td>
+    <font face="Courier New, Courier" size="3" color="#88AAFF"><b>SynthRepair.net</b></font><br>
+    <font face="Verdana" size="1" color="#444466">Vintage Analog Synthesizer Service &bull; Est. 2000</font>
+    </td>
+    <td align="right" valign="middle">
+    <font face="Verdana" size="1" color="#444466">
+    <a href="#" style="color:#8888FF">Forum</a> &bull;
+    <a href="#" style="color:#8888FF">Schematics</a> &bull;
+    <a href="#" style="color:#8888FF">Parts</a> &bull;
+    <a href="#" style="color:#8888FF">Service Guides</a>
+    </font>
+    </td>
+  </tr>
+  </table>
+  </td>
+</tr>
+<tr bgcolor="#1A1A2E">
+  <td height="20">
+  <font face="Verdana" size="1" color="#6666AA">&nbsp;&nbsp;
+  <a href="#" style="color:#8888FF">Roland</a> &bull;
+  <a href="#" style="color:#8888FF">Oberheim</a> &bull;
+  <a href="#" style="color:#8888FF">Sequential</a> &bull;
+  <a href="#" style="color:#8888FF">Korg</a> &bull;
+  <a href="#" style="color:#8888FF">Yamaha DX</a> &bull;
+  <a href="#" style="color:#8888FF">Moog</a>
+  </font>
+  </td>
+</tr>
+</table>
+
+<table width="740" border="0" cellpadding="10" cellspacing="0" align="center" bgcolor="#0D0D20">
+<tr><td>
+<font face="Courier New" size="3" color="#DDDDEE"><b>Juno-106 recap complete but now ALL 6 voices silent - did I damage the 80017A chips?</b></font><br>
+<font face="Verdana" size="1" color="#444488">Roland Repair &bull; Posted by SynthCollector_Finn &bull; July 2002</font>
+<br><br>
+<font face="Verdana" size="2" color="#DDDDEE">
+Just completed a full recap on my Roland Juno-106. Original caps replaced with Nichicon
+and Panasonic equivalents, same values. But now ALL six voices are completely silent - no
+audio whatsoever, though the synth powers on, the display works, and the control panel
+responds normally. Before the recap, I had 2 failed voices (typical 80017A chip failure).
+The other 4 were working. Now none work. I'm worried I've damaged the 80017A chips with
+static or heat. What should I check first?
+</font>
+</td></tr>
+</table>
+
+<table width="740" border="0" cellpadding="0" cellspacing="0" align="center">
+<tr><td bgcolor="#0A0A18" height="1"></td></tr>
+<tr><td bgcolor="#1A1A2E" height="24">
+<font face="Courier New" size="2" color="#88AAFF"><b>&nbsp;&nbsp;Synth Repair Replies (8)</b></font>
+</td></tr>
+<tr><td bgcolor="#0A0A18" height="1"></td></tr>
+</table>
+
+<!-- No class names, pure positional, dark synth theme, Courier New monospace body text -->
+<table width="740" border="0" cellpadding="0" cellspacing="2" align="center" bgcolor="#0A0A18">
+
+<tr bgcolor="#111122">
+<td width="130" valign="top" bgcolor="#0D0D1C" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>VCO_Victor</b></font><br>
+<font face="Verdana" size="1" color="#444466">Pro Synth Tech</font><br>
+<font face="Verdana" size="1" color="#333355">Posts: 8,112</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 11, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+Finn, all 6 voices going silent after a recap points to a common-path problem, not 6
+individual chip failures. The 80017A chips are unlikely to have been damaged by the recap
+itself unless you used a heat gun near them (don't). More likely:<br><br>
+1) POWER RAIL ISSUE: Check the +5V, +15V, and -15V rails with a multimeter before doing
+   anything else. A shorted or wrong-value capacitor on a power supply rail can collapse
+   the rail and silence all voices simultaneously. Measure at the PSU test points shown
+   on the service manual page 8.<br><br>
+2) GROUND CONNECTION: If a ground point was disturbed during recap, all voices can drop out.<br><br>
+3) REINSTALLED CAP BACKWARDS: A reversed electrolytic cap on the voice board supply rail
+   will kill all voices and may blow the cap. Look for any cap that appears swollen/leaking.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#0D0D20">
+<td width="130" valign="top" bgcolor="#0A0A18" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>JunoExpert_Lars</b></font><br>
+<font face="Verdana" size="1" color="#333355">Posts: 5,224</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 11, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+Victor is right - start with power rails. On the Juno-106 specifically, also check the
+CPU/DCB section. The 80017A chips require the voice assign CPU to tell them which voice
+to activate. If the CPU lost its reference voltage (from a recap error in that section)
+it won't send voice gate signals and all voices will be silent even if the 80017A chips
+are intact. This is different from the typical "one quiet voice" 80017A failure mode.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#111122">
+<td width="130" valign="top" bgcolor="#0D0D1C" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>SynthCollector_Finn</b></font><br>
+<font face="Verdana" size="1" color="#444466"><i>OP</i></font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 12, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+Checked power rails. Results:
++5V: 4.97V (good)
++15V: 14.8V (good)
+-15V: -14.9V (good)
+No swollen caps visible. But I just noticed one cap on the voice board (C47, 47uF) - I think
+I may have installed it with the stripe on the wrong side. The service manual shows stripe
+facing up and I installed it with stripe facing down. Could this be the culprit?
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#0D0D20">
+<td width="130" valign="top" bgcolor="#0A0A18" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>VCO_Victor</b></font><br>
+<font face="Verdana" size="1" color="#333355">Posts: 8,112</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 12, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+THAT IS YOUR PROBLEM. C47 reversed is a textbook all-voices-out failure on the 106 voice
+board. The stripe on an electrolytic cap marks the NEGATIVE lead. If the service manual
+shows stripe-up in that position, the negative lead goes up = the board layout has ground
+at the top of that cap's footprint.
+BEFORE you power on again: desolder C47 immediately, replace with a fresh cap installed
+correctly. A reversed electrolytic run under power will fail (sometimes dramatically) and
+can take out other components. Do not power on with it reversed.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#111122">
+<td width="130" valign="top" bgcolor="#0D0D1C" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>CapKing_Olaf</b></font><br>
+<font face="Verdana" size="1" color="#333355">Posts: 3,445</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 13, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+Important habit for all future recap work: after installing EVERY electrolytic cap, before
+powering on, visually compare your placement to the service manual silkscreen photo or the
+cap polarity marks on the PCB. Some boards mark the + side, some mark the - side (stripe).
+Know which convention your board uses before starting. A 5-minute check per session prevents
+exactly this problem.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#0D0D20">
+<td width="130" valign="top" bgcolor="#0A0A18" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>Anonymous</b></font><br>
+<font face="Verdana" size="1" color="#333355">Guest</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 14, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+The Juno-106 service manual is available at Synthfool.com as a free PDF. It has excellent
+cap polarity markings. For future reference: the 80017A chips in the Juno are actually
+the Roland-proprietary BA662A VCA + IR3R05 DCO combination in a single package. They fail
+due to the epoxy coating cracking and allowing moisture in. They are being reproduced by
+Analogue Renaissance if you still need to replace your 2 failed voices after fixing the recap.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#111122">
+<td width="130" valign="top" bgcolor="#0D0D1C" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>SynthCollector_Finn</b></font><br>
+<font face="Verdana" size="1" color="#444466"><i>OP</i></font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 15, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+FIXED. Replaced C47 with correct orientation. Powered on. All 4 previously working voices
+immediately restored. The 2 original failed voices still out (as expected - that's the
+80017A issue, not the recap). Ordered 2 Analogue Renaissance replacements per the anonymous
+tip.
+The Juno sounds incredible. Thank you Victor, Lars, Olaf, and the anonymous guest.
+I will never install a cap without verifying polarity against the service manual again.
+Marking solved.
+</font>
+</td>
+</tr>
+
+<tr bgcolor="#0D0D20">
+<td width="130" valign="top" bgcolor="#0A0A18" align="center" style="padding:8px;">
+<font face="Courier New" size="1" color="#88AAFF"><b>VCO_Victor</b></font><br>
+<font face="Verdana" size="1" color="#333355">Posts: 8,112</font>
+</td>
+<td valign="top" style="padding:9px;">
+<font face="Verdana" size="1" color="#444488">Jul 16, 2002</font><br>
+<font face="Courier New" size="2" color="#DDDDEE">
+Classic diagnosis and fix. A reversed cap causing total voice dropout is one of the most
+common post-recap mistakes, and you diagnosed it yourself with good systematical thinking.
+The AR 80017A replacements are excellent - your 106 will be fully functional. Archive this
+thread in the Juno-106 FAQ.
+</font>
+</td>
+</tr>
+
+</table>
+
+<br>
+<table width="740" border="0" cellpadding="8" cellspacing="0" align="center" bgcolor="#111122">
+<tr><td bgcolor="#0A0A18"><font face="Courier New" size="2" color="#88AAFF"><b>Post a Reply</b></font></td></tr>
+<tr><td>
+<font face="Verdana" size="2" color="#DDDDEE">Handle:</font>
+<input type="text" name="name" size="20" style="background:#0D0D20;color:#DDDDEE;border:1px solid #333355;">&nbsp;
+<font face="Verdana" size="2" color="#DDDDEE">Instrument:</font>
+<input type="text" name="synth" size="24" style="background:#0D0D20;color:#DDDDEE;border:1px solid #333355;"><br><br>
+<textarea name="reply" rows="5" cols="64" style="background:#0D0D20;color:#DDDDEE;border:1px solid #333355;font-family:Courier New;"></textarea><br><br>
+<input type="submit" value="Post Reply">
+</td></tr>
+</table>
+
+</body>
+</html>

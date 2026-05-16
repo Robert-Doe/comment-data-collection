@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voices - A timeless entry list with no hierarchy</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #faf7f2; color: #2a241d; }
+.page { width: min(920px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.story { background: #fff; border: 1px solid #ddd3c5; padding: 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.story .lede { margin: 0; color: #6d5f52; }
+.guestbook, .comments, .feed { background: #fff; border: 1px solid #ddd3c5; padding: 18px; }
+.item { margin-bottom: 14px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.author { font-weight: 700; }
+.pin, .featured { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #fff2c6; font-size: 11px; }
+.compose { margin-bottom: 16px; display: grid; gap: 10px; max-width: 520px; }
+.compose input, .compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b4; padding: 8px 10px; font: inherit; }
+.policy, .approval { margin: 0 0 12px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; }
+table { width: 100%; border-collapse: collapse; }
+th, td { vertical-align: top; padding: 10px 8px; border-top: 1px solid #e6ddd1; text-align: left; }
+dl dt { margin-top: 12px; font-weight: 700; }
+dl dd { margin: 4px 0 0 0; padding-bottom: 12px; border-bottom: 1px solid #e6ddd1; }
+.item .content { display: block; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Voices</p>
+<h1>A timeless entry list with no hierarchy</h1>
+<p class="lede">The list is intentionally linear, with no replies or branches anywhere in the structure.</p>
+</section>
+<section class="guestbook">
+<form class="compose">
+<label>Name <input type="text" name="name"></label>
+<label>Email <input type="email" name="email"></label>
+<label>Message <textarea rows="4"></textarea></label>
+<button type="button">Send</button>
+</form>
+<dl><dt><span class="author">Ari</span>  <time datetime="2016-05-05T19:53:00.000Z">May 5, 2016</time></dt>
+<dd><div class="body">The content fits the static shell well.</div></dd>
+<dt><span class="author">Theo</span>  <time datetime="2016-03-06T12:45:00.000Z">Mar 6, 2016</time></dt>
+<dd><div class="body">The content fits the static shell well.</div></dd>
+<dt><span class="author">Zia</span>  </dt>
+<dd><div class="body">The visual hierarchy does most of the work here.</div></dd>
+<dt><span class="author">Mina</span>  <time datetime="2016-06-13T12:28:00.000Z">Jun 13, 2016</time></dt>
+<dd><div class="body">The nested branch is there, but it does not overwhelm the layout.</div></dd>
+<dt><span class="author">Nora</span>  </dt>
+<dd><div class="body">The nested branch is there, but it does not overwhelm the layout.</div></dd>
+<dt><span class="author">Mina</span>  <time datetime="2016-12-24T12:36:00.000Z">Dec 24, 2016</time></dt>
+<dd><div class="body">This feels like the output of a component-first rendering pipeline.</div></dd>
+<dt><span class="author">Mina</span>  <time datetime="2016-09-13T08:21:00.000Z">Sep 13, 2016</time></dt>
+<dd><div class="body">The nested branch is there, but it does not overwhelm the layout.</div></dd>
+<dt><span class="author">Ivy</span>  <time datetime="2016-03-10T14:58:00.000Z">Mar 10, 2016</time></dt>
+<dd><div class="body">The comments are easy to scan because the spacing stays consistent.</div></dd>
+<dt><span class="author">Noel</span>  <time datetime="2016-08-11T19:01:00.000Z">Aug 11, 2016</time></dt>
+<dd><div class="body">The author note is concise and stays close to the text.</div></dd>
+<dt><span class="author">Theo</span>  </dt>
+<dd><div class="body">The content fits the static shell well.</div></dd>
+<dt><span class="author">Jules</span>  </dt>
+<dd><div class="body">The content fits the static shell well.</div></dd>
+<dt><span class="author">Pia</span>  <time datetime="2016-06-26T00:08:00.000Z">Jun 25, 2016</time></dt>
+<dd><div class="body">The author note is concise and stays close to the text.</div></dd>
+<dt><span class="author">Milo</span>  </dt>
+<dd><div class="body">The page keeps the conversation readable without any extra chrome.</div></dd>
+<dt><span class="author">Rae</span>  <time datetime="2016-04-15T03:45:00.000Z">Apr 14, 2016</time></dt>
+<dd><div class="body">The page keeps the conversation readable without any extra chrome.</div></dd>
+<dt><span class="author">Eli</span>  <time datetime="2016-03-10T02:26:00.000Z">Mar 9, 2016</time></dt>
+<dd><div class="body">The last branch is intentionally a little deeper than the rest.</div></dd>
+<dt><span class="author">Ari</span>  <time datetime="2016-03-26T04:40:00.000Z">Mar 25, 2016</time></dt>
+<dd><div class="body">The structure is clean enough to be hydrated later.</div></dd>
+<dt><span class="author">Nora</span>  <time datetime="2016-07-19T07:20:00.000Z">Jul 19, 2016</time></dt>
+<dd><div class="body">The content fits the static shell well.</div></dd>
+<dt><span class="author">Pia</span>  <time datetime="2016-01-24T20:20:00.000Z">Jan 24, 2016</time></dt>
+<dd><div class="body">The author note is concise and stays close to the text.</div></dd>
+<dt><span class="author">Cora</span>  </dt>
+<dd><div class="body">This feels like the output of a component-first rendering pipeline.</div></dd></dl>
+</section>
+</div>
+</body>
+</html>

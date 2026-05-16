@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Responses - A pure sequence of reader responses</title>
+<style>body { margin: 0; font-family: Georgia, "Times New Roman", serif; background: #faf7f2; color: #2a241d; }
+.page { width: min(920px, calc(100% - 24px)); margin: 0 auto; padding: 20px 0 44px; }
+.story { background: #fff; border: 1px solid #ddd3c5; padding: 18px; margin-bottom: 16px; }
+.story h1 { margin: 4px 0 8px; font-size: 28px; }
+.story .lede { margin: 0; color: #6d5f52; }
+.guestbook, .comments, .feed { background: #fff; border: 1px solid #ddd3c5; padding: 18px; }
+.item { margin-bottom: 14px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
+.author { font-weight: 700; }
+.pin, .featured { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #fff2c6; font-size: 11px; }
+.compose { margin-bottom: 16px; display: grid; gap: 10px; max-width: 520px; }
+.compose input, .compose textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfc4b4; padding: 8px 10px; font: inherit; }
+.policy, .approval { margin: 0 0 12px; padding: 10px 12px; background: #f7f2ea; border: 1px solid #e4d7c4; }
+table { width: 100%; border-collapse: collapse; }
+th, td { vertical-align: top; padding: 10px 8px; border-top: 1px solid #e6ddd1; text-align: left; }
+dl dt { margin-top: 12px; font-weight: 700; }
+dl dd { margin: 4px 0 0 0; padding-bottom: 12px; border-bottom: 1px solid #e6ddd1; }
+.item .content { display: block; }</style>
+</head>
+<body>
+<div class="page">
+<section class="story">
+<p class="kicker">Responses</p>
+<h1>A pure sequence of reader responses</h1>
+<p class="lede">The list is intentionally linear, with no replies or branches anywhere in the structure.</p>
+</section>
+<section class="guestbook">
+<table><tbody><tr><th scope="row">Owen<span class="pin">Pinned</span></th><td><div class="body">The page reads like a server-rendered snapshot.</div> <time datetime="2016-02-12T12:04:00.000Z">Feb 12, 2016</time></td></tr>
+<tr><th scope="row">Noel</th><td><div class="body">This feels like the output of a component-first rendering pipeline.</div> <time datetime="2016-06-09T01:27:00.000Z">Jun 8, 2016</time></td></tr>
+<tr><th scope="row">Pia</th><td><div class="body">The page keeps the conversation readable without any extra chrome.</div> <time datetime="2016-07-21T04:08:00.000Z">Jul 20, 2016</time></td></tr>
+<tr><th scope="row">Milo</th><td><div class="body">The author note is concise and stays close to the text.</div> <time datetime="2016-08-05T06:44:00.000Z">Aug 4, 2016</time></td></tr>
+<tr><th scope="row">Maya</th><td><div class="body">The page keeps the conversation readable without any extra chrome.</div> <time datetime="2016-05-08T08:45:00.000Z">May 8, 2016</time></td></tr>
+<tr><th scope="row">Nora</th><td><div class="body">The author note is concise and stays close to the text.</div> <time datetime="2016-04-20T04:26:00.000Z">Apr 19, 2016</time></td></tr>
+<tr><th scope="row">Cal</th><td><div class="body">The content fits the static shell well.</div> </td></tr>
+<tr><th scope="row">Lena</th><td><div class="body">The visual hierarchy does most of the work here.</div> <time datetime="2016-01-18T09:05:00.000Z">Jan 18, 2016</time></td></tr>
+<tr><th scope="row">Rae</th><td><div class="body">The nested branch is there, but it does not overwhelm the layout.</div> </td></tr>
+<tr><th scope="row">Ivy</th><td><div class="body">The nested branch is there, but it does not overwhelm the layout.</div> <time datetime="2016-06-23T06:14:00.000Z">Jun 22, 2016</time></td></tr>
+<tr><th scope="row">Ivy</th><td><div class="body">The page reads like a server-rendered snapshot.</div> <time datetime="2016-12-22T06:36:00.000Z">Dec 21, 2016</time></td></tr>
+<tr><th scope="row">Milo</th><td><div class="body">The visual hierarchy does most of the work here.</div> <time datetime="2016-02-04T11:49:00.000Z">Feb 4, 2016</time></td></tr>
+<tr><th scope="row">Theo</th><td><div class="body">The structure is clean enough to be hydrated later.</div> <time datetime="2016-10-18T15:26:00.000Z">Oct 18, 2016</time></td></tr>
+<tr><th scope="row">Rae</th><td><div class="body">The visual hierarchy does most of the work here.</div> <time datetime="2016-08-19T20:15:00.000Z">Aug 19, 2016</time></td></tr>
+<tr><th scope="row">Tess</th><td><div class="body">The page reads like a server-rendered snapshot.</div> <time datetime="2016-06-14T15:49:00.000Z">Jun 14, 2016</time></td></tr>
+<tr><th scope="row">Drew</th><td><div class="body">The content fits the static shell well.</div> </td></tr>
+<tr><th scope="row">Rae</th><td><div class="body">The content fits the static shell well.</div> </td></tr>
+<tr><th scope="row">Pia</th><td><div class="body">The author note is concise and stays close to the text.</div> <time datetime="2016-05-17T13:40:00.000Z">May 17, 2016</time></td></tr>
+<tr><th scope="row">Milo</th><td><div class="body">The content fits the static shell well.</div> <time datetime="2016-12-05T10:35:00.000Z">Dec 5, 2016</time></td></tr>
+<tr><th scope="row">Milo</th><td><div class="body">The page reads like a server-rendered snapshot.</div> <time datetime="2016-03-28T01:58:00.000Z">Mar 27, 2016</time></td></tr>
+<tr><th scope="row">Noel</th><td><div class="body">The last branch is intentionally a little deeper than the rest.</div> </td></tr>
+<tr><th scope="row">Noel</th><td><div class="body">The structure is clean enough to be hydrated later.</div> <time datetime="2016-04-25T09:57:00.000Z">Apr 25, 2016</time></td></tr>
+<tr><th scope="row">Eli</th><td><div class="body">The structure is clean enough to be hydrated later.</div> </td></tr>
+<tr><th scope="row">Owen</th><td><div class="body">This feels like the output of a component-first rendering pipeline.</div> <time datetime="2016-12-16T14:17:00.000Z">Dec 16, 2016</time></td></tr>
+<tr><th scope="row">Rae</th><td><div class="body">The page reads like a server-rendered snapshot.</div> </td></tr>
+<tr><th scope="row">Cal</th><td><div class="body">The page reads like a server-rendered snapshot.</div> </td></tr>
+<tr><th scope="row">Jules</th><td><div class="body">The last branch is intentionally a little deeper than the rest.</div> <time datetime="2016-12-13T21:28:00.000Z">Dec 13, 2016</time></td></tr></tbody></table>
+</section>
+</div>
+</body>
+</html>
