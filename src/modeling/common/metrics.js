@@ -226,7 +226,66 @@ function computeAllMetrics(rows, options = {}) {
   };
 }
 
+// t-distribution critical values for df = n-1 (index 0 = df 0, not useful; index 1 = df 1, etc.)
+// Using two-tailed 95% CI values from standard tables up to df=29, then 1.96 for large n.
+const T_CRIT_95 = [
+  Infinity, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365,
+  2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120,
+  2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060,
+  2.056, 2.052, 2.048, 2.045,
+];
+
+/**
+ * Compute mean ± std and 95% CI for an array of numeric values.
+ */
+function computeStatSummary(values) {
+  const valid = (Array.isArray(values) ? values : []).filter((v) => typeof v === 'number' && isFinite(v));
+  if (!valid.length) return { mean: null, std: null, ci95_lo: null, ci95_hi: null, n: 0 };
+  const n = valid.length;
+  const mean = valid.reduce((sum, v) => sum + v, 0) / n;
+  const variance = n > 1 ? valid.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (n - 1) : 0;
+  const std = Math.sqrt(variance);
+  const tCritical = n >= 30 ? 1.96 : (T_CRIT_95[n - 1] || 2.045);
+  const se = n > 1 ? std / Math.sqrt(n) : 0;
+  return {
+    mean: roundNumber(mean),
+    std: roundNumber(std),
+    ci95_lo: roundNumber(mean - tCritical * se),
+    ci95_hi: roundNumber(mean + tCritical * se),
+    n,
+  };
+}
+
+/**
+ * Bin scored rows by predicted probability and compare mean predicted vs actual positive rate.
+ * Returns one entry per bin with count, mean_predicted, and fraction_positive.
+ */
+function computeCalibrationCurve(rows, nBins = 10) {
+  const bins = Math.max(2, Math.min(20, Number(nBins) || 10));
+  const labeled = (Array.isArray(rows) ? rows : []).filter(
+    (row) => (row.binary_label === 0 || row.binary_label === 1) && typeof row.probability === 'number' && isFinite(row.probability),
+  );
+  const buckets = Array.from({ length: bins }, () => ({ count: 0, positives: 0, probSum: 0 }));
+  labeled.forEach((row) => {
+    const prob = Math.max(0, Math.min(1, row.probability));
+    const idx = Math.min(Math.floor(prob * bins), bins - 1);
+    buckets[idx].count += 1;
+    buckets[idx].positives += row.binary_label;
+    buckets[idx].probSum += prob;
+  });
+  return buckets.map((bucket, idx) => ({
+    bin: idx,
+    bin_start: roundNumber(idx / bins),
+    bin_end: roundNumber((idx + 1) / bins),
+    count: bucket.count,
+    mean_predicted: bucket.count > 0 ? roundNumber(bucket.probSum / bucket.count) : null,
+    fraction_positive: bucket.count > 0 ? roundNumber(bucket.positives / bucket.count) : null,
+  }));
+}
+
 module.exports = {
   computeAllMetrics,
   computeBinaryMetrics,
+  computeStatSummary,
+  computeCalibrationCurve,
 };

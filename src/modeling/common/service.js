@@ -8,7 +8,7 @@ const { trainLogisticRegression, predictProbability } = require('./logisticRegre
 const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree } = require('./decisionTree');
 const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
 const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
-const { computeAllMetrics } = require('./metrics');
+const { computeAllMetrics, computeStatSummary, computeCalibrationCurve } = require('./metrics');
 const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
@@ -2052,6 +2052,195 @@ async function computeCommentArchetype(artifactRoot, artifactId, items) {
   };
 }
 
+/**
+ * Run 5-fold cross-validation using domain holdout splitting.
+ * Each fold rotates which domain bucket (0-4) is the held-out test set.
+ * Returns per-fold metrics and aggregate mean ± std / 95% CI statistics.
+ */
+async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  if (labeledRows.length < 10) {
+    throw new Error('Cross-validation needs at least 10 labeled rows');
+  }
+
+  const nFolds = 5;
+  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
+  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+  const foldResults = [];
+
+  for (let fold = 0; fold < nFolds; fold++) {
+    const split = splitRowsByDomain(labeledRows, { modulo: nFolds, holdoutBucket: fold });
+    if (!canTrainRows(split.trainRows) || !canTrainRows(split.testRows)) {
+      foldResults.push({ fold, skipped: true, reason: 'Insufficient class diversity in this fold split' });
+      continue;
+    }
+
+    const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
+    const trainingPreparation = prepareImbalanceTrainingRows(
+      split.trainRows,
+      dataset.featureCatalog,
+      vectorizer,
+      normalizedStrategy,
+      {
+        algorithm: normalizedAlgorithm,
+        seed: `cv:fold${fold}:${labeledRows.length}`,
+      },
+    );
+    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : split.trainRows;
+    const trainVectors = transformRows(preparedTrainRows, vectorizer);
+    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
+    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
+      classWeighting: trainingPreparation.classWeighting,
+    });
+    const trainingArtifact = { algorithm: model.algorithm, model };
+    const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+    const metrics = computeAllMetrics(scoredTestRows, {});
+    const calibration = computeCalibrationCurve(scoredTestRows, 10);
+
+    foldResults.push({
+      fold,
+      skipped: false,
+      train_count: split.trainRows.length,
+      effective_train_count: preparedTrainRows.length,
+      test_count: split.testRows.length,
+      train_label_counts: countBinaryLabels(split.trainRows),
+      test_label_counts: countBinaryLabels(split.testRows),
+      metrics,
+      calibration,
+    });
+  }
+
+  const completedFolds = foldResults.filter((f) => !f.skipped);
+
+  function extractValues(accessor) {
+    return completedFolds.map(accessor).filter((v) => typeof v === 'number' && isFinite(v));
+  }
+
+  const aggregate = {
+    f1: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.f1)),
+    precision: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.precision)),
+    recall: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.recall)),
+    roc_auc: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.roc_auc)),
+    pr_auc: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.pr_auc)),
+    top_1_accuracy: computeStatSummary(extractValues((f) => f.metrics.ranking_metrics.top_1_accuracy)),
+    mean_reciprocal_rank: computeStatSummary(extractValues((f) => f.metrics.ranking_metrics.mean_reciprocal_rank)),
+  };
+
+  return {
+    n_folds: nFolds,
+    total_labeled: labeledRows.length,
+    algorithm: normalizedAlgorithm,
+    imbalance_strategy: normalizedStrategy,
+    folds: foldResults,
+    aggregate,
+  };
+}
+
+/**
+ * Compute a learning curve by training on increasing fractions of the training split
+ * while evaluating on a fixed held-out test set (domain bucket 0).
+ * Fractions: [0.2, 0.4, 0.6, 0.8, 1.0]
+ */
+async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  if (labeledRows.length < 10) {
+    throw new Error('Learning curve needs at least 10 labeled rows');
+  }
+
+  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
+  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+
+  // Fix the test split using bucket 0 domain holdout
+  let baseSplit = splitRowsByDomain(labeledRows, { modulo: 5, holdoutBucket: 0 });
+  if (!canTrainRows(baseSplit.trainRows)) {
+    baseSplit = splitRowsByCandidate(labeledRows, { modulo: 5, holdoutBucket: 0 });
+  }
+  if (!canTrainRows(baseSplit.trainRows) || !canTrainRows(baseSplit.testRows)) {
+    throw new Error('Dataset does not have enough class diversity for a learning curve');
+  }
+
+  const fractions = [0.2, 0.4, 0.6, 0.8, 1.0];
+  const points = [];
+
+  for (const fraction of fractions) {
+    // Stratified sample: take `fraction` of positives and negatives separately
+    const positiveTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 1);
+    const negativeTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 0);
+    const nPos = Math.max(1, Math.round(positiveTrainRows.length * fraction));
+    const nNeg = Math.max(1, Math.round(negativeTrainRows.length * fraction));
+    // Deterministic slice (rows are already in a stable order from the split)
+    const sampledTrainRows = [
+      ...positiveTrainRows.slice(0, nPos),
+      ...negativeTrainRows.slice(0, nNeg),
+    ];
+
+    if (!canTrainRows(sampledTrainRows)) {
+      points.push({ fraction, skipped: true, reason: 'Insufficient class diversity at this fraction' });
+      continue;
+    }
+
+    const vectorizer = fitVectorizer(sampledTrainRows, dataset.featureCatalog);
+    const trainingPreparation = prepareImbalanceTrainingRows(
+      sampledTrainRows,
+      dataset.featureCatalog,
+      vectorizer,
+      normalizedStrategy,
+      {
+        algorithm: normalizedAlgorithm,
+        seed: `lc:${fraction}:${labeledRows.length}`,
+      },
+    );
+    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : sampledTrainRows;
+    const trainVectors = transformRows(preparedTrainRows, vectorizer);
+    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
+    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
+      classWeighting: trainingPreparation.classWeighting,
+    });
+    const trainingArtifact = { algorithm: model.algorithm, model };
+
+    const scoredTrainRows = scoreRows(sampledTrainRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+    const scoredTestRows = scoreRows(baseSplit.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+
+    const trainMetrics = computeAllMetrics(scoredTrainRows, {});
+    const testMetrics = computeAllMetrics(scoredTestRows, {});
+
+    points.push({
+      fraction,
+      skipped: false,
+      train_count: sampledTrainRows.length,
+      test_count: baseSplit.testRows.length,
+      train_metrics: {
+        f1: trainMetrics.candidate_metrics.f1,
+        roc_auc: trainMetrics.candidate_metrics.roc_auc,
+        pr_auc: trainMetrics.candidate_metrics.pr_auc,
+      },
+      test_metrics: {
+        f1: testMetrics.candidate_metrics.f1,
+        roc_auc: testMetrics.candidate_metrics.roc_auc,
+        pr_auc: testMetrics.candidate_metrics.pr_auc,
+        precision: testMetrics.candidate_metrics.precision,
+        recall: testMetrics.candidate_metrics.recall,
+      },
+    });
+  }
+
+  return {
+    algorithm: normalizedAlgorithm,
+    imbalance_strategy: normalizedStrategy,
+    total_labeled: labeledRows.length,
+    test_count: baseSplit.testRows.length,
+    points,
+  };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2060,6 +2249,8 @@ module.exports = {
   normalizeImbalanceStrategy,
   trainModel,
   compareImbalanceStrategies,
+  runCrossValidation,
+  computeLearningCurve,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

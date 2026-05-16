@@ -55,6 +55,15 @@
   const liveProbeInspectNotes = document.getElementById('live-probe-inspect-notes');
   const liveProbeInspectMarkup = document.getElementById('live-probe-inspect-markup');
   const liveProbeInspectClose = document.getElementById('live-probe-inspect-close');
+  const diagVariantId = document.getElementById('diag-variant-id');
+  const diagAlgorithm = document.getElementById('diag-algorithm');
+  const diagImbalanceStrategy = document.getElementById('diag-imbalance-strategy');
+  const diagJobIds = document.getElementById('diag-job-ids');
+  const diagCrossValidateButton = document.getElementById('diag-cross-validate');
+  const diagLearningCurveButton = document.getElementById('diag-learning-curve');
+  const diagMessage = document.getElementById('diag-message');
+  const diagCvResult = document.getElementById('diag-cv-result');
+  const diagLcResult = document.getElementById('diag-lc-result');
   const archetypeModelId = document.getElementById('archetype-model-id');
   const archetypeJobIds = document.getElementById('archetype-job-ids');
   const archetypeTopN = document.getElementById('archetype-top-n');
@@ -1583,6 +1592,7 @@
       `;
     }).join('');
     updateDatasetDownloadLink();
+    syncDiagVariantSelector(currentVariants);
   }
 
   function renderTrainResult(model) {
@@ -2479,6 +2489,221 @@
       ? models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.id)}</option>`).join('')
       : '<option value="">No trained models</option>';
     if (current && models.find((m) => m.id === current)) archetypeModelId.value = current;
+  }
+
+  function syncDiagVariantSelector(variants) {
+    if (!diagVariantId) return;
+    const current = diagVariantId.value;
+    diagVariantId.innerHTML = (variants || []).length
+      ? variants.map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.title || v.id)}</option>`).join('')
+      : '<option value="">No variants</option>';
+    if (current && variants.find((v) => v.id === current)) diagVariantId.value = current;
+  }
+
+  function fmtStat(stat) {
+    if (!stat || stat.mean === null || stat.mean === undefined) return '—';
+    const mean = Number(stat.mean).toFixed(3);
+    const std = stat.std !== null ? Number(stat.std).toFixed(3) : null;
+    const lo = stat.ci95_lo !== null ? Number(stat.ci95_lo).toFixed(3) : null;
+    const hi = stat.ci95_hi !== null ? Number(stat.ci95_hi).toFixed(3) : null;
+    if (std === null) return mean;
+    const ci = (lo !== null && hi !== null) ? ` [${lo}–${hi}]` : '';
+    return `${mean} ± ${std}${ci}`;
+  }
+
+  function renderCvResult(result) {
+    if (!diagCvResult) return;
+    if (!result || !result.folds) {
+      diagCvResult.className = 'table-shell empty';
+      diagCvResult.textContent = 'No cross-validation result.';
+      return;
+    }
+    const agg = result.aggregate || {};
+    const aggRows = [
+      ['F1', agg.f1],
+      ['Precision', agg.precision],
+      ['Recall', agg.recall],
+      ['ROC-AUC', agg.roc_auc],
+      ['PR-AUC', agg.pr_auc],
+      ['Top-1 Accuracy', agg.top_1_accuracy],
+      ['MRR', agg.mean_reciprocal_rank],
+    ].filter(([, s]) => s && s.mean !== null);
+
+    const completedFolds = result.folds.filter((f) => !f.skipped);
+
+    diagCvResult.className = 'table-shell';
+    diagCvResult.innerHTML = `
+      <h3 style="margin:0 0 8px">5-Fold Cross-Validation — ${escapeHtml(result.algorithm || '')} / ${escapeHtml(result.imbalance_strategy || '')} — ${result.total_labeled} labeled rows</h3>
+      <h4 style="margin:8px 0 4px;color:var(--muted)">Aggregate (mean ± std [95% CI])</h4>
+      <table>
+        <thead><tr><th>Metric</th><th>Mean</th><th>Std</th><th>95% CI</th><th>n Folds</th></tr></thead>
+        <tbody>
+          ${aggRows.map(([label, stat]) => `
+            <tr>
+              <td>${escapeHtml(label)}</td>
+              <td class="mono">${stat.mean !== null ? Number(stat.mean).toFixed(3) : '—'}</td>
+              <td class="mono">${stat.std !== null ? Number(stat.std).toFixed(3) : '—'}</td>
+              <td class="mono">${stat.ci95_lo !== null ? `[${Number(stat.ci95_lo).toFixed(3)}–${Number(stat.ci95_hi).toFixed(3)}]` : '—'}</td>
+              <td class="mono">${stat.n}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <h4 style="margin:16px 0 4px;color:var(--muted)">Per-Fold Results</h4>
+      <table>
+        <thead><tr><th>Fold</th><th>Train</th><th>Test</th><th>F1</th><th>Precision</th><th>Recall</th><th>ROC-AUC</th><th>PR-AUC</th></tr></thead>
+        <tbody>
+          ${result.folds.map((fold) => {
+            if (fold.skipped) {
+              return `<tr><td>${fold.fold}</td><td colspan="7" style="color:var(--muted)">${escapeHtml(fold.reason || 'Skipped')}</td></tr>`;
+            }
+            const cm = fold.metrics && fold.metrics.candidate_metrics || {};
+            return `
+              <tr>
+                <td class="mono">${fold.fold}</td>
+                <td class="mono">${fold.train_count}</td>
+                <td class="mono">${fold.test_count}</td>
+                <td class="mono">${cm.f1 !== undefined ? cm.f1 : '—'}</td>
+                <td class="mono">${cm.precision !== undefined ? cm.precision : '—'}</td>
+                <td class="mono">${cm.recall !== undefined ? cm.recall : '—'}</td>
+                <td class="mono">${cm.roc_auc !== null && cm.roc_auc !== undefined ? cm.roc_auc : '—'}</td>
+                <td class="mono">${cm.pr_auc !== null && cm.pr_auc !== undefined ? cm.pr_auc : '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      ${completedFolds.length > 0 ? `
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;color:var(--muted);font-size:0.85rem">Calibration curves (per fold)</summary>
+          <table style="margin-top:8px">
+            <thead><tr><th>Fold</th><th>Bin</th><th>Count</th><th>Mean Predicted</th><th>Fraction Positive</th></tr></thead>
+            <tbody>
+              ${completedFolds.flatMap((f) => (f.calibration || []).map((b) => `
+                <tr>
+                  <td class="mono">${f.fold}</td>
+                  <td class="mono">${b.bin_start}–${b.bin_end}</td>
+                  <td class="mono">${b.count}</td>
+                  <td class="mono">${b.mean_predicted !== null ? b.mean_predicted : '—'}</td>
+                  <td class="mono">${b.fraction_positive !== null ? b.fraction_positive : '—'}</td>
+                </tr>
+              `)).join('')}
+            </tbody>
+          </table>
+        </details>
+      ` : ''}
+    `;
+  }
+
+  function renderLcResult(result) {
+    if (!diagLcResult) return;
+    if (!result || !result.points) {
+      diagLcResult.className = 'table-shell empty';
+      diagLcResult.textContent = 'No learning curve result.';
+      return;
+    }
+    diagLcResult.className = 'table-shell';
+    diagLcResult.innerHTML = `
+      <h3 style="margin:0 0 8px">Learning Curve — ${escapeHtml(result.algorithm || '')} / ${escapeHtml(result.imbalance_strategy || '')} — fixed test set: ${result.test_count} rows</h3>
+      <p style="font-size:0.85rem;color:var(--muted);margin:0 0 8px">Each row trains on a fraction of the domain-holdout training split. A gap between Train F1 and Test F1 indicates overfitting; converging curves signal data saturation.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Fraction</th>
+            <th>Train Count</th>
+            <th>Train F1</th>
+            <th>Train ROC-AUC</th>
+            <th>Test F1</th>
+            <th>Test Precision</th>
+            <th>Test Recall</th>
+            <th>Test ROC-AUC</th>
+            <th>Test PR-AUC</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${result.points.map((pt) => {
+            if (pt.skipped) {
+              return `<tr><td class="mono">${(pt.fraction * 100).toFixed(0)}%</td><td colspan="8" style="color:var(--muted)">${escapeHtml(pt.reason || 'Skipped')}</td></tr>`;
+            }
+            const tr = pt.train_metrics || {};
+            const te = pt.test_metrics || {};
+            const gap = (typeof tr.f1 === 'number' && typeof te.f1 === 'number') ? (tr.f1 - te.f1) : null;
+            const gapColor = gap === null ? '' : (gap > 0.1 ? 'color:var(--warn,#f59e0b)' : 'color:var(--accent)');
+            return `
+              <tr>
+                <td class="mono">${(pt.fraction * 100).toFixed(0)}%</td>
+                <td class="mono">${pt.train_count}</td>
+                <td class="mono" style="${gapColor}">${tr.f1 !== undefined ? tr.f1 : '—'}</td>
+                <td class="mono">${tr.roc_auc !== null && tr.roc_auc !== undefined ? tr.roc_auc : '—'}</td>
+                <td class="mono">${te.f1 !== undefined ? te.f1 : '—'}</td>
+                <td class="mono">${te.precision !== undefined ? te.precision : '—'}</td>
+                <td class="mono">${te.recall !== undefined ? te.recall : '—'}</td>
+                <td class="mono">${te.roc_auc !== null && te.roc_auc !== undefined ? te.roc_auc : '—'}</td>
+                <td class="mono">${te.pr_auc !== null && te.pr_auc !== undefined ? te.pr_auc : '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (diagCrossValidateButton) {
+    diagCrossValidateButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) {
+        setMessage(diagMessage, 'Select a model variant first.', true);
+        return;
+      }
+      runElementAction(diagCrossValidateButton, async () => {
+        setMessage(diagMessage, 'Running 5-fold cross-validation… this may take a minute.', false);
+        if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Running…'; }
+        const result = await fetchJson('/api/modeling/cross-validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
+            imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        setMessage(diagMessage, '', false);
+        renderCvResult(result);
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Cross-validation failed.'; }
+      });
+    });
+  }
+
+  if (diagLearningCurveButton) {
+    diagLearningCurveButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) {
+        setMessage(diagMessage, 'Select a model variant first.', true);
+        return;
+      }
+      runElementAction(diagLearningCurveButton, async () => {
+        setMessage(diagMessage, 'Computing learning curve… training 5 models in sequence.', false);
+        if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Running…'; }
+        const result = await fetchJson('/api/modeling/learning-curve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
+            imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        setMessage(diagMessage, '', false);
+        renderLcResult(result);
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Learning curve failed.'; }
+      });
+    });
   }
 
   function renderArchetype(data) {

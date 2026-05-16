@@ -17,6 +17,8 @@ const {
   normalizeTrainingAlgorithm,
   compareImbalanceStrategies,
   trainModel,
+  runCrossValidation,
+  computeLearningCurve,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,
@@ -345,6 +347,74 @@ function createModelingRouter(dependencies) {
         cache_hit: !!cachedDataset,
         ...comparison,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/cross-validate', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) {
+        res.status(400).json({ error: 'Select a valid model variant' });
+        return;
+      }
+
+      const algorithm = normalizeTrainingAlgorithm(req.body && req.body.algorithm);
+      if (!algorithm) {
+        res.status(400).json({ error: 'Select a valid training algorithm' });
+        return;
+      }
+
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'training', message: 'Starting 5-fold cross-validation' });
+
+      const cachedDataset = datasetCache.get(jobIds, variantId);
+      const items = cachedDataset ? null : await loadModelingItems(jobIds, progress, { modelingOnly: true });
+
+      const result = await runCrossValidation(items, dependencies.artifactRoot, {
+        variantId,
+        algorithm,
+        imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
+        dataset: cachedDataset || undefined,
+      });
+
+      res.json({ ok: true, ...result, cache_hit: !!cachedDataset });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/learning-curve', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) {
+        res.status(400).json({ error: 'Select a valid model variant' });
+        return;
+      }
+
+      const algorithm = normalizeTrainingAlgorithm(req.body && req.body.algorithm);
+      if (!algorithm) {
+        res.status(400).json({ error: 'Select a valid training algorithm' });
+        return;
+      }
+
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'training', message: 'Computing learning curve' });
+
+      const cachedDataset = datasetCache.get(jobIds, variantId);
+      const items = cachedDataset ? null : await loadModelingItems(jobIds, progress, { modelingOnly: true });
+
+      const result = await computeLearningCurve(items, dependencies.artifactRoot, {
+        variantId,
+        algorithm,
+        imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
+        dataset: cachedDataset || undefined,
+      });
+
+      res.json({ ok: true, ...result, cache_hit: !!cachedDataset });
     } catch (error) {
       next(error);
     }
