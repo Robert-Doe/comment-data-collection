@@ -2251,7 +2251,41 @@ async function updateModelThreshold(artifactRoot, artifactId, threshold) {
   if (!isFinite(value) || value < 0 || value > 1) {
     throw new Error('Threshold must be a number between 0 and 1');
   }
-  const updated = await patchModelArtifact(artifactRoot, artifactId, { default_threshold: roundNumber(value, 4) });
+  const rounded = roundNumber(value, 4);
+  const patch = { default_threshold: rounded };
+
+  const artifact = await loadModelArtifact(artifactRoot, artifactId);
+  if (!artifact) throw new Error('Model artifact not found');
+
+  if (Array.isArray(artifact.threshold_curve) && artifact.threshold_curve.length > 0) {
+    let closest = artifact.threshold_curve[0];
+    for (const pt of artifact.threshold_curve) {
+      if (Math.abs(pt.t - value) < Math.abs(closest.t - value)) closest = pt;
+    }
+    if (artifact.evaluation && artifact.evaluation.test && artifact.evaluation.test.candidate_metrics) {
+      patch.evaluation = {
+        ...artifact.evaluation,
+        test: {
+          ...artifact.evaluation.test,
+          candidate_metrics: {
+            ...artifact.evaluation.test.candidate_metrics,
+            threshold: closest.t,
+            precision: closest.precision,
+            recall: closest.recall,
+            f1: closest.f1,
+            confusion: {
+              true_positive: closest.tp,
+              true_negative: closest.tn,
+              false_positive: closest.fp,
+              false_negative: closest.fn,
+            },
+          },
+        },
+      };
+    }
+  }
+
+  const updated = await patchModelArtifact(artifactRoot, artifactId, patch);
   if (!updated) throw new Error('Model artifact not found');
   return summarizeArtifact(updated);
 }

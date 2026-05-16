@@ -116,7 +116,7 @@ async function deleteModelArtifact(rootDirectory, artifactId) {
  * Returns the updated artifact (with file_path set).
  * Only whitelisted keys are accepted to prevent accidental corruption.
  */
-const PATCHABLE_KEYS = new Set(['default_threshold', 'notes']);
+const PATCHABLE_KEYS = new Set(['default_threshold', 'notes', 'evaluation']);
 
 async function patchModelArtifact(rootDirectory, artifactId, patch) {
   const summaries = await listModelArtifacts(rootDirectory);
