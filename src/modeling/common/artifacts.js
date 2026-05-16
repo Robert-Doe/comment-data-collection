@@ -22,6 +22,9 @@ function summarizeArtifact(artifact) {
     evaluation: artifact.evaluation || null,
     dataset_summary: artifact.dataset_summary || null,
     file_path: artifact.file_path || '',
+    // Persisted decision threshold — set via the Threshold Tuner "Save as Default" button.
+    // When present, all scoring functions use this instead of the hardcoded 0.5 fallback.
+    default_threshold: typeof artifact.default_threshold === 'number' ? artifact.default_threshold : null,
   };
 }
 
@@ -108,6 +111,29 @@ async function deleteModelArtifact(rootDirectory, artifactId) {
   return true;
 }
 
+/**
+ * Apply a shallow patch to a persisted artifact JSON file.
+ * Returns the updated artifact (with file_path set).
+ * Only whitelisted keys are accepted to prevent accidental corruption.
+ */
+const PATCHABLE_KEYS = new Set(['default_threshold', 'notes']);
+
+async function patchModelArtifact(rootDirectory, artifactId, patch) {
+  const summaries = await listModelArtifacts(rootDirectory);
+  const match = summaries.find((entry) => entry.id === String(artifactId || '').trim());
+  if (!match || !match.file_path) return null;
+
+  const artifact = await readJsonFile(match.file_path);
+  artifact.file_path = match.file_path;
+
+  const safeKeys = Object.keys(patch).filter((k) => PATCHABLE_KEYS.has(k));
+  if (!safeKeys.length) return artifact;
+
+  safeKeys.forEach((k) => { artifact[k] = patch[k]; });
+  await fs.writeFile(match.file_path, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+  return artifact;
+}
+
 module.exports = {
   buildArtifactId,
   summarizeArtifact,
@@ -115,4 +141,5 @@ module.exports = {
   listModelArtifacts,
   loadModelArtifact,
   deleteModelArtifact,
+  patchModelArtifact,
 };

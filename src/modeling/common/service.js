@@ -9,7 +9,7 @@ const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree }
 const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
 const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
 const { computeAllMetrics, computeStatSummary, computeCalibrationCurve } = require('./metrics');
-const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
+const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact, patchModelArtifact } = require('./artifacts');
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
 
@@ -1116,7 +1116,8 @@ function scoreRows(rows, artifact, options = {}) {
   const totalRows = sourceRows.length;
   const progress = typeof options.progress === 'function' ? options.progress : null;
   const progressInterval = Math.max(1, Number(options.progressInterval) || 100);
-  const threshold = Number(options.threshold) || 0.5;
+  // Priority: explicit caller override → artifact's saved default → hardcoded 0.5
+  const threshold = Number(options.threshold) || Number(artifact && artifact.default_threshold) || 0.5;
 
   return sourceRows.map((row, index) => {
     if (progress && (index === 0 || (index + 1) % progressInterval === 0 || index + 1 === totalRows)) {
@@ -2241,6 +2242,20 @@ async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
   };
 }
 
+/**
+ * Persist a decision threshold onto an existing model artifact.
+ * The threshold must be in [0, 1]. Returns the updated artifact summary.
+ */
+async function updateModelThreshold(artifactRoot, artifactId, threshold) {
+  const value = Number(threshold);
+  if (!isFinite(value) || value < 0 || value > 1) {
+    throw new Error('Threshold must be a number between 0 and 1');
+  }
+  const updated = await patchModelArtifact(artifactRoot, artifactId, { default_threshold: roundNumber(value, 4) });
+  if (!updated) throw new Error('Model artifact not found');
+  return summarizeArtifact(updated);
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2251,6 +2266,7 @@ module.exports = {
   compareImbalanceStrategies,
   runCrossValidation,
   computeLearningCurve,
+  updateModelThreshold,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

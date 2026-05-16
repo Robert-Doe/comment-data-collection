@@ -19,6 +19,7 @@ const {
   trainModel,
   runCrossValidation,
   computeLearningCurve,
+  updateModelThreshold,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,
@@ -219,6 +220,21 @@ function createModelingRouter(dependencies) {
         return;
       }
       res.json({ deleted: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/models/:artifactId/threshold', async (req, res, next) => {
+    try {
+      const artifactId = req.params.artifactId;
+      const threshold = req.body && req.body.threshold != null ? req.body.threshold : undefined;
+      if (threshold === undefined) {
+        res.status(400).json({ error: 'threshold is required' });
+        return;
+      }
+      const summary = await updateModelThreshold(dependencies.artifactRoot, artifactId, threshold);
+      res.json({ ok: true, model: summary });
     } catch (error) {
       next(error);
     }

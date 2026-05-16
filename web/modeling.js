@@ -1743,12 +1743,24 @@
     `;
 
     if (Array.isArray(model.threshold_curve) && model.threshold_curve.length > 0) {
-      const tunerEl = buildThresholdTuner(model.threshold_curve, model.id);
+      const tunerEl = buildThresholdTuner(model.threshold_curve, model.id, model.default_threshold);
       if (tunerEl) trainResult.appendChild(tunerEl);
     }
   }
 
-  function buildThresholdTuner(curve, artifactId) {
+  async function saveModelThreshold(artifactId, threshold) {
+    const result = await fetchJson(`/api/modeling/models/${encodeURIComponent(artifactId)}/threshold`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threshold }),
+    });
+    // Refresh the model list so the new threshold shows in the Trained Models table
+    const overview = await fetchOverviewSnapshot().catch(() => null);
+    if (overview && overview.models) renderModelList(overview.models);
+    return result;
+  }
+
+  function buildThresholdTuner(curve, artifactId, savedThreshold) {
     if (!Array.isArray(curve) || curve.length < 3) return null;
 
     const uid = String(artifactId || 'th').replace(/[^a-z0-9]/gi, '-').slice(0, 32);
@@ -1824,6 +1836,12 @@
             Best F1 at threshold <strong>${bestPt.t.toFixed(2)}</strong>
             <button class="secondary compact th-jump-${uid}" type="button">Jump there</button>
           </div>
+          <div class="threshold-save-row" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="primary compact th-save-${uid}" type="button" title="Persist the current slider position as this model's default decision threshold. Scoring jobs and live probes will use it automatically.">Save as Default</button>
+            <span class="th-saved-badge-${uid}" style="font-size:0.8rem;color:${savedThreshold != null ? 'var(--success)' : 'var(--muted)'}">
+              ${savedThreshold != null ? `✓ Saved: ${Number(savedThreshold).toFixed(2)}` : 'Not saved — scoring uses 0.50'}
+            </span>
+          </div>
         </div>
       </div>
       <div class="threshold-slider-wrap">
@@ -1866,8 +1884,28 @@
       tnEl.textContent   = p.tn;
     };
 
+    const saveBtn   = article.querySelector(`.th-save-${uid}`);
+    const savedBadge = article.querySelector(`.th-saved-badge-${uid}`);
+
     slider.addEventListener('input', () => update(Number(slider.value)));
     if (jumpBtn) jumpBtn.addEventListener('click', () => { slider.value = bestIdx; update(bestIdx); });
+
+    if (saveBtn && artifactId) {
+      saveBtn.addEventListener('click', () => {
+        const currentPt = curve[Math.max(0, Math.min(Number(slider.value), curve.length - 1))];
+        const threshold = currentPt.t;
+        runElementAction(saveBtn, async () => {
+          await saveModelThreshold(artifactId, threshold);
+          if (savedBadge) {
+            savedBadge.textContent = `✓ Saved: ${threshold.toFixed(2)}`;
+            savedBadge.style.color = 'var(--success)';
+          }
+          showToast(`Default threshold saved: ${threshold.toFixed(2)} (F1 ${formatMetric(currentPt.f1)})`, { tone: 'success' });
+        }).catch((err) => {
+          showToast(err.message || 'Could not save threshold', { tone: 'error' });
+        });
+      });
+    }
 
     return article;
   }
@@ -1906,6 +1944,7 @@
             <th>Recall</th>
             <th>F1</th>
             <th>Top-1</th>
+            <th title="Decision threshold used when scoring. Saved via the Threshold Tuner. Defaults to 0.50 if not set.">Threshold</th>
             <th></th>
           </tr>
         </thead>
@@ -1916,6 +1955,10 @@
               : model.evaluation && model.evaluation.train
                 ? model.evaluation.train
                 : null;
+            const hasSavedThreshold = model.default_threshold != null;
+            const thresholdDisplay = hasSavedThreshold
+              ? Number(model.default_threshold).toFixed(2)
+              : '0.50';
             return `
               <tr>
                 <td class="mono">${escapeHtml(model.id || '')}</td>
@@ -1926,6 +1969,18 @@
                 <td>${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.recall) : '')}</td>
                 <td>${escapeHtml(evaluation && evaluation.candidate_metrics ? formatMetric(evaluation.candidate_metrics.f1) : '')}</td>
                 <td>${escapeHtml(evaluation && evaluation.ranking_metrics ? formatMetric(evaluation.ranking_metrics.top_1_accuracy) : '')}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <input type="number" min="0" max="1" step="0.01"
+                      value="${escapeHtml(thresholdDisplay)}"
+                      data-model-th-input="${escapeHtml(model.id || '')}"
+                      style="width:62px;font-size:0.82rem;padding:2px 4px"
+                      title="Edit threshold then click Set">
+                    <button class="secondary compact" type="button"
+                      data-set-threshold="${escapeHtml(model.id || '')}"
+                      title="Save this threshold to the model artifact">${hasSavedThreshold ? '✓ Set' : 'Set'}</button>
+                  </div>
+                </td>
                 <td>
                   <div class="action-stack">
                     <button class="secondary compact" type="button" data-use-model="${escapeHtml(model.id || '')}">Use</button>
@@ -3017,6 +3072,26 @@
           deleteButton.disabled = false;
           alert(`Delete failed: ${err.message || err}`);
         });
+      return;
+    }
+
+    const setThresholdButton = event.target.closest('[data-set-threshold]');
+    if (setThresholdButton) {
+      const modelId = setThresholdButton.getAttribute('data-set-threshold');
+      if (!modelId) return;
+      const input = modelList.querySelector(`[data-model-th-input="${CSS.escape(modelId)}"]`);
+      const threshold = input ? Number(input.value) : NaN;
+      if (!isFinite(threshold) || threshold < 0 || threshold > 1) {
+        showToast('Threshold must be between 0 and 1', { tone: 'error' });
+        return;
+      }
+      runElementAction(setThresholdButton, async () => {
+        await saveModelThreshold(modelId, threshold);
+        setThresholdButton.textContent = '✓ Set';
+        showToast(`Threshold ${threshold.toFixed(2)} saved for ${modelId}`, { tone: 'success' });
+      }).catch((err) => {
+        showToast(err.message || 'Could not save threshold', { tone: 'error' });
+      });
     }
   });
 
