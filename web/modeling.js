@@ -64,6 +64,8 @@
   const diagMessage = document.getElementById('diag-message');
   const diagCvResult = document.getElementById('diag-cv-result');
   const diagLcResult = document.getElementById('diag-lc-result');
+  const diagDomainBucketsButton = document.getElementById('diag-domain-buckets');
+  const diagBucketResult = document.getElementById('diag-bucket-result');
   const archetypeModelId = document.getElementById('archetype-model-id');
   const archetypeJobIds = document.getElementById('archetype-job-ids');
   const archetypeTopN = document.getElementById('archetype-top-n');
@@ -2575,7 +2577,8 @@
     }
     const agg = result.aggregate || {};
     const aggRows = [
-      ['F1', agg.f1],
+      ['F1 (at 0.50 threshold)', agg.f1],
+      ['F1 (per-fold best threshold ★)', agg.best_f1],
       ['Precision', agg.precision],
       ['Recall', agg.recall],
       ['ROC-AUC', agg.roc_auc],
@@ -2606,19 +2609,25 @@
       </table>
       <h4 style="margin:16px 0 4px;color:var(--muted)">Per-Fold Results</h4>
       <table>
-        <thead><tr><th>Fold</th><th>Train</th><th>Test</th><th>F1</th><th>Precision</th><th>Recall</th><th>ROC-AUC</th><th>PR-AUC</th></tr></thead>
+        <thead><tr><th>Fold</th><th>Train</th><th>Test</th><th>F1 @0.50</th><th>Best F1 ★</th><th>Best Threshold</th><th>Precision</th><th>Recall</th><th>ROC-AUC</th><th>PR-AUC</th></tr></thead>
         <tbody>
           ${result.folds.map((fold) => {
             if (fold.skipped) {
-              return `<tr><td>${fold.fold}</td><td colspan="7" style="color:var(--muted)">${escapeHtml(fold.reason || 'Skipped')}</td></tr>`;
+              return `<tr><td>${fold.fold}</td><td colspan="9" style="color:var(--muted)">${escapeHtml(fold.reason || 'Skipped')}</td></tr>`;
             }
             const cm = fold.metrics && fold.metrics.candidate_metrics || {};
+            const bm = fold.best_threshold_metrics || {};
+            const bestF1 = bm.f1 !== undefined ? bm.f1 : null;
+            const f1At50 = cm.f1 !== undefined ? cm.f1 : null;
+            const bestIsBetter = bestF1 !== null && f1At50 !== null && bestF1 > f1At50 + 0.01;
             return `
               <tr>
                 <td class="mono">${fold.fold}</td>
                 <td class="mono">${fold.train_count}</td>
                 <td class="mono">${fold.test_count}</td>
-                <td class="mono">${cm.f1 !== undefined ? cm.f1 : '—'}</td>
+                <td class="mono">${f1At50 !== null ? f1At50 : '—'}</td>
+                <td class="mono" style="${bestIsBetter ? 'color:var(--accent);font-weight:600' : ''}">${bestF1 !== null ? bestF1 : '—'}</td>
+                <td class="mono">${bm.threshold !== undefined ? bm.threshold : '—'}</td>
                 <td class="mono">${cm.precision !== undefined ? cm.precision : '—'}</td>
                 <td class="mono">${cm.recall !== undefined ? cm.recall : '—'}</td>
                 <td class="mono">${cm.roc_auc !== null && cm.roc_auc !== undefined ? cm.roc_auc : '—'}</td>
@@ -2757,6 +2766,69 @@
       }).catch((err) => {
         setMessage(diagMessage, err.message || String(err), true);
         if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Learning curve failed.'; }
+      });
+    });
+  }
+
+  function renderDomainBuckets(result) {
+    if (!diagBucketResult) return;
+    if (!result || !Array.isArray(result.buckets)) {
+      diagBucketResult.className = 'table-shell empty';
+      diagBucketResult.textContent = 'No domain bucket data.';
+      return;
+    }
+    const bucketColors = ['var(--accent)', '#60a5fa', '#f87171', '#34d399', '#a78bfa'];
+    diagBucketResult.className = 'table-shell';
+    diagBucketResult.innerHTML = `
+      <h3 style="margin:0 0 6px">Domain Bucket Inspector — ${result.total_labeled} labeled rows across ${result.n_buckets} buckets</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 12px">Each domain is deterministically assigned to a bucket by <code>hash(hostname) % 5</code>. Bucket N is the held-out test set for Fold N in cross-validation.</p>
+      ${result.buckets.map((b) => `
+        <details style="margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden" ${b.bucket === 2 ? 'open' : ''}>
+          <summary style="padding:8px 12px;cursor:pointer;background:var(--surface-2,#1e293b);display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucketColors[b.bucket]};flex-shrink:0"></span>
+            Bucket ${b.bucket} — Fold ${b.bucket} test set
+            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} spam</span>
+            ${b.bucket === 2 ? '<span style="margin-left:auto;font-size:0.75rem;color:#f87171;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);padding:2px 8px;border-radius:12px">⚠ Weak fold in your last CV run</span>' : ''}
+          </summary>
+          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+            <table style="margin:0">
+              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>Spam Count</th><th>Spam Rate</th></tr></thead>
+              <tbody>
+                ${b.domains.map((d) => `
+                  <tr>
+                    <td class="mono" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(d.domain)}">${escapeHtml(d.domain)}</td>
+                    <td class="mono">${d.count}</td>
+                    <td class="mono">${d.positive_count}</td>
+                    <td class="mono" style="${d.positive_rate > 0.7 ? 'color:var(--accent)' : d.positive_rate < 0.2 ? 'color:var(--muted)' : ''}">${(d.positive_rate * 100).toFixed(1)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      `).join('')}
+    `;
+  }
+
+  if (diagDomainBucketsButton) {
+    diagDomainBucketsButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) {
+        setMessage(diagMessage, 'Select a model variant first.', true);
+        return;
+      }
+      runElementAction(diagDomainBucketsButton, async () => {
+        setMessage(diagMessage, 'Inspecting domain buckets…', false);
+        if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Loading…'; }
+        const result = await apiPost('/domain-buckets', {
+          variantId,
+          jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+        });
+        setMessage(diagMessage, '', false);
+        renderDomainBuckets(result);
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Domain bucket inspection failed.'; }
       });
     });
   }

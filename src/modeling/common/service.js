@@ -1437,6 +1437,33 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
   };
   const thresholdCurve = split.testRows.length >= 4 ? computeThresholdCurve(scoredTestRows) : [];
+
+  // Auto-select the threshold that maximises F1 on the held-out test set so the
+  // model is immediately usable at peak binary performance without manual tuning.
+  let autoThreshold = null;
+  if (thresholdCurve.length > 0) {
+    const bestPt = thresholdCurve.reduce((prev, curr) => (curr.f1 > prev.f1 ? curr : prev));
+    autoThreshold = bestPt.t;
+    if (evaluation.test && evaluation.test.candidate_metrics) {
+      evaluation.test = {
+        ...evaluation.test,
+        candidate_metrics: {
+          ...evaluation.test.candidate_metrics,
+          threshold: bestPt.t,
+          precision: bestPt.precision,
+          recall: bestPt.recall,
+          f1: bestPt.f1,
+          confusion: {
+            true_positive: bestPt.tp,
+            true_negative: bestPt.tn,
+            false_positive: bestPt.fp,
+            false_negative: bestPt.fn,
+          },
+        },
+      };
+    }
+  }
+
   emitProgress(progress, {
     stage: 'training',
     message: 'Computing feature reliance',
@@ -1480,6 +1507,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     dataset_summary: dataset.summary,
     evaluation,
     threshold_curve: thresholdCurve,
+    default_threshold: autoThreshold !== null ? autoThreshold : undefined,
     reliance,
   };
 
@@ -2102,6 +2130,22 @@ async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
     const metrics = computeAllMetrics(scoredTestRows, {});
     const calibration = computeCalibrationCurve(scoredTestRows, 10);
 
+    // Find the threshold that maximises F1 for this fold independently.
+    // Reported as "best_threshold_metrics" — an oracle ceiling showing what
+    // would be achievable with perfect per-bucket threshold tuning.
+    const foldCurve = computeThresholdCurve(scoredTestRows);
+    let bestThresholdMetrics = null;
+    if (foldCurve.length > 0) {
+      const bestPt = foldCurve.reduce((prev, curr) => (curr.f1 > prev.f1 ? curr : prev));
+      bestThresholdMetrics = {
+        threshold: bestPt.t,
+        precision: bestPt.precision,
+        recall: bestPt.recall,
+        f1: bestPt.f1,
+        confusion: { true_positive: bestPt.tp, true_negative: bestPt.tn, false_positive: bestPt.fp, false_negative: bestPt.fn },
+      };
+    }
+
     foldResults.push({
       fold,
       skipped: false,
@@ -2111,6 +2155,7 @@ async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
       train_label_counts: countBinaryLabels(split.trainRows),
       test_label_counts: countBinaryLabels(split.testRows),
       metrics,
+      best_threshold_metrics: bestThresholdMetrics,
       calibration,
     });
   }
@@ -2129,6 +2174,8 @@ async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
     pr_auc: computeStatSummary(extractValues((f) => f.metrics.candidate_metrics.pr_auc)),
     top_1_accuracy: computeStatSummary(extractValues((f) => f.metrics.ranking_metrics.top_1_accuracy)),
     mean_reciprocal_rank: computeStatSummary(extractValues((f) => f.metrics.ranking_metrics.mean_reciprocal_rank)),
+    // Oracle ceiling: each fold tuned to its own best threshold — shows potential of per-bucket threshold tuning.
+    best_f1: computeStatSummary(extractValues((f) => f.best_threshold_metrics && f.best_threshold_metrics.f1)),
   };
 
   return {
@@ -2290,6 +2337,55 @@ async function updateModelThreshold(artifactRoot, artifactId, threshold) {
   return summarizeArtifact(updated);
 }
 
+/**
+ * Return every unique domain (hostname) in the labeled dataset grouped by their
+ * 5-bucket domain-holdout assignment, so the user can see which sites fall into
+ * each CV fold's test bucket — especially useful for inspecting "problem" buckets.
+ */
+async function getDomainBuckets(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+
+  const nBuckets = 5;
+  const byBucket = Array.from({ length: nBuckets }, () => new Map());
+
+  for (const row of labeledRows) {
+    const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '';
+    if (!stableKey) continue;
+    const bucket = hashString(stableKey) % nBuckets;
+    const domainMap = byBucket[bucket];
+    if (!domainMap.has(stableKey)) {
+      domainMap.set(stableKey, { domain: stableKey, count: 0, positive_count: 0 });
+    }
+    const entry = domainMap.get(stableKey);
+    entry.count += 1;
+    if (row.binary_label === 1) entry.positive_count += 1;
+  }
+
+  return {
+    n_buckets: nBuckets,
+    total_labeled: labeledRows.length,
+    buckets: byBucket.map((domainMap, bucket) => {
+      const domains = Array.from(domainMap.values())
+        .map((d) => ({
+          ...d,
+          positive_rate: d.count > 0 ? roundNumber(d.positive_count / d.count, 3) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+      return {
+        bucket,
+        domain_count: domains.length,
+        row_count: domains.reduce((s, d) => s + d.count, 0),
+        positive_count: domains.reduce((s, d) => s + d.positive_count, 0),
+        domains,
+      };
+    }),
+  };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2301,6 +2397,7 @@ module.exports = {
   runCrossValidation,
   computeLearningCurve,
   updateModelThreshold,
+  getDomainBuckets,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

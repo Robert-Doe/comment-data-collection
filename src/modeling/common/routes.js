@@ -20,6 +20,7 @@ const {
   runCrossValidation,
   computeLearningCurve,
   updateModelThreshold,
+  getDomainBuckets,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,
@@ -427,6 +428,32 @@ function createModelingRouter(dependencies) {
         variantId,
         algorithm,
         imbalanceStrategy: req.body && req.body.imbalanceStrategy ? req.body.imbalanceStrategy : undefined,
+        dataset: cachedDataset || undefined,
+      });
+
+      res.json({ ok: true, ...result, cache_hit: !!cachedDataset });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/domain-buckets', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) {
+        res.status(400).json({ error: 'Select a valid model variant' });
+        return;
+      }
+
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const progress = requestProgress(req);
+      progress && progress({ stage: 'training', message: 'Inspecting domain buckets' });
+
+      const cachedDataset = datasetCache.get(jobIds, variantId);
+      const items = cachedDataset ? null : await loadModelingItems(jobIds, progress, { modelingOnly: true });
+
+      const result = await getDomainBuckets(items, dependencies.artifactRoot, {
+        variantId,
         dataset: cachedDataset || undefined,
       });
 
