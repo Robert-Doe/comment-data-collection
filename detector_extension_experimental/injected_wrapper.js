@@ -996,8 +996,8 @@
       // This filters out video/media lists (~0.46) which pass LOW_THRESHOLD but
       // lack the semantic signals (reply actions, author markers, timestamps) that
       // push genuine comment sections above 0.65.
-      const _scoredForHighlight = [];
-
+      // Pass 1 — collect raw scores without writing to ugcRegionMap yet.
+      const rawScores = new Map();
       for (const candidate of candidates) {
         const domNode = findDOMNodeById(candidate.id);
         let score = scoreCandidateHeuristic(candidate, domNode);
@@ -1008,14 +1008,42 @@
             if (Number.isFinite(runtimeScore)) {
               score = (_scoringMode === 'model') ? runtimeScore : Math.max(score, runtimeScore);
             } else if (_scoringMode === 'model') {
-              continue; // model returned no score — skip rather than fall back
+              continue;
             }
           } catch (error) {
             console.warn('[PseudoDOM Guard] Runtime scoring failed:', error?.message || error);
           }
         } else if (_scoringMode === 'model') {
-          continue; // model-only but no DOM node or no model — skip
+          continue;
         }
+
+        rawScores.set(candidate.id, score);
+      }
+
+      // Pass 2 — ancestor penalty: a candidate nested inside another above-threshold
+      // candidate gets its score multiplied by 0.6 so the outer container wins.
+      // This prevents reply sub-threads from outranking the main comment list.
+      const finalScores = new Map(rawScores);
+      for (const candidate of candidates) {
+        const raw = rawScores.get(candidate.id);
+        if (raw == null) continue;
+        let parentId = PseudoDOM.nodes.get(candidate.id)?.parentId;
+        while (parentId) {
+          const ancestorScore = rawScores.get(parentId);
+          if (Number.isFinite(ancestorScore) && ancestorScore >= UGC_LOW_THRESHOLD) {
+            finalScores.set(candidate.id, raw * 0.6);
+            break;
+          }
+          parentId = PseudoDOM.nodes.get(parentId)?.parentId;
+        }
+      }
+
+      // Pass 3 — write final scores and collect highlight candidates.
+      const _scoredForHighlight = [];
+      for (const candidate of candidates) {
+        const score = finalScores.get(candidate.id);
+        if (score == null) continue;
+        const domNode = findDOMNodeById(candidate.id);
 
         PseudoDOM.setUGCConfidenceById(candidate.id, score);
         if (domNode) PseudoDOM.setUGCConfidence(domNode, score);
