@@ -1259,7 +1259,7 @@ function buildRuntimeModelBundle(artifact, options = {}) {
     algorithm: artifact.algorithm,
     feature_count: artifact.feature_count,
     thresholds: {
-      positive: Number.isFinite(positiveThreshold) ? positiveThreshold : 0.5,
+      positive: Number.isFinite(positiveThreshold) ? positiveThreshold : (artifact.default_threshold ?? 0.5),
       manual_review_low: Number.isFinite(manualReviewLow) ? manualReviewLow : 0.2,
       manual_review_high: Number.isFinite(manualReviewHigh) ? manualReviewHigh : 0.8,
     },
