@@ -971,8 +971,8 @@
       const candidates = PseudoDOM.getCandidateRoots();
       const featureExtractor = getRuntimeFeatureExtractor();
       const useRuntime = Boolean(
-        _runtimeModel?.model?.weights &&
-        _runtimeModel?.vectorizer?.descriptors &&
+        _runtimeModel?.model &&
+        _runtimeModel?.vectorizer?.descriptors?.length &&
         featureExtractor
       );
       let snapshot = null;
@@ -1158,7 +1158,7 @@
         const featureValues = featureExtractor(
           domNode, pseudoNode, candidate, _pageSignals || null
         );
-        if (_runtimeModel?.model?.weights && _runtimeModel?.vectorizer?.descriptors) {
+        if (_runtimeModel?.model && _runtimeModel?.vectorizer?.descriptors?.length) {
           // Model is authoritative — same policy as classify().
           score = HeuristicClassifier.predictDirect(featureValues);
         } else {
