@@ -912,15 +912,46 @@
       return vector;
     }
 
+    function traverseTree(node, vector) {
+      if (!node) return 0;
+      if (node.leaf || !node.left || !node.right) {
+        return node.value !== undefined ? Number(node.value) : Number(node.probability) || 0;
+      }
+      return ((Number(vector[node.featureIndex]) || 0) <= node.threshold)
+        ? traverseTree(node.left, vector)
+        : traverseTree(node.right, vector);
+    }
+
     function predictRuntimeProbability(runtime, featureValues) {
       const vector = vectorizeFeatureValues(featureValues, runtime);
-      const weights = runtime?.model?.weights || [];
-      let logit = Number(runtime?.model?.bias) || 0;
+      const model = runtime?.model || {};
+      const algo = model.algorithm || runtime?.algorithm;
 
+      if (algo === 'random_forest') {
+        const trees = Array.isArray(model.trees) ? model.trees : [];
+        if (!trees.length) return 0.5;
+        const sum = trees.reduce((acc, tree) => acc + traverseTree(tree, vector), 0);
+        return sum / trees.length;
+      }
+
+      if (algo === 'gradient_boosting') {
+        const trees = Array.isArray(model.trees) ? model.trees : [];
+        const lr = Math.max(0.001, Number(model.learning_rate) || 0.1);
+        let score = Number(model.base_score) || 0;
+        trees.forEach((tree) => { score += lr * traverseTree(tree, vector); });
+        return 1 / (1 + Math.exp(-score));
+      }
+
+      if (algo === 'decision_tree') {
+        return traverseTree(model.tree, vector);
+      }
+
+      // logistic_regression (default)
+      const weights = model.weights || [];
+      let logit = Number(model.bias) || 0;
       for (let i = 0; i < vector.length; i += 1) {
         logit += (vector[i] || 0) * (Number(weights[i]) || 0);
       }
-
       return 1 / (1 + Math.exp(-logit));
     }
 

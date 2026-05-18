@@ -256,21 +256,29 @@ function getCandidatesFromPage() {
 }
 
 function isValidRuntimeBundle(bundle) {
+  if (!bundle || typeof bundle !== 'object') return false;
+  if (!bundle.vectorizer?.descriptors?.length > 0) return false;
+  const m = bundle.model;
+  if (!m) return false;
+  const algo = m.algorithm || bundle.algorithm;
+  if (algo === 'logistic_regression') return Array.isArray(m.weights) && m.weights.length > 0;
+  if (algo === 'random_forest') return Array.isArray(m.trees) && m.trees.length > 0;
+  if (algo === 'gradient_boosting') return Array.isArray(m.trees) && m.trees.length > 0;
+  if (algo === 'decision_tree') return m.tree != null;
+  // Unknown algorithm: accept if any recognised model payload is present
   return (
-    bundle &&
-    typeof bundle === 'object' &&
-    bundle.model?.weights?.length > 0 &&
-    bundle.vectorizer?.descriptors?.length > 0
+    (Array.isArray(m.weights) && m.weights.length > 0) ||
+    (Array.isArray(m.trees) && m.trees.length > 0) ||
+    m.tree != null
   );
 }
 
 function derivePositiveThreshold(bundle) {
-  // Prefer the training threshold recorded in the evaluation section,
-  // then fall back to the legacy thresholds object, then default to 0.50.
-  const evalThreshold = bundle?.evaluation?.train?.candidate_metrics?.threshold;
+  // Prefer the explicitly saved threshold, then fall back to evaluation, then 0.50.
+  const saved = bundle?.thresholds?.positive;
+  if (Number.isFinite(Number(saved))) return Number(saved);
+  const evalThreshold = bundle?.evaluation?.test?.candidate_metrics?.threshold;
   if (Number.isFinite(evalThreshold)) return evalThreshold;
-  const legacyThreshold = bundle?.thresholds?.positive;
-  if (Number.isFinite(Number(legacyThreshold))) return Number(legacyThreshold);
   return 0.50;
 }
 
