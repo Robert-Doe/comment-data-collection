@@ -28,9 +28,12 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 // ─── Initialize ────────────────────────────────────────────────────────────────
 
+let _activeTab = null;
+
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
+  _activeTab = tab;
 
   await Promise.all([
     loadOverview(tab),
@@ -508,13 +511,15 @@ function applyToggles(mode) {
 }
 
 async function onScoringToggle(chosen) {
-  // If the chosen toggle is already on, turning it off means 'none'.
   const current = modelToggle.checked && chosen === 'model' ? 'model'
     : heuristicToggle.checked && chosen === 'heuristic' ? 'heuristic'
     : 'none';
   applyToggles(current);
   try {
     await setScoringMode(current);
+    // Give the message time to reach injected_wrapper before re-reading candidates.
+    await new Promise(r => setTimeout(r, 150));
+    if (_activeTab) await loadCandidates(_activeTab);
   } catch (_) {
     setCandidatePanelMessage('Could not reach this page — reload the tab to activate the extension, then try again.');
   }
