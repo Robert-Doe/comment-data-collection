@@ -257,7 +257,7 @@ function getCandidatesFromPage() {
 
 function isValidRuntimeBundle(bundle) {
   if (!bundle || typeof bundle !== 'object') return false;
-  if (!bundle.vectorizer?.descriptors?.length > 0) return false;
+  if (!(bundle.vectorizer?.descriptors?.length > 0)) return false;
   const m = bundle.model;
   if (!m) return false;
   const algo = m.algorithm || bundle.algorithm;
