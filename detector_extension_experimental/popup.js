@@ -243,7 +243,10 @@ function getCandidatesFromPage() {
   // reclassify() is synchronous so the map is fresh when we read it below.
   dbg.reclassify();
   const snap = dbg.getPseudoDOM();
-  const modelLoaded = Boolean(dbg.runtimeModel?.()?.model?.weights?.length);
+  const rm = dbg.runtimeModel?.();
+  const modelLoaded = Boolean(
+    rm?.model && rm?.vectorizer?.descriptors?.length
+  );
   return (dbg.getCandidates() || []).map(c => ({
     id:                c.id,
     tag:               c.node?.tag,
