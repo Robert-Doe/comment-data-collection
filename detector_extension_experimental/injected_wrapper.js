@@ -2022,6 +2022,7 @@
     checkAttribute: (n, v) => SecurityGate.checkAttribute(n, v),
     pageSignals:    () => _pageSignals,
     runtimeModel:   () => _runtimeModel,
+    scoringMode:    () => _scoringMode,
     featureExtractorReady: () => Boolean(window.__PSEUDODOM_FEATURE_EXTRACTOR__?.extractFeatures),
   };
 
