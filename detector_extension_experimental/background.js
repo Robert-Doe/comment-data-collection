@@ -286,6 +286,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case 'SET_HIGHLIGHT_MODE':
+    case 'SET_MODEL_ONLY':
     case 'LOAD_CANDIDATE_JSON': {
       const forward = sender.tab?.id
         ? broadcastMessageToTab(sender.tab.id, {

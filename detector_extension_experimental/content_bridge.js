@@ -115,6 +115,11 @@
       return;
     }
 
+    if (message.type === 'SET_MODEL_ONLY') {
+      postToPage('MODEL_ONLY_MODE', message.payload);
+      return;
+    }
+
     if (message.type === 'HIGHLIGHT_CANDIDATE') {
       postToPage('HIGHLIGHT_CANDIDATE', message.payload);
       return;
