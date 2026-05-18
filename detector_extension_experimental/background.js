@@ -275,6 +275,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case 'SET_SCORING_MODE': {
+      const mode = message.payload?.mode;
+      store.saveScoringMode(mode)
+        .then(async () => {
+          const tabs = await chrome.tabs.query({});
+          await Promise.all(tabs.map(async (tab) => {
+            if (!tab || typeof tab.id !== 'number') return;
+            await broadcastMessageToTab(tab.id, { type: 'SET_SCORING_MODE', payload: { mode } });
+          }));
+          sendResponse({ ok: true });
+        })
+        .catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+
+    case 'GET_SCORING_MODE': {
+      store.getScoringMode()
+        .then((mode) => sendResponse(mode))
+        .catch(() => sendResponse('heuristic'));
+      return true;
+    }
+
     case 'CLEAR_RUNTIME_MODEL': {
       store.clearRuntimeModel()
         .then(async () => {
@@ -286,7 +308,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case 'SET_HIGHLIGHT_MODE':
-    case 'SET_MODEL_ONLY':
     case 'LOAD_CANDIDATE_JSON': {
       const forward = sender.tab?.id
         ? broadcastMessageToTab(sender.tab.id, {

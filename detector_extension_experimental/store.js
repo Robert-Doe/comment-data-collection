@@ -26,6 +26,7 @@ const KEY_SNAPSHOTS       = 'pseudodom_snapshots';
 const KEY_CANDIDATES      = 'pseudodom_candidates';
 const KEY_SECURITY_EVENTS = 'pseudodom_security_events';
 const KEY_RUNTIME_MODEL   = 'pseudodom_runtime_model';
+const KEY_SCORING_MODE    = 'pseudodom_scoring_mode';
 const MAX_EVENTS          = 500;
 const MAX_SNAPSHOTS       = 200;
 
@@ -129,6 +130,16 @@ export const store = {
 
   async clearRuntimeModel() {
     await _setObject(KEY_RUNTIME_MODEL, null);
+  },
+
+  // ── Scoring mode ─────────────────────────────────────────────────────────
+
+  async saveScoringMode(mode) {
+    await _setObject(KEY_SCORING_MODE, mode);
+  },
+
+  async getScoringMode() {
+    return await _getObject(KEY_SCORING_MODE) || 'heuristic';
   },
 
   // ── Security events ──────────────────────────────────────────────────────
