@@ -15,6 +15,7 @@
   let featureExtractorReady = false;
   let pendingPageSignals = null;
   let pendingRuntimeModel = null;
+  let pendingScoringMode = null;
   // Set to true when the background requests the runtime model to be cleared so
   // flushPendingPushes() sends a RUNTIME_MODEL with null payload to the wrapper.
   let pendingClearModel = false;
@@ -58,6 +59,10 @@
       // Explicitly push null so the wrapper clears _runtimeModel and re-classifies.
       postToPage('RUNTIME_MODEL', null);
       pendingClearModel = false;
+    }
+    if (pendingScoringMode !== null) {
+      postToPage('SCORING_MODE', { mode: pendingScoringMode });
+      pendingScoringMode = null;
     }
     if (featureExtractorReady) {
       postToPage('FEATURE_EXTRACTOR_READY', { ready: true });
@@ -115,8 +120,8 @@
       return;
     }
 
-    if (message.type === 'SET_MODEL_ONLY') {
-      postToPage('MODEL_ONLY_MODE', message.payload);
+    if (message.type === 'SET_SCORING_MODE') {
+      postToPage('SCORING_MODE', message.payload);
       return;
     }
 
@@ -142,6 +147,11 @@
   chrome.runtime.sendMessage({ type: 'GET_RUNTIME_MODEL' }, (bundle) => {
     if (!bundle) return;
     pendingRuntimeModel = bundle;
+    flushPendingPushes();
+  });
+
+  chrome.runtime.sendMessage({ type: 'GET_SCORING_MODE' }, (mode) => {
+    pendingScoringMode = mode || 'heuristic';
     flushPendingPushes();
   });
 

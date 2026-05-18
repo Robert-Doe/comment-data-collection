@@ -969,8 +969,19 @@
      */
     async function classify() {
       const candidates = PseudoDOM.getCandidateRoots();
+
+      if (_scoringMode === 'none') {
+        for (const candidate of candidates) {
+          PseudoDOM.setUGCConfidenceById(candidate.id, 0);
+          const domNode = findDOMNodeById(candidate.id);
+          if (domNode) PseudoDOM.setUGCConfidence(domNode, 0);
+        }
+        return;
+      }
+
       const featureExtractor = getRuntimeFeatureExtractor();
       const useRuntime = Boolean(
+        _scoringMode === 'model' &&
         _runtimeModel?.model &&
         _runtimeModel?.vectorizer?.descriptors?.length &&
         featureExtractor
@@ -995,14 +1006,15 @@
           try {
             const runtimeScore = scoreCandidateWithRuntime(candidate, domNode, featureExtractor, snapshot);
             if (Number.isFinite(runtimeScore)) {
-              score = _modelOnly ? runtimeScore : Math.max(score, runtimeScore);
+              score = (_scoringMode === 'model') ? runtimeScore : Math.max(score, runtimeScore);
+            } else if (_scoringMode === 'model') {
+              continue; // model returned no score — skip rather than fall back
             }
           } catch (error) {
             console.warn('[PseudoDOM Guard] Runtime scoring failed:', error?.message || error);
           }
-        } else if (_modelOnly && useRuntime) {
-          // model-only mode but no DOM node — skip rather than use heuristic
-          continue;
+        } else if (_scoringMode === 'model') {
+          continue; // model-only but no DOM node or no model — skip
         }
 
         PseudoDOM.setUGCConfidenceById(candidate.id, score);
@@ -1152,20 +1164,23 @@
       const featureExtractor = window.__PSEUDODOM_FEATURE_EXTRACTOR__?.extractFeatures;
       let score;
 
-      const hScore = HeuristicClassifier.scoreDirect(candidate, domNode);
+      if (_scoringMode === 'none') return;
 
-      if (typeof featureExtractor === 'function') {
-        const featureValues = featureExtractor(
-          domNode, pseudoNode, candidate, _pageSignals || null
-        );
-        if (_runtimeModel?.model && _runtimeModel?.vectorizer?.descriptors?.length) {
-          const runtimeScore = HeuristicClassifier.predictDirect(featureValues);
-          score = _modelOnly ? runtimeScore : Math.max(hScore, runtimeScore);
-        } else {
-          score = _modelOnly ? null : hScore;
-        }
+      const hasModel = Boolean(
+        _runtimeModel?.model && _runtimeModel?.vectorizer?.descriptors?.length
+      );
+      const hScore = (_scoringMode !== 'model')
+        ? HeuristicClassifier.scoreDirect(candidate, domNode)
+        : null;
+
+      if (_scoringMode === 'model') {
+        const featureExtractor = window.__PSEUDODOM_FEATURE_EXTRACTOR__?.extractFeatures;
+        if (!hasModel || typeof featureExtractor !== 'function') return;
+        const featureValues = featureExtractor(domNode, pseudoNode, candidate, _pageSignals || null);
+        score = HeuristicClassifier.predictDirect(featureValues);
       } else {
-        score = _modelOnly ? null : hScore;
+        // heuristic mode — optionally blend model if available
+        score = hScore;
       }
 
       if (Number.isFinite(score) && score >= UGC_LOW_THRESHOLD) {
@@ -1941,7 +1956,7 @@
 
   let _pageSignals = null;
   let _runtimeModel = null;
-  let _modelOnly = false;
+  let _scoringMode = 'heuristic'; // 'model' | 'heuristic' | 'none'
 
   // Listen for page signals and runtime model pushes from content_bridge.
   window.addEventListener('message', (event) => {
@@ -1976,8 +1991,8 @@
       return;
     }
 
-    if (event.data.type === 'MODEL_ONLY_MODE') {
-      _modelOnly = Boolean(event.data.payload?.enabled);
+    if (event.data.type === 'SCORING_MODE') {
+      _scoringMode = event.data.payload?.mode || 'heuristic';
       _scheduleClassify();
       return;
     }

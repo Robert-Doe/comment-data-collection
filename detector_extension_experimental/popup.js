@@ -183,12 +183,13 @@ async function setHighlightMode(enabled) {
   setCandidatePanelMessage(enabled ? 'Highlight mode is on.' : 'Highlight mode is off.');
 }
 
-async function setModelOnly(enabled) {
-  const response = await bgMessage({ type: 'SET_MODEL_ONLY', payload: { enabled } });
+async function setScoringMode(mode) {
+  const response = await bgMessage({ type: 'SET_SCORING_MODE', payload: { mode } });
   if (!response || response.ok !== true) {
     throw new Error(response?.error || 'Could not update scoring mode');
   }
-  setCandidatePanelMessage(enabled ? 'Model-only scoring on — heuristics disabled.' : 'Scoring mode: model + heuristics.');
+  const labels = { model: 'Model only — heuristics off.', heuristic: 'Heuristic only — model off.', none: 'Both off — nothing will be identified.' };
+  setCandidatePanelMessage(labels[mode] || '');
 }
 
 function setCandidateJsonSectionVisible(visible) {
@@ -497,15 +498,40 @@ document.getElementById('highlight-toggle').addEventListener('change', async (ev
   }
 });
 
-document.getElementById('model-only-toggle').addEventListener('change', async (event) => {
-  const enabled = event.target.checked;
+const modelToggle     = document.getElementById('model-toggle');
+const heuristicToggle = document.getElementById('heuristic-toggle');
+
+function applyToggles(mode) {
+  modelToggle.checked     = mode === 'model';
+  heuristicToggle.checked = mode === 'heuristic';
+}
+
+async function onScoringToggle(chosen) {
+  // If the chosen toggle is already on, turning it off means 'none'.
+  const current = modelToggle.checked && chosen === 'model' ? 'model'
+    : heuristicToggle.checked && chosen === 'heuristic' ? 'heuristic'
+    : 'none';
+  applyToggles(current);
   try {
-    await setModelOnly(enabled);
+    await setScoringMode(current);
   } catch (_) {
-    setCandidatePanelMessage(
-      'Could not reach this page — reload the tab to activate the extension, then try again.'
-    );
+    setCandidatePanelMessage('Could not reach this page — reload the tab to activate the extension, then try again.');
   }
+}
+
+modelToggle.addEventListener('change', () => {
+  if (modelToggle.checked) heuristicToggle.checked = false;
+  onScoringToggle('model');
+});
+
+heuristicToggle.addEventListener('change', () => {
+  if (heuristicToggle.checked) modelToggle.checked = false;
+  onScoringToggle('heuristic');
+});
+
+// Restore saved scoring mode on popup open.
+bgMessage({ type: 'GET_SCORING_MODE' }).then((mode) => {
+  applyToggles(mode || 'heuristic');
 });
 
 document.getElementById('btn-load-candidate-json').addEventListener('click', async () => {
