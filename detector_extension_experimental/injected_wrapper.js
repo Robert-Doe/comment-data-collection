@@ -995,14 +995,14 @@
           try {
             const runtimeScore = scoreCandidateWithRuntime(candidate, domNode, featureExtractor, snapshot);
             if (Number.isFinite(runtimeScore)) {
-              // Take the higher of heuristic and model — the runtime model may under-score
-              // elements whose unit-level signals are hidden inside shadow roots (e.g. YouTube
-              // custom elements). The heuristic acts as a safety floor.
-              score = Math.max(score, runtimeScore);
+              score = _modelOnly ? runtimeScore : Math.max(score, runtimeScore);
             }
           } catch (error) {
             console.warn('[PseudoDOM Guard] Runtime scoring failed:', error?.message || error);
           }
+        } else if (_modelOnly && useRuntime) {
+          // model-only mode but no DOM node — skip rather than use heuristic
+          continue;
         }
 
         PseudoDOM.setUGCConfidenceById(candidate.id, score);
@@ -1159,13 +1159,13 @@
           domNode, pseudoNode, candidate, _pageSignals || null
         );
         if (_runtimeModel?.model && _runtimeModel?.vectorizer?.descriptors?.length) {
-          // Model is authoritative — same policy as classify().
-          score = HeuristicClassifier.predictDirect(featureValues);
+          const runtimeScore = HeuristicClassifier.predictDirect(featureValues);
+          score = _modelOnly ? runtimeScore : Math.max(hScore, runtimeScore);
         } else {
-          score = hScore;
+          score = _modelOnly ? null : hScore;
         }
       } else {
-        score = hScore;
+        score = _modelOnly ? null : hScore;
       }
 
       if (Number.isFinite(score) && score >= UGC_LOW_THRESHOLD) {
@@ -1941,6 +1941,7 @@
 
   let _pageSignals = null;
   let _runtimeModel = null;
+  let _modelOnly = false;
 
   // Listen for page signals and runtime model pushes from content_bridge.
   window.addEventListener('message', (event) => {
@@ -1972,6 +1973,12 @@
       _autoHighlightEnabled = Boolean(event.data.payload?.enabled);
       if (!_autoHighlightEnabled) _clearAllHighlights();
       else _scheduleClassify();
+      return;
+    }
+
+    if (event.data.type === 'MODEL_ONLY_MODE') {
+      _modelOnly = Boolean(event.data.payload?.enabled);
+      _scheduleClassify();
       return;
     }
 

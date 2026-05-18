@@ -183,6 +183,14 @@ async function setHighlightMode(enabled) {
   setCandidatePanelMessage(enabled ? 'Highlight mode is on.' : 'Highlight mode is off.');
 }
 
+async function setModelOnly(enabled) {
+  const response = await bgMessage({ type: 'SET_MODEL_ONLY', payload: { enabled } });
+  if (!response || response.ok !== true) {
+    throw new Error(response?.error || 'Could not update scoring mode');
+  }
+  setCandidatePanelMessage(enabled ? 'Model-only scoring on — heuristics disabled.' : 'Scoring mode: model + heuristics.');
+}
+
 function setCandidateJsonSectionVisible(visible) {
   const section = document.getElementById('candidate-json-section');
   if (section) {
@@ -483,6 +491,17 @@ document.getElementById('highlight-toggle').addEventListener('change', async (ev
   } catch (_) {
     // If the content script isn't reachable (e.g. tab opened before extension was loaded),
     // keep the toggle in the requested state and show a friendly hint instead of an error.
+    setCandidatePanelMessage(
+      'Could not reach this page — reload the tab to activate the extension, then try again.'
+    );
+  }
+});
+
+document.getElementById('model-only-toggle').addEventListener('change', async (event) => {
+  const enabled = event.target.checked;
+  try {
+    await setModelOnly(enabled);
+  } catch (_) {
     setCandidatePanelMessage(
       'Could not reach this page — reload the tab to activate the extension, then try again.'
     );
