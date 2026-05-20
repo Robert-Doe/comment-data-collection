@@ -282,7 +282,7 @@
             <li>
               <strong>2. Try a different algorithm (costs one CV run)</strong>
               <span>Logistic Regression is the right starting point, but it assumes linear separability.
-              If your spam/ham boundary is non-linear, Random Forest or Gradient Boosting can gain 5–15 F1 points
+              If your comment/no-comment boundary is non-linear, Random Forest or Gradient Boosting can gain 5–15 F1 points
               with zero extra data. Run CV again with the new algorithm — same variant, same strategy.</span>
             </li>
             <li>
@@ -326,7 +326,7 @@
               <strong>Why this happens</strong><br>
               Each fold tests on a different set of domains. High variance means the model's performance is highly
               sensitive to <em>which</em> domains end up in the test set. Some domain clusters are genuinely harder
-              (foreign-language sites, sites with very few spam examples, sites where spam looks exactly like ham).
+              (foreign-language sites, sites with very few comment-section examples, sites where comment pages look structurally identical to non-comment pages).
               The model is not bad — it just faces an easier test in some folds than others.
             </div>
             <div class="dc-fixes">
@@ -343,7 +343,7 @@
                 <div class="fix-num try2">2</div>
                 <div class="fix-body">
                   <strong>Collect more labeled data from the weak bucket's domains</strong>
-                  <p>If the weak fold has 3× fewer spam examples than the others, the model is not learning those
+                  <p>If the weak fold has 3× fewer comment-section examples than the others, the model is not learning those
                   patterns. Label more examples from those domains specifically. Even 50–100 extra rows
                   from the right domains can dramatically tighten the folds.</p>
                 </div>
@@ -389,7 +389,7 @@
               <strong>Why this happens</strong><br>
               Domain buckets are assigned by <code>hash(hostname) % 5</code>. This is deterministic and fair,
               but it cannot guarantee equal difficulty. One bucket might contain a site that accounts for
-              40% of all spam in your dataset — so when that bucket is the test set, the training distribution
+              40% of all comment-section pages in your dataset — so when that bucket is the test set, the training distribution
               shifts dramatically and the model struggles. Or the bucket might simply have too few labeled rows
               to evaluate reliably.
             </div>
@@ -398,7 +398,7 @@
                 <div class="fix-num try1">1</div>
                 <div class="fix-body">
                   <strong>Open "Inspect Domain Buckets" and look at the outlier bucket</strong>
-                  <p>Check: how many domains? How many labeled rows? What is the spam rate?
+                  <p>Check: how many domains? How many labeled rows? What is the comment rate?
                   If one domain dominates the bucket (e.g. 80% of the rows), that domain's
                   characteristics are controlling the fold's difficulty.</p>
                 </div>
@@ -450,7 +450,7 @@
             <div class="dtree-q"><span class="q-icon">❓</span> Is ROC-AUC above 0.80 across all folds?</div>
             <div class="dtree-answer">
               <span class="a-label yes">YES →</span>
-              <span>The model <em>can</em> rank spam above ham — it just doesn't threshold well.
+              <span>The model <em>can</em> rank pages with comments above pages without — it just doesn't threshold well.
               This is a <strong>class imbalance problem</strong>, not a feature problem.
               Jump to <a href="#good-auc-bad-f1">Section 5</a> and try imbalance strategies.</span>
             </div>
@@ -479,7 +479,7 @@
             <div class="dtree-answer">
               <span class="a-label yes">YES →</span>
               <span>Try <strong>Random Forest</strong> or <strong>Gradient Boosting</strong>.
-              LR assumes a linear decision boundary. If spam and ham overlap in feature space in
+              LR assumes a linear decision boundary. If pages with comments and pages without overlap in feature space in
               a non-linear way, LR will always underfit. Tree-based models can find complex boundaries.</span>
             </div>
             <div class="dtree-answer">
@@ -523,11 +523,11 @@
           <div class="dc-body">
             <div class="dc-why">
               <strong>Why this happens</strong><br>
-              ROC-AUC measures <em>ranking quality</em> — does the model put spam above ham in its probability scores?
+              ROC-AUC measures <em>ranking quality</em> — does the model put pages with comments above pages without in its probability scores?
               F1 measures <em>classification quality</em> at a specific threshold. A large gap between
               the two means the model ranks correctly but its probabilities are compressed toward the middle —
-              it is not confidently pushing spam toward 1.0. This is classic <strong>class imbalance</strong>:
-              when ham outnumbers spam 10:1, the model's "safe" bet is to output moderate probabilities for everyone,
+              it is not confidently pushing comment-section pages toward 1.0. This is classic <strong>class imbalance</strong>:
+              when no-comment pages outnumber comment-section pages 10:1, the model's "safe" bet is to output moderate probabilities for everyone,
               which destroys F1 at 0.50 but leaves ranking intact.
             </div>
             <div class="dc-fixes">
@@ -545,16 +545,16 @@
                 <div class="fix-body">
                   <strong>Try Class Weighted first — it is the safest option</strong>
                   <p>It does not add or remove rows — it just tells the optimizer to penalise
-                  spam mistakes more heavily. No data fabrication, no information loss.
-                  Almost always better than Baseline when spam:ham ratio exceeds 1:3.</p>
+                  comment-section misses more heavily. No data fabrication, no information loss.
+                  Almost always better than Baseline when comment:no-comment ratio exceeds 1:3.</p>
                 </div>
               </div>
               <div class="fix-step">
                 <div class="fix-num try3">3</div>
                 <div class="fix-body">
                   <strong>If Class Weighted is not enough, try SMOTE</strong>
-                  <p>SMOTE creates synthetic spam examples by interpolating between real spam rows
-                  in feature space. It can push the model's spam probabilities higher, closing the
+                  <p>SMOTE creates synthetic comment-section examples by interpolating between real comment-section rows
+                  in feature space. It can push the model's comment probabilities higher, closing the
                   gap between F1 @0.50 and Best F1 ★. Check that Precision does not fall too far.</p>
                 </div>
               </div>
@@ -580,7 +580,7 @@
 
         <p>
           Every strategy is a different answer to the same question:
-          <em>"How do we stop the model from being lazy and predicting ham for everything?"</em>
+          <em>"How do we stop the model from being lazy and predicting no comments for everything?"</em>
         </p>
 
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:20px 0">
@@ -602,27 +602,27 @@
               </tr>
               <tr>
                 <td><strong>Class Weighted</strong></td>
-                <td>Multiplies the loss for spam mistakes by the imbalance ratio. No rows are added or removed.</td>
+                <td>Multiplies the loss for comment-section misses by the imbalance ratio. No rows are added or removed.</td>
                 <td>Any imbalance level. The safest first step. No data mutation.</td>
                 <td>Logistic Regression uses true loss weighting. Other algorithms use a weighted bootstrap approximation, which is noisier.</td>
               </tr>
               <tr>
                 <td><strong>Undersample Majority</strong></td>
-                <td>Randomly removes ham rows until spam:ham is 1:1.</td>
-                <td>You have so much ham that the model never sees diverse spam. Also faster training.</td>
-                <td class="warn">Throws away ham data. The model may not learn to distinguish borderline ham from spam.</td>
+                <td>Randomly removes no-comment rows until comment:no-comment is 1:1.</td>
+                <td>You have so many no-comment pages that the model never sees diverse comment-section examples. Also faster training.</td>
+                <td class="warn">Throws away no-comment data. The model may not learn to distinguish borderline no-comment pages from comment-section pages.</td>
               </tr>
               <tr>
                 <td><strong>Oversample Minority</strong></td>
-                <td>Duplicates real spam rows until classes are balanced.</td>
-                <td>You have very few spam examples and cannot afford to throw away ham.</td>
-                <td class="warn">Identical duplicates — the model memorises specific spam rows rather than generalising. SMOTE is usually better.</td>
+                <td>Duplicates real comment-section rows until classes are balanced.</td>
+                <td>You have very few comment-section examples and cannot afford to throw away no-comment data.</td>
+                <td class="warn">Identical duplicates — the model memorises specific comment-section rows rather than generalising. SMOTE is usually better.</td>
               </tr>
               <tr>
                 <td><strong>SMOTE</strong></td>
-                <td>Creates <em>synthetic</em> spam rows by interpolating between real spam examples in feature space.</td>
+                <td>Creates <em>synthetic</em> comment-section rows by interpolating between real comment-section examples in feature space.</td>
                 <td>Severe imbalance (1:5 or worse). When Oversample causes overfitting. When Class Weighted is not strong enough.</td>
-                <td class="warn">Synthetic rows can sometimes look like ham if spam examples are very scattered. Inspect Precision after applying.</td>
+                <td class="warn">Synthetic rows can sometimes look like no-comment pages if comment-section examples are very scattered. Inspect Precision after applying.</td>
               </tr>
             </tbody>
           </table>
@@ -656,7 +656,7 @@
               <li>Calibrated probabilities</li>
             </ul>
             <span class="algo-best">Start here. Always your baseline.</span>
-            <span class="algo-bad">Underperforms when spam/ham boundary is non-linear.</span>
+            <span class="algo-bad">Underperforms when comment/no-comment boundary is non-linear.</span>
           </div>
 
           <div class="algo-card" style="border-color:rgba(52,199,123,.3)">
@@ -803,7 +803,7 @@
           <div class="dc-body">
             <div class="dc-why">
               <strong>Why this happens</strong><br>
-              If 5–10% of your spam examples are actually labeled ham (or vice versa), the model is
+              If 5–10% of your comment-section examples are actually labeled as no-comment (or vice versa), the model is
               trying to learn a boundary that does not exist. No algorithm can find a pattern that is
               not there. Label noise above ~5% is enough to suppress F1 by 0.05–0.15 and
               ROC-AUC by 0.04–0.10.
@@ -814,7 +814,7 @@
                 <div class="fix-body">
                   <strong>Score your labeled dataset with your best-performing model</strong>
                   <p>Train the final model with your best config. Then score every labeled item.
-                  Look at high-confidence errors: items your model scores as spam=0.92 that are labeled ham.
+                  Look at high-confidence errors: items your model scores as comment-section=0.92 that are labeled no-comment.
                   These are your mislabeling candidates. Review them manually.</p>
                 </div>
               </div>
@@ -841,8 +841,8 @@
 
         <div class="callout red">
           <strong>The hard truth about label noise:</strong>
-          There is a theoretical upper bound on F1 given a certain noise rate. If 10% of your spam examples
-          are wrong, the best F1 you can ever achieve is roughly 0.90 — no algorithm overcomes that.
+          There is a theoretical upper bound on F1 given a certain noise rate. If 10% of your comment-section examples
+          are mislabeled, the best F1 you can ever achieve is roughly 0.90 — no algorithm overcomes that.
           Improving labels is often worth more than any algorithmic change.
         </div>
 

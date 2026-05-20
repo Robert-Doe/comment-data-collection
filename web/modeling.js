@@ -3193,11 +3193,11 @@
           <summary style="padding:8px 12px;cursor:pointer;background:var(--surface-2,#1e293b);display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucketColors[b.bucket]};flex-shrink:0"></span>
             Bucket ${b.bucket} — Fold ${b.bucket} test set
-            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} positive</span>
+            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} with comments</span>
           </summary>
           <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
             <table style="margin:0">
-              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>Positive Count</th><th>Positive Rate</th></tr></thead>
+              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>With Comments</th><th>Comment Rate</th></tr></thead>
               <tbody>
                 ${b.domains.map((d) => `
                   <tr>

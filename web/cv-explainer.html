@@ -631,8 +631,8 @@
         <h2><span class="num" style="background:var(--purple)">6</span> How the final threshold is chosen</h2>
 
         <p>
-          The final model outputs a probability between 0 and 1 for each candidate (higher = more likely spam).
-          The threshold is the cutoff above which you call something positive. You need to choose it.
+          The final model outputs a probability between 0 and 1 for each candidate (higher = more likely to have a comment section).
+          The threshold is the cutoff above which you call something a match. You need to choose it.
         </p>
 
         <p>
@@ -693,8 +693,8 @@
           Notice what happens as you drag the slider:
         </p>
         <ul style="padding-left:20px;margin-bottom:14px">
-          <li style="margin-bottom:8px"><strong>Too low a threshold</strong> (e.g. 0.10) — nearly everything gets flagged as spam. Recall is perfect but Precision collapses. Lots of false positives.</li>
-          <li style="margin-bottom:8px"><strong>Too high a threshold</strong> (e.g. 0.85) — only the most obvious spam gets caught. Precision is perfect but Recall collapses. Lots of missed spam.</li>
+          <li style="margin-bottom:8px"><strong>Too low a threshold</strong> (e.g. 0.10) — nearly everything gets flagged as having a comment section. Recall is perfect but Precision collapses. Lots of false positives.</li>
+          <li style="margin-bottom:8px"><strong>Too high a threshold</strong> (e.g. 0.85) — only the most obvious comment pages get caught. Precision is perfect but Recall collapses. Lots of missed comment sections.</li>
           <li style="margin-bottom:8px"><strong>The sweet spot</strong> — somewhere in the middle, F1 peaks. That is where the system lands.</li>
         </ul>
 
@@ -712,16 +712,16 @@
           <div class="decision-card">
             <h4>Lower threshold → higher Recall</h4>
             <ul>
-              <li>Catches more spam — fewer misses</li>
-              <li>Also catches more legitimate comments (false positives)</li>
-              <li>Right choice when missing spam is costly</li>
+              <li>Catches more comment sections — fewer misses</li>
+              <li>Also catches more pages without comments (false positives)</li>
+              <li>Right choice when missing comment sections is costly</li>
             </ul>
           </div>
           <div class="decision-card">
             <h4>Higher threshold → higher Precision</h4>
             <ul>
-              <li>Everything flagged is almost certainly spam</li>
-              <li>Misses some real spam (false negatives)</li>
+              <li>Everything flagged almost certainly has a comment section</li>
+              <li>Misses some real comment sections (false negatives)</li>
               <li>Right choice when false positives are costly</li>
             </ul>
           </div>
@@ -778,7 +778,7 @@
               </tr>
               <tr>
                 <td>ROC-AUC &lt; 0.75 across all folds</td>
-                <td>The model is not separating spam from ham reliably</td>
+                <td>The model is not separating pages with comments from pages without comments reliably</td>
                 <td class="bad">Re-examine features; add data; try a different algorithm</td>
               </tr>
               <tr>
@@ -896,7 +896,7 @@
           chipStatus.textContent = 'Too low → false positives';
           chipStatus.style.color = 'var(--amber)';
         } else if (t > bestT + 0.1) {
-          chipStatus.textContent = 'Too high → missing spam';
+          chipStatus.textContent = 'Too high → missing comment sections';
           chipStatus.style.color = 'var(--red)';
         } else if (t < bestT) {
           chipStatus.textContent = 'Slightly low';
