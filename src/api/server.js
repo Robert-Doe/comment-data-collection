@@ -538,8 +538,12 @@ function createApp(config = getConfig()) {
 
       const syntheticPagesRoot = path.resolve(__dirname, '../../synthetic_data/pages');
 
-      // Build the base URL from the incoming request so it works on any host/port
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Build the base URL from the incoming request. When running behind a
+      // reverse proxy (Caddy), use X-Forwarded-Host / X-Forwarded-Proto so the
+      // URLs resolve to the public hostname, not localhost:3000.
+      const proto = req.get('x-forwarded-proto') || req.protocol;
+      const fwdHost = req.get('x-forwarded-host') || req.get('host');
+      const baseUrl = `${proto}://${fwdHost}`;
 
       // Optional filter: comma-separated prompt IDs e.g. "prompt_01,prompt_03"
       const rawFilter = String((req.body && req.body.promptFilter) || '').trim();
@@ -2323,24 +2327,24 @@ function createApp(config = getConfig()) {
   // ── End Crawler API ───────────────────────────────────────────────────────────
 
   // ── Synthetic Data Bank ───────────────────────────────────────────────────────
-  // Serves the 2,000 synthetic HTML comment pages under /synthetic/<prompt_id>/<page>.html
+  // Serves the 4,000 synthetic HTML UGC pages under /synthetic/<prompt_id>/<page>.html
   // Pages live in: synthetic_data/pages/prompt_NN/
   // Index listing: GET /synthetic  →  HTML directory of all prompt sets + pages
+  //
+  // Route handlers must be registered BEFORE the static middleware so they are
+  // reached before serve-static can intercept the directory requests.
   const syntheticRoot = require('path').resolve(__dirname, '../../synthetic_data/pages');
-  app.use('/synthetic', express.static(syntheticRoot, {
-    index: false,         // Do not auto-serve index.html — we handle the listing ourselves
-    extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
-    setHeaders(res) {
-      // Allow the scanner/crawler to fetch these pages cross-origin
-      res.setHeader('Access-Control-Allow-Origin', '*');
-    },
-  }));
 
   // Directory index: GET /synthetic  →  list all prompt sets
   app.get('/synthetic', async (_req, res, next) => {
     try {
       const fsSync = require('fs');
       const path = require('path');
+      if (!fsSync.existsSync(syntheticRoot)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Synthetic UGC Bank</title></head><body><h1>Synthetic UGC Bank</h1><p style="color:#888">No synthetic pages have been generated yet.</p></body></html>`);
+        return;
+      }
       const promptDirs = fsSync.readdirSync(syntheticRoot)
         .filter((d) => d.startsWith('prompt_'))
         .sort();
@@ -2373,7 +2377,7 @@ function createApp(config = getConfig()) {
 </head>
 <body>
   <h1>Synthetic Comment Section Bank</h1>
-  <p>2,000 target HTML pages across 20 prompt sets · All pages label: <strong>positive</strong> (comment section present)</p>
+  <p>4,000 target HTML pages across 40 prompt sets · All pages label: <strong>positive</strong> (UGC section present)</p>
   <table>
     <thead><tr><th>Prompt Set</th><th>Pages Generated</th><th>Files</th></tr></thead>
     <tbody>${rows.join('\n')}</tbody>
@@ -2382,7 +2386,7 @@ function createApp(config = getConfig()) {
     const fsSync = require('fs');
     const path = require('path');
     return sum + fsSync.readdirSync(path.join(syntheticRoot, dir)).filter((f) => f.endsWith('.html')).length;
-  }, 0)} / 2,000 pages generated</p>
+  }, 0)} / 4,000 pages generated</p>
 </body>
 </html>`);
     } catch (err) { next(err); }
@@ -2421,6 +2425,18 @@ function createApp(config = getConfig()) {
 </html>`);
     } catch (err) { next(err); }
   });
+
+  // Static file serving last — catches /synthetic/<promptId>/<page>.html requests.
+  // Must come AFTER the route handlers above so the GET /synthetic and
+  // GET /synthetic/:promptId handlers are not shadowed by the static middleware.
+  app.use('/synthetic', express.static(syntheticRoot, {
+    index: false,         // Do not auto-serve index.html — we handle the listing ourselves
+    extensions: ['html'], // Allow /synthetic/prompt_01/page_001 → page_001.html
+    setHeaders(res) {
+      // Allow the scanner/crawler to fetch these pages cross-origin
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    },
+  }));
   // ── End Synthetic Data Bank ───────────────────────────────────────────────────
 
   app.use((error, _req, res, _next) => {

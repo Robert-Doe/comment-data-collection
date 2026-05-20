@@ -1813,7 +1813,7 @@ function scoreFeatures(features) {
   add(features.repeating_group_count >= 4 && features.sibling_homogeneity_score >= 0.75, 2, 'strong_repeating_structure');
   add(features.text_contains_links && features.repeating_group_count >= 3, 1, 'repeating_link_collection');
 
-  subtract(features.table_row_structure, 6, 'table_row_structure');
+  subtract(features.table_row_structure && !(features.has_text_content && features.text_word_count >= 40), 6, 'table_row_structure');
   subtract(features.no_text_content_in_units, 6, 'no_text_content_in_units');
   subtract(features.add_to_cart_present, 8, 'add_to_cart_present');
   subtract(features.nav_header_ancestor, 4, 'nav_header_ancestor');

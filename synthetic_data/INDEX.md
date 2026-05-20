@@ -106,6 +106,7 @@ Organized by structural era, mirroring how prompts 01–20 cover comment section
 | 40 | 100 / 100 | `/synthetic/prompt_40/` |
 
 **Total:** 4000 / 4,000
+**Total:** 4,000 / 4,000
 
 ---
 
