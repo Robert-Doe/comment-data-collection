@@ -20,6 +20,7 @@
   const compareImbalanceButton = document.getElementById('compare-imbalance');
   const imbalanceResults = document.getElementById('imbalance-results');
   const modelList = document.getElementById('model-list');
+  const modelThresholdTunerPanel = document.getElementById('model-threshold-tuner-panel');
   const scoreModelId = document.getElementById('score-model-id');
   const scoreJobId = document.getElementById('score-job-id');
   const scoreJobForm = document.getElementById('score-job-form');
@@ -55,6 +56,17 @@
   const liveProbeInspectNotes = document.getElementById('live-probe-inspect-notes');
   const liveProbeInspectMarkup = document.getElementById('live-probe-inspect-markup');
   const liveProbeInspectClose = document.getElementById('live-probe-inspect-close');
+  const diagVariantId = document.getElementById('diag-variant-id');
+  const diagAlgorithm = document.getElementById('diag-algorithm');
+  const diagImbalanceStrategy = document.getElementById('diag-imbalance-strategy');
+  const diagJobIds = document.getElementById('diag-job-ids');
+  const diagCrossValidateButton = document.getElementById('diag-cross-validate');
+  const diagLearningCurveButton = document.getElementById('diag-learning-curve');
+  const diagMessage = document.getElementById('diag-message');
+  const diagCvResult = document.getElementById('diag-cv-result');
+  const diagLcResult = document.getElementById('diag-lc-result');
+  const diagDomainBucketsButton = document.getElementById('diag-domain-buckets');
+  const diagBucketResult = document.getElementById('diag-bucket-result');
   const archetypeModelId = document.getElementById('archetype-model-id');
   const archetypeJobIds = document.getElementById('archetype-job-ids');
   const archetypeTopN = document.getElementById('archetype-top-n');
@@ -1544,8 +1556,16 @@
     syncOverviewPolling();
   }
 
+  function populateDiagVariantSelect(variants) {
+    if (!diagVariantId) return;
+    const current = diagVariantId.value;
+    diagVariantId.innerHTML = (variants || []).map((v) => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.title || v.id)}</option>`).join('') || '<option value="">No variants</option>';
+    if (current && (variants || []).find((v) => v.id === current)) diagVariantId.value = current;
+  }
+
   function renderVariantCards(variants) {
     currentVariants = variants || [];
+    populateDiagVariantSelect(currentVariants);
     if (!currentVariants.length) {
       variantCards.className = 'model-card-grid empty';
       variantCards.textContent = 'No model variants are available.';
@@ -1826,6 +1846,10 @@
           <span>0.00</span><span>0.25</span><span>0.50</span><span>0.75</span><span>1.00</span>
         </div>
       </div>
+      <div class="threshold-apply-row">
+        <button class="primary compact th-apply-${uid}" type="button">Apply This Threshold</button>
+        <span class="th-apply-msg-${uid} candidate-copy" aria-live="polite" style="margin-left:10px"></span>
+      </div>
     `;
 
     const dot    = article.querySelector(`.th-dot-${uid}`);
@@ -1856,8 +1880,35 @@
       tnEl.textContent   = p.tn;
     };
 
+    const applyBtn = article.querySelector(`.th-apply-${uid}`);
+    const applyMsg = article.querySelector(`.th-apply-msg-${uid}`);
+
     slider.addEventListener('input', () => update(Number(slider.value)));
     if (jumpBtn) jumpBtn.addEventListener('click', () => { slider.value = bestIdx; update(bestIdx); });
+
+    if (applyBtn && artifactId) {
+      applyBtn.addEventListener('click', async () => {
+        const currentThreshold = parseFloat(valEl.textContent);
+        if (!Number.isFinite(currentThreshold)) return;
+        applyBtn.disabled = true;
+        applyMsg.textContent = 'Saving…';
+        try {
+          await fetchJson(`/api/modeling/models/${encodeURIComponent(artifactId)}/threshold`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold: currentThreshold }),
+          });
+          applyMsg.textContent = `Threshold ${currentThreshold.toFixed(2)} saved — model list updated.`;
+          await refreshPage();
+        } catch (err) {
+          applyMsg.textContent = `Error: ${err && err.message ? err.message : String(err)}`;
+        } finally {
+          applyBtn.disabled = false;
+        }
+      });
+    } else if (applyBtn) {
+      applyBtn.style.display = 'none'; // no artifactId = read-only view
+    }
 
     return article;
   }
@@ -1919,6 +1970,7 @@
                 <td>
                   <div class="action-stack">
                     <button class="secondary compact" type="button" data-use-model="${escapeHtml(model.id || '')}">Use</button>
+                    <button class="secondary compact" type="button" data-tune-model="${escapeHtml(model.id || '')}">Tune Threshold</button>
                     <a class="link-button compact" href="${escapeHtml(runtimeModelUrl(model.id || ''))}">Runtime JSON</a>
                     <button class="secondary compact danger" type="button" data-delete-model="${escapeHtml(model.id || '')}">Delete</button>
                   </div>
@@ -2656,22 +2708,37 @@
     const strategyMeta = getImbalanceStrategyMeta(imbalanceStrategy);
     currentTrainingVariantId = variantId;
     setMessage(trainMessage, `Training model using ${formatAlgorithmName(algorithm)} with ${strategyMeta.title}…`, false);
-    const body = {
-      variantId,
-      jobIds: trainJobIds.value.trim(),
-      algorithm,
-      imbalanceStrategy,
-    };
-    const result = await fetchJson('/api/modeling/train', {
+
+    // POST returns 202 immediately with a jobId — training runs server-side.
+    // We poll every 3 s so the proxy timeout is never an issue.
+    const { jobId } = await fetchJson('/api/modeling/train', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        variantId,
+        jobIds: trainJobIds.value.trim(),
+        algorithm,
+        imbalanceStrategy,
+      }),
     });
-    setMessage(trainMessage, `Saved model ${result.summary ? result.summary.id : ''}.`, false);
-    renderTrainResult(result.model || null);
-    await refreshPage();
+
+    const startedAt = Date.now();
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const status = await fetchJson(`/api/modeling/train-status/${jobId}`);
+      if (status.status === 'done') {
+        const result = status.result;
+        setMessage(trainMessage, `Saved model ${result.summary ? result.summary.id : ''}.`, false);
+        renderTrainResult(result.model || null);
+        await refreshPage();
+        return;
+      }
+      if (status.status === 'error') {
+        throw new Error(status.error || 'Training failed on the server');
+      }
+      const elapsed = Math.round((Date.now() - startedAt) / 1000);
+      setMessage(trainMessage, `Training in progress… (${elapsed}s elapsed)`, false);
+    }
   }
 
   async function compareImbalanceStrategies() {
@@ -2684,11 +2751,10 @@
     const imbalanceStrategy = trainImbalanceStrategy ? trainImbalanceStrategy.value : 'baseline';
     const strategyMeta = getImbalanceStrategyMeta(imbalanceStrategy);
     setMessage(imbalanceMessage, `Comparing imbalance strategies for ${selectedVariant ? selectedVariant.title : variantId} with ${formatAlgorithmName(algorithm)} from ${strategyMeta.title}…`, false);
-    const result = await fetchJson('/api/modeling/compare-imbalance', {
+
+    const { jobId } = await fetchJson('/api/modeling/compare-imbalance', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         variantId,
         jobIds: trainJobIds.value.trim(),
@@ -2696,8 +2762,22 @@
         imbalanceStrategy,
       }),
     });
-    setMessage(imbalanceMessage, 'Comparison ready.', false);
-    renderImbalanceComparison(result);
+
+    const startedAt = Date.now();
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const status = await fetchJson(`/api/modeling/compare-status/${jobId}`);
+      if (status.status === 'done') {
+        setMessage(imbalanceMessage, 'Comparison ready.', false);
+        renderImbalanceComparison(status.result);
+        return;
+      }
+      if (status.status === 'error') {
+        throw new Error(status.error || 'Comparison failed on the server');
+      }
+      const elapsed = Math.round((Date.now() - startedAt) / 1000);
+      setMessage(imbalanceMessage, `Comparing strategies… (${elapsed}s elapsed)`, false);
+    }
   }
 
   refreshButton.addEventListener('click', () => {
@@ -2776,6 +2856,33 @@
       scoreModelId.value = modelId;
       siteGroupModelId.value = modelId;
       liveProbeModelId.value = modelId;
+      return;
+    }
+
+    const tuneButton = event.target.closest('[data-tune-model]');
+    if (tuneButton) {
+      const modelId = tuneButton.getAttribute('data-tune-model');
+      if (!modelId || !modelThresholdTunerPanel) return;
+      // Clear previous tuner and show a loading state
+      modelThresholdTunerPanel.innerHTML = '<p class="candidate-copy" style="padding:12px 0">Loading threshold curve…</p>';
+      modelThresholdTunerPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      fetchJson(`/api/modeling/models/${encodeURIComponent(modelId)}`)
+        .then((data) => {
+          const artifact = data && data.model ? data.model : data;
+          const curve    = Array.isArray(artifact && artifact.threshold_curve) ? artifact.threshold_curve : [];
+          modelThresholdTunerPanel.innerHTML = '';
+          if (!curve.length) {
+            modelThresholdTunerPanel.innerHTML = '<p class="message">This model has no threshold curve — retrain to generate one.</p>';
+            return;
+          }
+          const tunerEl = buildThresholdTuner(curve, modelId);
+          if (tunerEl) modelThresholdTunerPanel.appendChild(tunerEl);
+        })
+        .catch((err) => {
+          if (modelThresholdTunerPanel) {
+            modelThresholdTunerPanel.innerHTML = `<p class="message error">${escapeHtml(err && err.message ? err.message : String(err))}</p>`;
+          }
+        });
       return;
     }
 
@@ -2931,6 +3038,280 @@
       clearProbeProgress(liveProbeProgress);
     });
   });
+
+  function renderCvResult(result) {
+    if (!diagCvResult) return;
+    if (!result || !result.folds) {
+      diagCvResult.className = 'table-shell empty';
+      diagCvResult.textContent = 'No cross-validation result.';
+      return;
+    }
+    const agg = result.aggregate || {};
+    const aggRows = [
+      ['F1 (at 0.50 threshold)', agg.f1],
+      ['F1 (per-fold best threshold ★)', agg.best_f1],
+      ['Precision', agg.precision],
+      ['Recall', agg.recall],
+      ['ROC-AUC', agg.roc_auc],
+      ['PR-AUC', agg.pr_auc],
+      ['Top-1 Accuracy', agg.top_1_accuracy],
+      ['MRR', agg.mean_reciprocal_rank],
+    ].filter(([, s]) => s && s.mean !== null);
+
+    const completedFolds = result.folds.filter((f) => !f.skipped);
+
+    diagCvResult.className = 'table-shell';
+    diagCvResult.innerHTML = `
+      <h3 style="margin:0 0 8px">5-Fold Cross-Validation — ${escapeHtml(result.algorithm || '')} / ${escapeHtml(result.imbalance_strategy || '')} — ${result.total_labeled} labeled rows</h3>
+      <h4 style="margin:8px 0 4px;color:var(--muted)">Aggregate (mean ± std [95% CI])</h4>
+      <table>
+        <thead><tr><th>Metric</th><th>Mean</th><th>Std</th><th>95% CI</th><th>n Folds</th></tr></thead>
+        <tbody>
+          ${aggRows.map(([label, stat]) => `
+            <tr>
+              <td>${escapeHtml(label)}</td>
+              <td class="mono">${stat.mean !== null ? Number(stat.mean).toFixed(3) : '—'}</td>
+              <td class="mono">${stat.std !== null ? Number(stat.std).toFixed(3) : '—'}</td>
+              <td class="mono">${stat.ci95_lo !== null ? `[${Number(stat.ci95_lo).toFixed(3)}–${Number(stat.ci95_hi).toFixed(3)}]` : '—'}</td>
+              <td class="mono">${stat.n}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <h4 style="margin:16px 0 4px;color:var(--muted)">Per-Fold Results</h4>
+      <table>
+        <thead><tr><th>Fold</th><th>Train</th><th>Test</th><th>F1 @0.50</th><th>Best F1 ★</th><th>Best Threshold</th><th>Precision</th><th>Recall</th><th>ROC-AUC</th><th>PR-AUC</th></tr></thead>
+        <tbody>
+          ${result.folds.map((fold) => {
+            if (fold.skipped) {
+              return `<tr><td>${fold.fold}</td><td colspan="9" style="color:var(--muted)">${escapeHtml(fold.reason || 'Skipped')}</td></tr>`;
+            }
+            const cm = fold.metrics && fold.metrics.candidate_metrics || {};
+            const bm = fold.best_threshold_metrics || {};
+            const bestF1 = bm.f1 !== undefined ? bm.f1 : null;
+            const f1At50 = cm.f1 !== undefined ? cm.f1 : null;
+            const bestIsBetter = bestF1 !== null && f1At50 !== null && bestF1 > f1At50 + 0.01;
+            return `
+              <tr>
+                <td class="mono">${fold.fold}</td>
+                <td class="mono">${fold.train_count}</td>
+                <td class="mono">${fold.test_count}</td>
+                <td class="mono">${f1At50 !== null ? f1At50 : '—'}</td>
+                <td class="mono" style="${bestIsBetter ? 'color:var(--accent);font-weight:600' : ''}">${bestF1 !== null ? bestF1 : '—'}</td>
+                <td class="mono">${bm.threshold !== undefined ? bm.threshold : '—'}</td>
+                <td class="mono">${cm.precision !== undefined ? cm.precision : '—'}</td>
+                <td class="mono">${cm.recall !== undefined ? cm.recall : '—'}</td>
+                <td class="mono">${cm.roc_auc !== null && cm.roc_auc !== undefined ? cm.roc_auc : '—'}</td>
+                <td class="mono">${cm.pr_auc !== null && cm.pr_auc !== undefined ? cm.pr_auc : '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      ${completedFolds.length > 0 ? `
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;color:var(--muted);font-size:0.85rem">Calibration curves (per fold)</summary>
+          <table style="margin-top:8px">
+            <thead><tr><th>Fold</th><th>Bin</th><th>Count</th><th>Mean Predicted</th><th>Fraction Positive</th></tr></thead>
+            <tbody>
+              ${completedFolds.flatMap((f) => (f.calibration || []).map((b) => `
+                <tr>
+                  <td class="mono">${f.fold}</td>
+                  <td class="mono">${b.bin_start}–${b.bin_end}</td>
+                  <td class="mono">${b.count}</td>
+                  <td class="mono">${b.mean_predicted !== null ? b.mean_predicted : '—'}</td>
+                  <td class="mono">${b.fraction_positive !== null ? b.fraction_positive : '—'}</td>
+                </tr>
+              `)).join('')}
+            </tbody>
+          </table>
+        </details>
+      ` : ''}
+    `;
+  }
+
+  function renderLcResult(result) {
+    if (!diagLcResult) return;
+    if (!result || !result.points) {
+      diagLcResult.className = 'table-shell empty';
+      diagLcResult.textContent = 'No learning curve result.';
+      return;
+    }
+    diagLcResult.className = 'table-shell';
+    diagLcResult.innerHTML = `
+      <h3 style="margin:0 0 8px">Learning Curve — ${escapeHtml(result.algorithm || '')} / ${escapeHtml(result.imbalance_strategy || '')} — fixed test set: ${result.test_count} rows</h3>
+      <p style="font-size:0.85rem;color:var(--muted);margin:0 0 8px">Each row trains on a fraction of the domain-holdout training split. A gap between Train F1 and Test F1 indicates overfitting; converging curves signal data saturation.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Fraction</th><th>Train Count</th><th>Train F1</th><th>Train ROC-AUC</th>
+            <th>Test F1</th><th>Test Precision</th><th>Test Recall</th><th>Test ROC-AUC</th><th>Test PR-AUC</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${result.points.map((pt) => {
+            if (pt.skipped) {
+              return `<tr><td class="mono">${(pt.fraction * 100).toFixed(0)}%</td><td colspan="8" style="color:var(--muted)">${escapeHtml(pt.reason || 'Skipped')}</td></tr>`;
+            }
+            const tr = pt.train_metrics || {};
+            const te = pt.test_metrics || {};
+            const gap = (typeof tr.f1 === 'number' && typeof te.f1 === 'number') ? (tr.f1 - te.f1) : null;
+            const gapColor = gap === null ? '' : (gap > 0.1 ? 'color:var(--warn,#f59e0b)' : 'color:var(--accent)');
+            return `
+              <tr>
+                <td class="mono">${(pt.fraction * 100).toFixed(0)}%</td>
+                <td class="mono">${pt.train_count}</td>
+                <td class="mono" style="${gapColor}">${tr.f1 !== undefined ? tr.f1 : '—'}</td>
+                <td class="mono">${tr.roc_auc !== null && tr.roc_auc !== undefined ? tr.roc_auc : '—'}</td>
+                <td class="mono">${te.f1 !== undefined ? te.f1 : '—'}</td>
+                <td class="mono">${te.precision !== undefined ? te.precision : '—'}</td>
+                <td class="mono">${te.recall !== undefined ? te.recall : '—'}</td>
+                <td class="mono">${te.roc_auc !== null && te.roc_auc !== undefined ? te.roc_auc : '—'}</td>
+                <td class="mono">${te.pr_auc !== null && te.pr_auc !== undefined ? te.pr_auc : '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function renderDomainBuckets(result) {
+    if (!diagBucketResult) return;
+    if (!result || !Array.isArray(result.buckets)) {
+      diagBucketResult.className = 'table-shell empty';
+      diagBucketResult.textContent = 'No domain bucket data.';
+      return;
+    }
+    const bucketColors = ['var(--accent)', '#60a5fa', '#f87171', '#34d399', '#a78bfa'];
+    diagBucketResult.className = 'table-shell';
+    diagBucketResult.innerHTML = `
+      <h3 style="margin:0 0 6px">Domain Bucket Inspector — ${result.total_labeled} labeled rows across ${result.n_buckets} buckets</h3>
+      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 12px">Each domain is deterministically assigned to a bucket by <code>hash(hostname) % 5</code>. Bucket N is the held-out test set for Fold N in cross-validation.</p>
+      ${result.buckets.map((b) => `
+        <details style="margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <summary style="padding:8px 12px;cursor:pointer;background:var(--surface-2,#1e293b);display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucketColors[b.bucket]};flex-shrink:0"></span>
+            Bucket ${b.bucket} — Fold ${b.bucket} test set
+            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} spam</span>
+          </summary>
+          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+            <table style="margin:0">
+              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>Spam Count</th><th>Spam Rate</th></tr></thead>
+              <tbody>
+                ${b.domains.map((d) => `
+                  <tr>
+                    <td class="mono" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(d.domain)}">${escapeHtml(d.domain)}</td>
+                    <td class="mono">${d.count}</td>
+                    <td class="mono">${d.positive_count}</td>
+                    <td class="mono" style="${d.positive_rate > 0.7 ? 'color:var(--accent)' : d.positive_rate < 0.2 ? 'color:var(--muted)' : ''}">${(d.positive_rate * 100).toFixed(1)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      `).join('')}
+    `;
+  }
+
+  if (diagCrossValidateButton) {
+    diagCrossValidateButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
+      runElementAction(diagCrossValidateButton, async () => {
+        setMessage(diagMessage, 'Submitting cross-validation job…', false);
+        if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Running…'; }
+        const { jobId } = await fetchJson('/api/modeling/cross-validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
+            imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        const startedAt = Date.now();
+        for (;;) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const status = await fetchJson(`/api/modeling/diag-status/${jobId}`);
+          if (status.status === 'done') {
+            setMessage(diagMessage, 'Cross-validation complete.', false);
+            renderCvResult(status.result);
+            return;
+          }
+          if (status.status === 'error') throw new Error(status.error || 'Cross-validation failed on the server');
+          const elapsed = Math.round((Date.now() - startedAt) / 1000);
+          setMessage(diagMessage, `Running 5-fold cross-validation… (${elapsed}s elapsed)`, false);
+        }
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Cross-validation failed.'; }
+      });
+    });
+  }
+
+  if (diagLearningCurveButton) {
+    diagLearningCurveButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
+      runElementAction(diagLearningCurveButton, async () => {
+        setMessage(diagMessage, 'Submitting learning curve job…', false);
+        if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Running…'; }
+        const { jobId } = await fetchJson('/api/modeling/learning-curve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
+            imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        const startedAt = Date.now();
+        for (;;) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const status = await fetchJson(`/api/modeling/diag-status/${jobId}`);
+          if (status.status === 'done') {
+            setMessage(diagMessage, 'Learning curve complete.', false);
+            renderLcResult(status.result);
+            return;
+          }
+          if (status.status === 'error') throw new Error(status.error || 'Learning curve failed on the server');
+          const elapsed = Math.round((Date.now() - startedAt) / 1000);
+          setMessage(diagMessage, `Computing learning curve… (${elapsed}s elapsed)`, false);
+        }
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Learning curve failed.'; }
+      });
+    });
+  }
+
+  if (diagDomainBucketsButton) {
+    diagDomainBucketsButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
+      runElementAction(diagDomainBucketsButton, async () => {
+        setMessage(diagMessage, 'Inspecting domain buckets…', false);
+        if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Loading…'; }
+        const result = await fetchJson('/api/modeling/domain-buckets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        setMessage(diagMessage, '', false);
+        renderDomainBuckets(result);
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Domain bucket inspection failed.'; }
+      });
+    });
+  }
 
   renderTrainResult(null);
   renderImbalanceComparison(null);

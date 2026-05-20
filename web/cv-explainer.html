@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cross-Validation Explainer — From CV to Deployed Model</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0f1117;
+        --surface: #181c27;
+        --surface2: #1e2436;
+        --border:  #2a2f3f;
+        --text:    #e2e8f0;
+        --muted:   #8892a4;
+        --accent:  #4f8ef7;
+        --green:   #34c77b;
+        --amber:   #f6a623;
+        --red:     #e05555;
+        --purple:  #9d7ef7;
+        --teal:    #2dd4bf;
+        --radius:  10px;
+        --max-w:   900px;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.75;
+      }
+
+      a { color: var(--accent); }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        padding: 32px 32px 28px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+      }
+      header .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); margin-bottom: 8px; }
+      header h1 { font-size: 28px; font-weight: 700; line-height: 1.2; }
+      header p  { color: var(--muted); margin-top: 10px; font-size: 14px; max-width: 620px; }
+
+      main { max-width: var(--max-w); margin: 0 auto; padding: 44px 32px 100px; }
+
+      nav.toc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 56px;
+      }
+      nav.toc .toc-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+      nav.toc ol { padding-left: 20px; }
+      nav.toc li { margin-bottom: 6px; }
+      nav.toc a  { color: var(--accent); text-decoration: none; font-size: 14px; }
+      nav.toc a:hover { text-decoration: underline; }
+
+      section { margin-bottom: 64px; scroll-margin-top: 24px; }
+      section > h2 {
+        font-size: 21px; font-weight: 700; margin-bottom: 18px;
+        display: flex; align-items: center; gap: 10px;
+      }
+      section > h2 .num {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 50%;
+        background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; flex-shrink: 0;
+      }
+      section > h2 .num.green  { background: var(--green); }
+      section > h2 .num.amber  { background: var(--amber); color: #111; }
+      section > h2 .num.purple { background: var(--purple); }
+      section > h2 .num.teal   { background: var(--teal); color: #111; }
+
+      p { margin-bottom: 14px; }
+      p:last-child { margin-bottom: 0; }
+
+      .callout {
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin: 20px 0;
+        border-left: 3px solid;
+        font-size: 14px;
+      }
+      .callout.blue   { background: rgba(79,142,247,.08); border-color: var(--accent); }
+      .callout.green  { background: rgba(52,199,123,.08); border-color: var(--green); }
+      .callout.amber  { background: rgba(246,166,35,.08); border-color: var(--amber); }
+      .callout.red    { background: rgba(224,85,85,.08);  border-color: var(--red); }
+      .callout.purple { background: rgba(157,126,247,.08);border-color: var(--purple); }
+      .callout strong { display: block; margin-bottom: 4px; }
+
+      code {
+        font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+        font-size: 0.87em;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+
+      /* ── Fold diagram ── */
+      .fold-diagram {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 28px 24px;
+        margin: 24px 0;
+        overflow-x: auto;
+      }
+      .fold-diagram h3 {
+        font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+        color: var(--muted); margin-bottom: 20px; font-weight: 600;
+      }
+      .fold-grid {
+        display: grid;
+        grid-template-columns: 56px repeat(5, 1fr);
+        gap: 5px;
+        min-width: 520px;
+      }
+      .fold-grid .col-label {
+        font-size: 11px; color: var(--muted); text-align: center;
+        font-weight: 600; padding-bottom: 4px; align-self: end;
+      }
+      .fold-grid .row-label {
+        font-size: 12px; color: var(--muted); display: flex; align-items: center;
+        font-weight: 600; padding-right: 8px;
+      }
+      .bucket {
+        height: 36px; border-radius: 6px; display: flex; align-items: center;
+        justify-content: center; font-size: 11px; font-weight: 700;
+        letter-spacing: .04em;
+      }
+      .bucket.train { background: rgba(79,142,247,.18); color: var(--accent); }
+      .bucket.test  { background: rgba(224,85,85,.22);  color: #f87171; border: 1px solid rgba(224,85,85,.4); }
+      .fold-legend {
+        display: flex; gap: 20px; margin-top: 14px; font-size: 12px; color: var(--muted);
+      }
+      .fold-legend span { display: flex; align-items: center; gap: 6px; }
+      .legend-swatch {
+        width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+      }
+      .legend-swatch.train { background: rgba(79,142,247,.35); }
+      .legend-swatch.test  { background: rgba(224,85,85,.35); border: 1px solid rgba(224,85,85,.5); }
+
+      /* ── Stat table ── */
+      table {
+        width: 100%; border-collapse: collapse; font-size: 13.5px;
+        margin: 20px 0;
+      }
+      th {
+        text-align: left; padding: 8px 12px; font-size: 11px;
+        text-transform: uppercase; letter-spacing: .07em;
+        color: var(--muted); border-bottom: 1px solid var(--border);
+      }
+      td { padding: 10px 12px; border-bottom: 1px solid rgba(42,47,63,.6); }
+      tr:last-child td { border-bottom: none; }
+      .mono { font-family: "JetBrains Mono", Consolas, monospace; }
+      .good { color: var(--green); }
+      .warn { color: var(--amber); }
+      .bad  { color: var(--red); }
+
+      /* ── Timeline / flow ── */
+      .flow {
+        display: flex; flex-direction: column; gap: 0;
+        margin: 28px 0; position: relative;
+      }
+      .flow-step {
+        display: flex; align-items: flex-start; gap: 16px;
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .flow-step:last-child { border-bottom: none; }
+      .flow-icon {
+        width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; margin-top: 2px;
+      }
+      .flow-icon.blue   { background: rgba(79,142,247,.15); }
+      .flow-icon.green  { background: rgba(52,199,123,.15); }
+      .flow-icon.amber  { background: rgba(246,166,35,.15); }
+      .flow-icon.purple { background: rgba(157,126,247,.15); }
+      .flow-icon.teal   { background: rgba(45,212,191,.15); }
+      .flow-body h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+      .flow-body p  { font-size: 13.5px; color: var(--muted); margin-bottom: 0; }
+
+      /* ── Threshold curve ── */
+      .threshold-visual {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        margin: 24px 0;
+      }
+      .threshold-visual h3 {
+        font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+        color: var(--muted); margin-bottom: 20px; font-weight: 600;
+      }
+      .curve-row {
+        display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px;
+      }
+      .curve-label { width: 120px; color: var(--muted); flex-shrink: 0; font-size: 12px; }
+      .curve-bar-wrap { flex: 1; background: var(--surface2); border-radius: 4px; height: 22px; overflow: hidden; position: relative; }
+      .curve-bar { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 700; white-space: nowrap; transition: width .4s ease; }
+      .curve-bar.f1        { background: linear-gradient(90deg, rgba(79,142,247,.5), rgba(79,142,247,.8)); color: #fff; }
+      .curve-bar.precision { background: linear-gradient(90deg, rgba(52,199,123,.5), rgba(52,199,123,.8)); color: #111; }
+      .curve-bar.recall    { background: linear-gradient(90deg, rgba(246,166,35,.5), rgba(246,166,35,.8)); color: #111; }
+      .curve-val { width: 48px; text-align: right; font-family: monospace; font-size: 12px; color: var(--text); }
+      .threshold-marker {
+        display: flex; align-items: center; gap: 8px; margin-top: 12px;
+        font-size: 13px; color: var(--muted);
+      }
+      .threshold-marker strong { color: var(--accent); font-size: 15px; }
+
+      .threshold-slider-wrap {
+        margin-top: 20px;
+      }
+      .threshold-slider-wrap label {
+        display: flex; justify-content: space-between; font-size: 13px;
+        color: var(--muted); margin-bottom: 8px;
+      }
+      .threshold-slider-wrap label span { color: var(--accent); font-weight: 700; }
+      input[type=range] {
+        width: 100%; accent-color: var(--accent); cursor: pointer;
+      }
+      .metric-chips {
+        display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+      }
+      .metric-chip {
+        background: var(--surface2); border: 1px solid var(--border);
+        border-radius: 20px; padding: 5px 14px; font-size: 13px;
+      }
+      .metric-chip strong { color: var(--muted); font-size: 11px; display: block; }
+      .metric-chip span   { font-family: monospace; font-weight: 700; }
+      .metric-chip.f1-chip        .chip-val { color: var(--accent); }
+      .metric-chip.precision-chip .chip-val { color: var(--green); }
+      .metric-chip.recall-chip    .chip-val { color: var(--amber); }
+
+      /* ── Decision box ── */
+      .decision-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+      }
+      @media (max-width: 600px) { .decision-grid { grid-template-columns: 1fr; } }
+      .decision-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 18px 20px;
+      }
+      .decision-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+      .decision-card ul { padding-left: 16px; font-size: 13px; color: var(--muted); }
+      .decision-card li { margin-bottom: 5px; }
+      .decision-card.good-card { border-color: rgba(52,199,123,.35); }
+      .decision-card.bad-card  { border-color: rgba(224,85,85,.35);  }
+      .decision-card h4.good   { color: var(--green); }
+      .decision-card h4.bad    { color: var(--red); }
+
+      /* ── Summary box ── */
+      .summary-box {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px 28px;
+        margin-top: 20px;
+      }
+      .summary-box h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--accent); }
+      .summary-box ol { padding-left: 20px; }
+      .summary-box li { margin-bottom: 8px; font-size: 14px; color: var(--muted); }
+      .summary-box li strong { color: var(--text); }
+
+      .big-answer {
+        background: rgba(52,199,123,.07);
+        border: 1px solid rgba(52,199,123,.25);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin: 24px 0;
+        font-size: 15px;
+      }
+      .big-answer .qa-q { font-weight: 700; color: var(--green); margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; }
+      .big-answer .qa-a { line-height: 1.7; }
+
+      hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <p class="eyebrow">Model Lab — Diagnostics Guide</p>
+      <h1>From Cross-Validation to a Deployed Model</h1>
+      <p>A step-by-step walkthrough of what CV actually tells you, which model gets chosen, and exactly how the final threshold is picked.</p>
+    </header>
+
+    <main>
+
+      <nav class="toc">
+        <p class="toc-label">Contents</p>
+        <ol>
+          <li><a href="#what-cv-is">What cross-validation actually does</a></li>
+          <li><a href="#the-five-folds">The 5-fold loop, step by step</a></li>
+          <li><a href="#which-model">Which of the 5 models gets used? (The key question)</a></li>
+          <li><a href="#what-cv-tells-you">What the CV statistics are actually telling you</a></li>
+          <li><a href="#final-model">Training the final model on all your data</a></li>
+          <li><a href="#threshold">How the final threshold is chosen</a></li>
+          <li><a href="#decision">When to proceed vs. when to re-tune</a></li>
+          <li><a href="#summary">The complete workflow, start to finish</a></li>
+        </ol>
+      </nav>
+
+
+      <!-- ── Section 1 ── -->
+      <section id="what-cv-is">
+        <h2><span class="num">1</span> What cross-validation actually does</h2>
+
+        <p>
+          Here is the single most important thing to internalize before anything else:
+        </p>
+
+        <div class="big-answer">
+          <p class="qa-q">What is cross-validation for?</p>
+          <p class="qa-a">
+            Cross-validation is a <strong>measurement tool</strong>, not a training tool. It answers the question:
+            <em>"If I train a model using this algorithm and this imbalance strategy, how good would it be — reliably, not just on a lucky split?"</em>
+            It does not produce the model you deploy. It tells you whether it is safe to train the model you will deploy.
+          </p>
+        </div>
+
+        <p>
+          Think of it like a clinical trial. You run 5 independent trials of the same treatment on 5 different patient cohorts.
+          You are not choosing which cohort to keep — you are measuring whether the treatment reliably works.
+          Once you have that confidence, you administer the treatment to everyone.
+        </p>
+
+        <div class="callout blue">
+          <strong>The analogy that sticks:</strong>
+          CV is like checking the weather from 5 different forecasting services before deciding whether to plan an outdoor event.
+          You are not picking one forecast to deploy — you are using all 5 to build confidence in what the weather will actually be.
+        </div>
+      </section>
+
+
+      <!-- ── Section 2 ── -->
+      <section id="the-five-folds">
+        <h2><span class="num">2</span> The 5-fold loop, step by step</h2>
+
+        <p>
+          In this system, the 5 folds are based on <strong>domain buckets</strong> — every domain is deterministically
+          assigned to one of 5 buckets using <code>hash(hostname) % 5</code>. This means the same domain always
+          lands in the same bucket, and all rows from a domain stay together (no leakage from the same site
+          appearing in both train and test).
+        </p>
+
+        <div class="fold-diagram">
+          <h3>Domain bucket assignment across 5 folds</h3>
+          <div class="fold-grid">
+            <div></div>
+            <div class="col-label">Bucket 0</div>
+            <div class="col-label">Bucket 1</div>
+            <div class="col-label">Bucket 2</div>
+            <div class="col-label">Bucket 3</div>
+            <div class="col-label">Bucket 4</div>
+
+            <div class="row-label">Fold 0</div>
+            <div class="bucket test">TEST</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+
+            <div class="row-label">Fold 1</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket test">TEST</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+
+            <div class="row-label">Fold 2</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket test">TEST</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+
+            <div class="row-label">Fold 3</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket test">TEST</div>
+            <div class="bucket train">TRAIN</div>
+
+            <div class="row-label">Fold 4</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket train">TRAIN</div>
+            <div class="bucket test">TEST</div>
+          </div>
+          <div class="fold-legend">
+            <span><span class="legend-swatch train"></span>Train — model learns from this</span>
+            <span><span class="legend-swatch test"></span>Test — model is evaluated on this, never seen during training</span>
+          </div>
+        </div>
+
+        <p>
+          For each fold, the system:
+        </p>
+        <ol style="padding-left:20px;margin-bottom:14px">
+          <li style="margin-bottom:8px">Trains a fresh model on the 4 training buckets</li>
+          <li style="margin-bottom:8px">Scores every row in the held-out test bucket</li>
+          <li style="margin-bottom:8px">Computes F1, Precision, Recall, ROC-AUC, PR-AUC at the 0.50 threshold</li>
+          <li style="margin-bottom:8px">Also sweeps thresholds to find the one that maximises F1 for <em>that fold</em></li>
+          <li style="margin-bottom:8px">Records calibration (predicted probability vs. actual positive rate)</li>
+          <li style="margin-bottom:8px">Then <strong>discards the model weights</strong></li>
+        </ol>
+
+        <div class="callout amber">
+          <strong>Step 6 surprises people every time:</strong>
+          The fold model is not saved. Its weights are thrown away after measuring performance.
+          Only the metrics survive. This is intentional — fold models are probes, not products.
+        </div>
+      </section>
+
+
+      <!-- ── Section 3 ── -->
+      <section id="which-model">
+        <h2><span class="num" style="background:var(--red)">?</span> Which of the 5 models gets used?</h2>
+
+        <div class="big-answer">
+          <p class="qa-q">The answer you came here for</p>
+          <p class="qa-a">
+            <strong>None of them.</strong> All 5 fold-models are discarded. Zero. They are measurement instruments,
+            not the final product. After cross-validation, you train a completely separate,
+            <strong>6th model on all of your labeled data</strong> using the algorithm and strategy
+            that CV told you was reliable. That 6th model is the one you deploy.
+          </p>
+        </div>
+
+        <p>
+          Why not just keep the best-performing fold model? Three reasons:
+        </p>
+
+        <div class="decision-grid">
+          <div class="decision-card bad-card">
+            <h4 class="bad">Problem 1 — It trained on less data</h4>
+            <ul>
+              <li>Every fold model only saw 80% of your labeled data</li>
+              <li>The final model trained on 100% will almost always be stronger</li>
+              <li>You have the data — use all of it</li>
+            </ul>
+          </div>
+          <div class="decision-card bad-card">
+            <h4 class="bad">Problem 2 — Its test set is no longer unseen</h4>
+            <ul>
+              <li>Once you pick a fold model, its "test" bucket has already influenced your decision</li>
+              <li>That leaks information and inflates your confidence in the threshold</li>
+              <li>The fairness guarantee breaks down</li>
+            </ul>
+          </div>
+          <div class="decision-card bad-card">
+            <h4 class="bad">Problem 3 — Selection bias</h4>
+            <ul>
+              <li>If you pick the best-fold model, you are capitalising on luck</li>
+              <li>The fold that happened to get easier domains will look best</li>
+              <li>That bias will not generalise to production traffic</li>
+            </ul>
+          </div>
+          <div class="decision-card good-card">
+            <h4 class="good">The right path</h4>
+            <ul>
+              <li>Use CV to validate the <em>configuration</em> (algorithm + strategy)</li>
+              <li>Once satisfied, click Train in Model Lab — same settings, all data</li>
+              <li>That model gets the threshold curve and gets deployed</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── Section 4 ── -->
+      <section id="what-cv-tells-you">
+        <h2><span class="num">4</span> What the CV statistics are actually telling you</h2>
+
+        <p>
+          After 5 folds, you have 5 F1 scores, 5 thresholds, 5 ROC-AUC values, and so on.
+          The system computes <strong>mean ± std</strong> and a <strong>95% confidence interval</strong>
+          across those 5 values. Here is how to read them:
+        </p>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:20px 0">
+          <table>
+            <thead>
+              <tr>
+                <th>What you see</th>
+                <th>What it means in plain English</th>
+                <th>Good signal?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="mono">F1 mean = 0.81</span></td>
+                <td>On average, across all 5 test windows, the model gets an F1 of 0.81</td>
+                <td class="good">Strong</td>
+              </tr>
+              <tr>
+                <td><span class="mono">F1 std = 0.02</span></td>
+                <td>The folds agreed closely — low sensitivity to which domains ended up as test</td>
+                <td class="good">Stable</td>
+              </tr>
+              <tr>
+                <td><span class="mono">F1 std = 0.15</span></td>
+                <td>The folds disagreed a lot — one domain bucket is much harder or easier than the others</td>
+                <td class="bad">Unstable</td>
+              </tr>
+              <tr>
+                <td><span class="mono">95% CI [0.77–0.85]</span></td>
+                <td>If you trained 100 times on random splits, F1 would land here 95% of the time</td>
+                <td class="good">Tight = confident</td>
+              </tr>
+              <tr>
+                <td><span class="mono">Best F1 ★ mean = 0.86</span></td>
+                <td>Average F1 when each fold used its own optimal threshold (not fixed 0.50)</td>
+                <td class="good">Shows threshold potential</td>
+              </tr>
+              <tr>
+                <td><span class="mono">Best threshold = 0.34</span></td>
+                <td>On average, folds needed to lower the threshold below 0.50 to hit their best F1</td>
+                <td>Informs where to start for final model</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout blue">
+          <strong>The gap between F1 @0.50 and Best F1 ★ tells you something important:</strong>
+          A large gap (e.g. 0.72 vs. 0.86) means the model's raw probabilities are shifted — it is systematically
+          under-confident about positives. The threshold for the final model will likely need to be below 0.50.
+          A small gap means 0.50 is already near-optimal.
+        </div>
+
+        <h3 style="font-size:16px;font-weight:700;margin:28px 0 12px">A concrete example to read together</h3>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:0 0 16px">
+          <table>
+            <thead>
+              <tr><th>Fold</th><th>Train rows</th><th>Test rows</th><th>F1 @0.50</th><th>Best F1 ★</th><th>Best threshold</th><th>ROC-AUC</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="mono">0</td><td class="mono">3,241</td><td class="mono">812</td><td class="mono good">0.83</td><td class="mono good">0.87</td><td class="mono">0.31</td><td class="mono">0.91</td></tr>
+              <tr><td class="mono">1</td><td class="mono">3,108</td><td class="mono">945</td><td class="mono good">0.81</td><td class="mono good">0.85</td><td class="mono">0.33</td><td class="mono">0.90</td></tr>
+              <tr><td class="mono">2</td><td class="mono">3,390</td><td class="mono">663</td><td class="mono warn">0.74</td><td class="mono warn">0.79</td><td class="mono">0.28</td><td class="mono">0.87</td></tr>
+              <tr><td class="mono">3</td><td class="mono">3,255</td><td class="mono">798</td><td class="mono good">0.82</td><td class="mono good">0.86</td><td class="mono">0.30</td><td class="mono">0.91</td></tr>
+              <tr><td class="mono">4</td><td class="mono">3,197</td><td class="mono">856</td><td class="mono good">0.80</td><td class="mono good">0.84</td><td class="mono">0.34</td><td class="mono">0.89</td></tr>
+              <tr style="border-top:2px solid var(--border)">
+                <td><strong>Aggregate</strong></td>
+                <td></td><td></td>
+                <td class="mono"><strong>0.80 ± 0.033</strong></td>
+                <td class="mono"><strong>0.84 ± 0.029</strong></td>
+                <td class="mono"><strong>0.312 avg</strong></td>
+                <td class="mono"><strong>0.896 ± 0.016</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Reading the example above: Fold 2 is the weak fold — it has fewer test rows and lower F1.
+          That likely means Bucket 2 has domains with unusual characteristics (maybe mostly foreign-language sites,
+          or one very large domain that dominates the bucket). This does not mean the model is bad —
+          it means one domain cluster is harder. The aggregate std of 0.033 is acceptable.
+          You would proceed to train the final model.
+        </p>
+
+        <p>
+          Also notice: the average best threshold across all folds is about <strong>0.31</strong>, not 0.50.
+          This is a signal you will use when picking the final model's threshold.
+        </p>
+      </section>
+
+
+      <!-- ── Section 5 ── -->
+      <section id="final-model">
+        <h2><span class="num" style="background:var(--green)">5</span> Training the final model on all your data</h2>
+
+        <p>
+          Once CV has convinced you the configuration works, you click <strong>Train</strong> in Model Lab
+          (same variant, same algorithm, same imbalance strategy). This time, there is no fold rotation —
+          the full labeled dataset is used for training, and the model is saved to disk as a real artifact.
+        </p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-icon blue">📋</div>
+            <div class="flow-body">
+              <h4>All labeled data → Training set</h4>
+              <p>Every row that has a label goes in. No bucket withheld. This is more data than any single fold had, so the final model is typically stronger than any fold model was.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon amber">⚙️</div>
+            <div class="flow-body">
+              <h4>Same algorithm + imbalance strategy as CV</h4>
+              <p>You use exactly what CV validated. Switching the algorithm at this point would mean CV told you nothing useful.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon purple">📊</div>
+            <div class="flow-body">
+              <h4>Model scores itself on the training data</h4>
+              <p>After fitting, the model scores every training row to produce a distribution of predicted probabilities. This is used to sweep the threshold curve.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon teal">💾</div>
+            <div class="flow-body">
+              <h4>Model artifact saved to disk</h4>
+              <p>Weights, vectorizer, threshold curve, and evaluation metrics are all written to the artifact directory. This is the model that production will load.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout green">
+          <strong>Why does the final model train on all data if CV held some back?</strong>
+          CV proved your approach is sound. Now you want the <em>strongest possible</em> model —
+          and more training data is almost always better. The CV validation already gave you the
+          honest estimate of how it will perform on unseen domains. The final model is just
+          putting that approach to full use.
+        </div>
+      </section>
+
+
+      <!-- ── Section 6 ── -->
+      <section id="threshold">
+        <h2><span class="num" style="background:var(--purple)">6</span> How the final threshold is chosen</h2>
+
+        <p>
+          The final model outputs a probability between 0 and 1 for each candidate (higher = more likely spam).
+          The threshold is the cutoff above which you call something positive. You need to choose it.
+        </p>
+
+        <p>
+          After training, the system runs a <strong>threshold curve</strong>: it tries every threshold from
+          0.05 to 0.95 in small steps and records the resulting Precision, Recall, and F1 at each step.
+          Then it picks the threshold that gives the highest F1.
+        </p>
+
+        <div class="threshold-visual">
+          <h3>Interactive threshold curve — drag the slider</h3>
+          <div id="curve-bars">
+            <div class="curve-row">
+              <div class="curve-label">F1 Score</div>
+              <div class="curve-bar-wrap"><div class="curve-bar f1" id="bar-f1" style="width:0%"></div></div>
+              <div class="curve-val" id="val-f1">—</div>
+            </div>
+            <div class="curve-row">
+              <div class="curve-label">Precision</div>
+              <div class="curve-bar-wrap"><div class="curve-bar precision" id="bar-prec" style="width:0%"></div></div>
+              <div class="curve-val" id="val-prec">—</div>
+            </div>
+            <div class="curve-row">
+              <div class="curve-label">Recall</div>
+              <div class="curve-bar-wrap"><div class="curve-bar recall" id="bar-rec" style="width:0%"></div></div>
+              <div class="curve-val" id="val-rec">—</div>
+            </div>
+          </div>
+
+          <div class="threshold-slider-wrap">
+            <label>
+              Threshold
+              <span id="thresh-display">0.31</span>
+            </label>
+            <input type="range" id="thresh-slider" min="5" max="95" value="31" step="1">
+          </div>
+
+          <div class="metric-chips" id="metric-chips">
+            <div class="metric-chip f1-chip">
+              <strong>F1</strong>
+              <span class="chip-val" id="chip-f1">—</span>
+            </div>
+            <div class="metric-chip precision-chip">
+              <strong>Precision</strong>
+              <span class="chip-val" id="chip-prec">—</span>
+            </div>
+            <div class="metric-chip recall-chip">
+              <strong>Recall</strong>
+              <span class="chip-val" id="chip-rec">—</span>
+            </div>
+            <div class="metric-chip" id="chip-note" style="border-color:var(--accent);background:rgba(79,142,247,.08)">
+              <strong>Status</strong>
+              <span class="chip-val" id="chip-status" style="color:var(--accent)">—</span>
+            </div>
+          </div>
+        </div>
+
+        <p>
+          Notice what happens as you drag the slider:
+        </p>
+        <ul style="padding-left:20px;margin-bottom:14px">
+          <li style="margin-bottom:8px"><strong>Too low a threshold</strong> (e.g. 0.10) — nearly everything gets flagged as spam. Recall is perfect but Precision collapses. Lots of false positives.</li>
+          <li style="margin-bottom:8px"><strong>Too high a threshold</strong> (e.g. 0.85) — only the most obvious spam gets caught. Precision is perfect but Recall collapses. Lots of missed spam.</li>
+          <li style="margin-bottom:8px"><strong>The sweet spot</strong> — somewhere in the middle, F1 peaks. That is where the system lands.</li>
+        </ul>
+
+        <div class="callout purple">
+          <strong>What about the per-fold thresholds from CV?</strong>
+          The average best threshold from CV (e.g. 0.31 in our example) is useful as a <em>sanity check</em> — if
+          the final model's optimal threshold lands near that range, everything is consistent. But the final threshold
+          is determined independently from the final model's own scoring run, not averaged from the folds.
+          The fold thresholds are hints, not inputs.
+        </div>
+
+        <h3 style="font-size:16px;font-weight:700;margin:28px 0 12px">The three-way trade-off you are always navigating</h3>
+
+        <div class="decision-grid">
+          <div class="decision-card">
+            <h4>Lower threshold → higher Recall</h4>
+            <ul>
+              <li>Catches more spam — fewer misses</li>
+              <li>Also catches more legitimate comments (false positives)</li>
+              <li>Right choice when missing spam is costly</li>
+            </ul>
+          </div>
+          <div class="decision-card">
+            <h4>Higher threshold → higher Precision</h4>
+            <ul>
+              <li>Everything flagged is almost certainly spam</li>
+              <li>Misses some real spam (false negatives)</li>
+              <li>Right choice when false positives are costly</li>
+            </ul>
+          </div>
+          <div class="decision-card" style="grid-column:span 2">
+            <h4>F1 maximisation — the default</h4>
+            <ul>
+              <li>F1 is the harmonic mean of Precision and Recall — it forces a balance</li>
+              <li>Picking the threshold that maximises F1 is the standard starting point</li>
+              <li>You can adjust it afterward based on production feedback (e.g. "we're seeing too many false positives" → raise threshold by 0.05)</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── Section 7 ── -->
+      <section id="decision">
+        <h2><span class="num" style="background:var(--amber);color:#111">7</span> When to proceed vs. when to re-tune</h2>
+
+        <p>
+          After CV, you have to make a judgment call. Here is a practical rubric:
+        </p>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:20px 0">
+          <table>
+            <thead>
+              <tr><th>Signal</th><th>Meaning</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>F1 std &lt; 0.05</td>
+                <td>Folds agree closely — the model is stable across domain distributions</td>
+                <td class="good">Proceed to train final model</td>
+              </tr>
+              <tr>
+                <td>F1 std &gt; 0.10</td>
+                <td>One or more folds are wildly different — some domains are far harder or easier</td>
+                <td class="warn">Inspect domain buckets; consider adding more data from the weak bucket</td>
+              </tr>
+              <tr>
+                <td>One fold is much worse</td>
+                <td>That bucket likely contains a domain cluster with unusual patterns</td>
+                <td class="warn">Use "Inspect Domain Buckets" to see which domains are in the problem fold</td>
+              </tr>
+              <tr>
+                <td>Best F1 ★ much higher than F1 @0.50</td>
+                <td>The model is systematically under-confident — probabilities are compressed toward the middle</td>
+                <td>Expected and normal; the threshold curve will correct for this</td>
+              </tr>
+              <tr>
+                <td>ROC-AUC &gt; 0.85 but F1 is low</td>
+                <td>The model ranks correctly but needs threshold tuning — class imbalance is likely the cause</td>
+                <td>Try SMOTE or class weight strategies, or rely on threshold tuning</td>
+              </tr>
+              <tr>
+                <td>ROC-AUC &lt; 0.75 across all folds</td>
+                <td>The model is not separating spam from ham reliably</td>
+                <td class="bad">Re-examine features; add data; try a different algorithm</td>
+              </tr>
+              <tr>
+                <td>Some folds skipped</td>
+                <td>A bucket had fewer than the minimum samples needed to train</td>
+                <td class="warn">Collect more labeled data or relax the minimum; check the skip reason</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
+      <!-- ── Section 8 ── -->
+      <section id="summary">
+        <h2><span class="num" style="background:var(--teal);color:#111">8</span> The complete workflow, start to finish</h2>
+
+        <div class="summary-box">
+          <h3>What a normal day looks like in Model Lab</h3>
+          <ol>
+            <li><strong>Pick a variant, algorithm, and imbalance strategy</strong> in the Diagnostics panel.</li>
+            <li><strong>Run 5-Fold Cross-Validation.</strong> Wait 1–5 minutes. Review the aggregate table.</li>
+            <li><strong>Check the std.</strong> Is it below 0.05? Good. Is one fold wildly off? Use "Inspect Domain Buckets" to understand why.</li>
+            <li><strong>Note the average best threshold</strong> from the fold results. It tells you roughly where the final model's threshold will land (useful as a sanity check later).</li>
+            <li><strong>Optionally run the Learning Curve</strong> to check whether adding more training data would still help (gap between train and test F1 closing = saturation reached).</li>
+            <li><strong>If CV looks good, go to Train Variants</strong> and click Train with the same settings. This trains on <em>all</em> data — not a fold.</li>
+            <li><strong>The trained model artifact appears in Trained Models.</strong> Its evaluation card shows the threshold curve result — the threshold that maximised F1 on its own scoring run.</li>
+            <li><strong>Verify the final threshold</strong> makes sense. It should be near the average fold threshold from step 4. If it is very different, investigate why (data distribution shift, imbalance correction side-effect, etc.).</li>
+            <li><strong>Deploy the model</strong> by setting it as active. The threshold from the artifact is what the live scanner uses.</li>
+          </ol>
+        </div>
+
+        <div class="callout green" style="margin-top:28px">
+          <strong>The three-sentence version:</strong>
+          Cross-validation runs 5 temporary models to measure how reliable your configuration is — none of those models survive.
+          Once you trust the configuration, you train a real model on all your data and that model picks its own optimal threshold
+          from a sweep of its own probability scores. The fold thresholds are reference points, not the answer.
+        </div>
+
+        <hr>
+
+        <p style="color:var(--muted);font-size:13px;text-align:center;margin-top:0">
+          See also:
+          <a href="./threshold-explainer.html">Threshold Tuning Explainer</a> ·
+          <a href="./ml-explainer.html">ML Feature Explainer</a> ·
+          <a href="./modeling.html">Model Lab</a>
+        </p>
+      </section>
+
+    </main>
+
+    <script>
+      // ── Interactive threshold curve simulation ──
+      // Simulated metrics based on a realistic logistic regression curve shape.
+      // The "true" optimal is at threshold ~0.31 to match the CV example above.
+
+      function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+      function computeMetrics(t) {
+        // Simulate a realistic precision/recall curve for a moderately imbalanced dataset.
+        // These are not real model outputs — they are illustrative.
+        const tp = sigmoid((0.38 - t) * 14) * 0.92;   // recall-like shape
+        const fp = sigmoid((0.25 - t) * 12) * 0.55;   // how many negatives we capture
+
+        const recall    = Math.min(0.97, Math.max(0.01, tp));
+        const precision = Math.min(0.99, Math.max(0.01, recall / (recall + fp * 0.65 + 0.02)));
+        const f1 = precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0;
+
+        return {
+          f1:        Math.round(f1 * 1000) / 1000,
+          precision: Math.round(precision * 1000) / 1000,
+          recall:    Math.round(recall * 1000) / 1000,
+        };
+      }
+
+      // Pre-compute to find the true optimum
+      let bestT = 0.31, bestF1 = 0;
+      for (let t = 0.05; t <= 0.95; t += 0.01) {
+        const m = computeMetrics(t);
+        if (m.f1 > bestF1) { bestF1 = m.f1; bestT = Math.round(t * 100) / 100; }
+      }
+
+      const slider = document.getElementById('thresh-slider');
+      const display = document.getElementById('thresh-display');
+      const barF1   = document.getElementById('bar-f1');
+      const barPrec = document.getElementById('bar-prec');
+      const barRec  = document.getElementById('bar-rec');
+      const valF1   = document.getElementById('val-f1');
+      const valPrec = document.getElementById('val-prec');
+      const valRec  = document.getElementById('val-rec');
+      const chipF1   = document.getElementById('chip-f1');
+      const chipPrec = document.getElementById('chip-prec');
+      const chipRec  = document.getElementById('chip-rec');
+      const chipStatus = document.getElementById('chip-status');
+
+      function update(val) {
+        const t = val / 100;
+        const m = computeMetrics(t);
+        display.textContent = t.toFixed(2);
+        barF1.style.width   = (m.f1 * 100) + '%';
+        barPrec.style.width = (m.precision * 100) + '%';
+        barRec.style.width  = (m.recall * 100) + '%';
+        valF1.textContent   = m.f1.toFixed(3);
+        valPrec.textContent = m.precision.toFixed(3);
+        valRec.textContent  = m.recall.toFixed(3);
+        chipF1.textContent   = m.f1.toFixed(3);
+        chipPrec.textContent = m.precision.toFixed(3);
+        chipRec.textContent  = m.recall.toFixed(3);
+
+        const diff = Math.abs(t - bestT);
+        if (diff < 0.03) {
+          chipStatus.textContent = 'Near optimal ★';
+          chipStatus.style.color = 'var(--green)';
+        } else if (t < bestT - 0.1) {
+          chipStatus.textContent = 'Too low → false positives';
+          chipStatus.style.color = 'var(--amber)';
+        } else if (t > bestT + 0.1) {
+          chipStatus.textContent = 'Too high → missing spam';
+          chipStatus.style.color = 'var(--red)';
+        } else if (t < bestT) {
+          chipStatus.textContent = 'Slightly low';
+          chipStatus.style.color = 'var(--accent)';
+        } else {
+          chipStatus.textContent = 'Slightly high';
+          chipStatus.style.color = 'var(--accent)';
+        }
+      }
+
+      slider.addEventListener('input', () => update(Number(slider.value)));
+      update(Number(slider.value));
+    </script>
+
+  </body>
+</html>

@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>When CV Looks Bad — Diagnosis &amp; Fixes</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0f1117;
+        --surface: #181c27;
+        --surface2: #1e2436;
+        --border:  #2a2f3f;
+        --text:    #e2e8f0;
+        --muted:   #8892a4;
+        --accent:  #4f8ef7;
+        --green:   #34c77b;
+        --amber:   #f6a623;
+        --red:     #e05555;
+        --purple:  #9d7ef7;
+        --teal:    #2dd4bf;
+        --radius:  10px;
+        --max-w:   920px;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.75;
+      }
+
+      a { color: var(--accent); }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        padding: 32px 32px 28px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+      }
+      header .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--red); margin-bottom: 8px; }
+      header h1 { font-size: 28px; font-weight: 700; line-height: 1.2; }
+      header p  { color: var(--muted); margin-top: 10px; font-size: 14px; max-width: 640px; }
+
+      main { max-width: var(--max-w); margin: 0 auto; padding: 44px 32px 100px; }
+
+      nav.toc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 56px;
+      }
+      nav.toc .toc-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+      nav.toc ol { padding-left: 20px; }
+      nav.toc li { margin-bottom: 6px; }
+      nav.toc a  { color: var(--accent); text-decoration: none; font-size: 14px; }
+      nav.toc a:hover { text-decoration: underline; }
+
+      section { margin-bottom: 68px; scroll-margin-top: 24px; }
+      section > h2 {
+        font-size: 21px; font-weight: 700; margin-bottom: 20px;
+        padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; gap: 12px;
+      }
+      .tag {
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .08em; padding: 3px 9px; border-radius: 20px;
+        white-space: nowrap;
+      }
+      .tag.red    { background: rgba(224,85,85,.15);  color: var(--red);    border: 1px solid rgba(224,85,85,.3);    }
+      .tag.amber  { background: rgba(246,166,35,.15); color: var(--amber);  border: 1px solid rgba(246,166,35,.3);  }
+      .tag.blue   { background: rgba(79,142,247,.15); color: var(--accent); border: 1px solid rgba(79,142,247,.3);  }
+      .tag.green  { background: rgba(52,199,123,.15); color: var(--green);  border: 1px solid rgba(52,199,123,.3);  }
+      .tag.purple { background: rgba(157,126,247,.15);color: var(--purple); border: 1px solid rgba(157,126,247,.3); }
+
+      p { margin-bottom: 14px; }
+      p:last-child { margin-bottom: 0; }
+
+      .callout {
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin: 20px 0;
+        border-left: 3px solid;
+        font-size: 14px;
+      }
+      .callout.blue   { background: rgba(79,142,247,.07); border-color: var(--accent); }
+      .callout.green  { background: rgba(52,199,123,.07); border-color: var(--green); }
+      .callout.amber  { background: rgba(246,166,35,.07); border-color: var(--amber); }
+      .callout.red    { background: rgba(224,85,85,.07);  border-color: var(--red); }
+      .callout.purple { background: rgba(157,126,247,.07);border-color: var(--purple); }
+      .callout strong { display: block; margin-bottom: 4px; }
+
+      code {
+        font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+        font-size: 0.87em;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+
+      /* ── Symptom→cause→fix cards ── */
+      .diagnosis-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      .diagnosis-card .dc-symptom {
+        padding: 14px 20px;
+        background: var(--surface2);
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+        display: flex; align-items: flex-start; gap: 10px;
+      }
+      .diagnosis-card .dc-symptom .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+      .diagnosis-card .dc-symptom strong { display: block; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+      .diagnosis-card .dc-body { padding: 18px 20px; }
+      .diagnosis-card .dc-why {
+        font-size: 13px; color: var(--muted); margin-bottom: 14px;
+        padding-bottom: 14px; border-bottom: 1px solid var(--border);
+      }
+      .diagnosis-card .dc-why strong { color: var(--text); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
+      .dc-fixes { display: flex; flex-direction: column; gap: 10px; }
+      .fix-step {
+        display: flex; gap: 12px; align-items: flex-start;
+        background: var(--surface2); border-radius: 8px; padding: 12px 14px;
+      }
+      .fix-step .fix-num {
+        width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+        color: #fff; font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;
+      }
+      .fix-step .fix-num.try1 { background: var(--green); color: #111; }
+      .fix-step .fix-num.try2 { background: var(--accent); }
+      .fix-step .fix-num.try3 { background: var(--amber); color: #111; }
+      .fix-step .fix-num.try4 { background: var(--purple); }
+      .fix-step .fix-body { font-size: 13.5px; }
+      .fix-step .fix-body strong { display: block; margin-bottom: 3px; }
+      .fix-step .fix-body p { margin: 0; color: var(--muted); font-size: 13px; }
+
+      /* ── Algorithm comparison grid ── */
+      .algo-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
+        margin: 20px 0;
+      }
+      .algo-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 16px 18px;
+      }
+      .algo-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+      .algo-card ul { padding-left: 14px; font-size: 12.5px; color: var(--muted); }
+      .algo-card li { margin-bottom: 5px; }
+      .algo-card .algo-best { font-size: 11px; color: var(--green); font-weight: 600; margin-top: 10px; display: block; }
+      .algo-card .algo-bad  { font-size: 11px; color: var(--red);   font-weight: 600; margin-top: 4px; display: block; }
+
+      /* ── Strategy comparison ── */
+      .strategy-table {
+        width: 100%; border-collapse: collapse; font-size: 13px; margin: 20px 0;
+      }
+      .strategy-table th {
+        text-align: left; padding: 8px 12px; font-size: 11px;
+        text-transform: uppercase; letter-spacing: .07em;
+        color: var(--muted); border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+      }
+      .strategy-table td { padding: 11px 12px; border-bottom: 1px solid rgba(42,47,63,.5); vertical-align: top; }
+      .strategy-table tr:last-child td { border-bottom: none; }
+      .strategy-table .mono { font-family: monospace; }
+      .strategy-table .good { color: var(--green); }
+      .strategy-table .warn { color: var(--amber); }
+      .strategy-table .bad  { color: var(--red); }
+
+      /* ── Decision tree ── */
+      .dtree {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 24px 20px; margin: 24px 0;
+      }
+      .dtree-node {
+        border-left: 2px solid var(--border); padding-left: 20px; margin-bottom: 14px;
+        position: relative;
+      }
+      .dtree-node::before {
+        content: ''; position: absolute; left: -1px; top: 12px;
+        width: 14px; height: 2px; background: var(--border);
+      }
+      .dtree-q {
+        font-weight: 700; font-size: 14px; margin-bottom: 8px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .dtree-q .q-icon { font-size: 16px; }
+      .dtree-answer {
+        font-size: 13px; color: var(--muted); padding: 8px 12px;
+        background: var(--surface2); border-radius: 6px; margin-bottom: 6px;
+        display: flex; gap: 10px; align-items: flex-start;
+      }
+      .dtree-answer .a-label { font-weight: 700; flex-shrink: 0; }
+      .dtree-answer .a-label.yes { color: var(--green); }
+      .dtree-answer .a-label.no  { color: var(--red); }
+
+      /* ── Learning curve ── */
+      .lc-diagram {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+      }
+      @media (max-width: 640px) { .lc-diagram { grid-template-columns: 1fr; } }
+      .lc-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 16px 18px;
+      }
+      .lc-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+      .lc-card p  { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+      .lc-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+      .lc-bar-row { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); }
+      .lc-bar-label { width: 60px; flex-shrink: 0; }
+      .lc-bar-wrap { flex: 1; background: var(--surface2); border-radius: 3px; height: 14px; }
+      .lc-bar-inner { height: 100%; border-radius: 3px; }
+      .train-bar { background: rgba(79,142,247,.55); }
+      .test-bar  { background: rgba(52,199,123,.55); }
+
+      /* ── Ordered checklist ── */
+      .checklist {
+        background: var(--surface2); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 22px 24px; margin: 24px 0;
+      }
+      .checklist h3 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--accent); }
+      .checklist ol { padding-left: 22px; }
+      .checklist li { margin-bottom: 12px; font-size: 14px; }
+      .checklist li strong { display: block; color: var(--text); }
+      .checklist li span  { color: var(--muted); font-size: 13px; }
+
+      hr { border: none; border-top: 1px solid var(--border); margin: 52px 0; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <p class="eyebrow">Model Lab — Diagnostics Guide</p>
+      <h1>When CV Looks Bad — Diagnosis &amp; Fixes</h1>
+      <p>Every symptom you can see in the cross-validation results table, what it means, and exactly what to change next. Companion to the <a href="./cv-explainer.html">CV Explainer</a>.</p>
+    </header>
+
+    <main>
+
+      <nav class="toc">
+        <p class="toc-label">Contents</p>
+        <ol>
+          <li><a href="#order-of-operations">Order of operations — what to try first</a></li>
+          <li><a href="#high-variance">High variance: folds disagree (high std)</a></li>
+          <li><a href="#one-fold-outlier">One fold is dramatically worse than the rest</a></li>
+          <li><a href="#low-f1-everywhere">Low F1 across all folds</a></li>
+          <li><a href="#good-auc-bad-f1">Good ROC-AUC but bad F1</a></li>
+          <li><a href="#imbalance-strategies">The imbalance strategies and when to use each</a></li>
+          <li><a href="#algorithm-choice">Switching algorithms — who does what</a></li>
+          <li><a href="#learning-curve-signals">Reading the learning curve to know what's missing</a></li>
+          <li><a href="#label-quality">When data quality is the real problem</a></li>
+        </ol>
+      </nav>
+
+
+      <!-- ── Order of operations ── -->
+      <section id="order-of-operations">
+        <h2>Order of operations <span class="tag amber">Start here</span></h2>
+
+        <p>
+          When CV disappoints, the temptation is to immediately jump to "add more data" or "try a fancier algorithm."
+          Resist that. The cheapest fixes usually come first. Work through this order:
+        </p>
+
+        <div class="checklist">
+          <h3>What to try, in order of cheapest to most expensive</h3>
+          <ol>
+            <li>
+              <strong>1. Run Imbalance Comparison first (costs nothing)</strong>
+              <span>The Model Lab has a "Compare Imbalance Strategies" button that trains your variant 5 ways side-by-side.
+              Class imbalance is the single most common reason for poor F1 and it is the cheapest fix.
+              Always check this before touching the algorithm or collecting data.</span>
+            </li>
+            <li>
+              <strong>2. Try a different algorithm (costs one CV run)</strong>
+              <span>Logistic Regression is the right starting point, but it assumes linear separability.
+              If your spam/ham boundary is non-linear, Random Forest or Gradient Boosting can gain 5–15 F1 points
+              with zero extra data. Run CV again with the new algorithm — same variant, same strategy.</span>
+            </li>
+            <li>
+              <strong>3. Inspect domain buckets (costs nothing)</strong>
+              <span>If one fold is the outlier, use "Inspect Domain Buckets" to see which sites landed there.
+              A single dominant domain with unusual patterns can tank a whole fold. Understanding this
+              tells you whether the problem is fixable with data or structural.</span>
+            </li>
+            <li>
+              <strong>4. Collect more labeled data (costs real time)</strong>
+              <span>Only do this after exhausting the above. If the learning curve shows that more data would still help
+              (train–test gap is still large at full training size), then labeling is worth it.
+              If the curves have converged, more data will not meaningfully improve F1.</span>
+            </li>
+            <li>
+              <strong>5. Review label quality (costs real time but fixes the root)</strong>
+              <span>If F1 is stubbornly low across all algorithms and strategies, and you have plenty of data,
+              mislabeled examples are often the culprit. A 5–10% label noise rate can suppress F1 by 0.05–0.15.
+              Score some items with your best model and review the high-confidence mistakes.</span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+
+      <!-- ── High variance ── -->
+      <section id="high-variance">
+        <h2>High variance: folds disagree <span class="tag red">High std</span></h2>
+
+        <div class="diagnosis-card">
+          <div class="dc-symptom">
+            <div class="icon">📊</div>
+            <div>
+              <strong>What you see in the CV table</strong>
+              F1 std is above 0.08–0.10. The 95% confidence interval is wide (e.g. [0.60–0.82]).
+              Individual fold F1 values range widely, e.g. 0.61, 0.78, 0.82, 0.79, 0.75.
+            </div>
+          </div>
+          <div class="dc-body">
+            <div class="dc-why">
+              <strong>Why this happens</strong><br>
+              Each fold tests on a different set of domains. High variance means the model's performance is highly
+              sensitive to <em>which</em> domains end up in the test set. Some domain clusters are genuinely harder
+              (foreign-language sites, sites with very few spam examples, sites where spam looks exactly like ham).
+              The model is not bad — it just faces an easier test in some folds than others.
+            </div>
+            <div class="dc-fixes">
+              <div class="fix-step">
+                <div class="fix-num try1">1</div>
+                <div class="fix-body">
+                  <strong>Inspect domain buckets — find the weak fold</strong>
+                  <p>Click "Inspect Domain Buckets" in the Diagnostics panel. Look at the bucket that corresponds
+                  to your lowest-F1 fold. What domains are in it? Are they all from the same niche?
+                  Are there very few labeled rows? This tells you whether the problem is structural or fixable with data.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try2">2</div>
+                <div class="fix-body">
+                  <strong>Collect more labeled data from the weak bucket's domains</strong>
+                  <p>If the weak fold has 3× fewer spam examples than the others, the model is not learning those
+                  patterns. Label more examples from those domains specifically. Even 50–100 extra rows
+                  from the right domains can dramatically tighten the folds.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try3">3</div>
+                <div class="fix-body">
+                  <strong>Accept it if the domains are structurally different</strong>
+                  <p>If the weak bucket contains foreign-language sites or a completely different content type,
+                  no amount of data from your existing distribution will fix it — the model genuinely cannot
+                  generalise there. In that case, document it and consider whether those domains should be
+                  in scope at all. The mean F1 across the other 4 folds is your real number.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout amber">
+          <strong>How much variance is acceptable?</strong>
+          Std below 0.05 is comfortable. Std of 0.05–0.09 is worth investigating but not disqualifying —
+          proceed with caution and note the weak fold. Std above 0.10 means the model is too sensitive to
+          the test distribution to trust; diagnose before training the final model.
+        </div>
+      </section>
+
+
+      <!-- ── One fold outlier ── -->
+      <section id="one-fold-outlier">
+        <h2>One fold is dramatically worse <span class="tag red">Outlier fold</span></h2>
+
+        <div class="diagnosis-card">
+          <div class="dc-symptom">
+            <div class="icon">⚠️</div>
+            <div>
+              <strong>What you see in the CV table</strong>
+              Four folds cluster tightly (e.g. F1 around 0.80–0.84) and one fold is an outlier
+              (e.g. F1 = 0.52). The overall std is high because of that one fold.
+            </div>
+          </div>
+          <div class="dc-body">
+            <div class="dc-why">
+              <strong>Why this happens</strong><br>
+              Domain buckets are assigned by <code>hash(hostname) % 5</code>. This is deterministic and fair,
+              but it cannot guarantee equal difficulty. One bucket might contain a site that accounts for
+              40% of all spam in your dataset — so when that bucket is the test set, the training distribution
+              shifts dramatically and the model struggles. Or the bucket might simply have too few labeled rows
+              to evaluate reliably.
+            </div>
+            <div class="dc-fixes">
+              <div class="fix-step">
+                <div class="fix-num try1">1</div>
+                <div class="fix-body">
+                  <strong>Open "Inspect Domain Buckets" and look at the outlier bucket</strong>
+                  <p>Check: how many domains? How many labeled rows? What is the spam rate?
+                  If one domain dominates the bucket (e.g. 80% of the rows), that domain's
+                  characteristics are controlling the fold's difficulty.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try2">2</div>
+                <div class="fix-body">
+                  <strong>Check whether the outlier fold has very few test rows</strong>
+                  <p>If the weak fold's test set has fewer than ~100 labeled rows, the F1 measurement
+                  is noisy anyway — a handful of wrong predictions swings it wildly. Look at the "Test" column
+                  in the per-fold table. If it is small, the low F1 may just be statistical noise from tiny sample size.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try3">3</div>
+                <div class="fix-body">
+                  <strong>Label more rows specifically from that bucket's dominant domain</strong>
+                  <p>If one site controls a bucket and it is genuinely hard, more labeled examples
+                  from that site go into the training set of the other folds — the model will learn
+                  its patterns and the weak fold will improve on next CV.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try4">4</div>
+                <div class="fix-body">
+                  <strong>Try Gradient Boosting — it handles domain-specific pattern shifts better</strong>
+                  <p>Logistic Regression uses a single global linear boundary. If one domain cluster
+                  requires a different decision boundary, it will always underfit that cluster.
+                  Tree-based models can learn domain-specific subregions of the feature space.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── Low F1 everywhere ── -->
+      <section id="low-f1-everywhere">
+        <h2>Low F1 across all folds <span class="tag red">Systematic failure</span></h2>
+
+        <p>
+          This is a different problem from high variance. All folds agree: the model is just not good.
+          The diagnosis path depends on what else the CV table tells you.
+        </p>
+
+        <div class="dtree">
+          <div class="dtree-node">
+            <div class="dtree-q"><span class="q-icon">❓</span> Is ROC-AUC above 0.80 across all folds?</div>
+            <div class="dtree-answer">
+              <span class="a-label yes">YES →</span>
+              <span>The model <em>can</em> rank spam above ham — it just doesn't threshold well.
+              This is a <strong>class imbalance problem</strong>, not a feature problem.
+              Jump to <a href="#good-auc-bad-f1">Section 5</a> and try imbalance strategies.</span>
+            </div>
+            <div class="dtree-answer">
+              <span class="a-label no">NO →</span>
+              <span>The model cannot even rank correctly. Continue below.</span>
+            </div>
+          </div>
+
+          <div class="dtree-node" style="margin-left:24px">
+            <div class="dtree-q"><span class="q-icon">❓</span> Do you have fewer than ~500 labeled examples total?</div>
+            <div class="dtree-answer">
+              <span class="a-label yes">YES →</span>
+              <span>The model is almost certainly <strong>data-starved</strong>. With fewer than 500 rows
+              split across 5 folds, each fold trains on only ~400 rows and tests on ~100. That is not enough.
+              Label more before anything else.</span>
+            </div>
+            <div class="dtree-answer">
+              <span class="a-label no">NO →</span>
+              <span>Data volume is not the issue. Continue below.</span>
+            </div>
+          </div>
+
+          <div class="dtree-node" style="margin-left:48px">
+            <div class="dtree-q"><span class="q-icon">❓</span> Are you using Logistic Regression?</div>
+            <div class="dtree-answer">
+              <span class="a-label yes">YES →</span>
+              <span>Try <strong>Random Forest</strong> or <strong>Gradient Boosting</strong>.
+              LR assumes a linear decision boundary. If spam and ham overlap in feature space in
+              a non-linear way, LR will always underfit. Tree-based models can find complex boundaries.</span>
+            </div>
+            <div class="dtree-answer">
+              <span class="a-label no">NO →</span>
+              <span>Continue below.</span>
+            </div>
+          </div>
+
+          <div class="dtree-node" style="margin-left:72px">
+            <div class="dtree-q"><span class="q-icon">❓</span> Are you using the right variant for the sites you are targeting?</div>
+            <div class="dtree-answer">
+              <span class="a-label yes">YES →</span>
+              <span>Check label quality. If ROC-AUC is low despite a good algorithm and
+              enough data, <strong>mislabeled examples</strong> are the most likely cause.
+              See <a href="#label-quality">Section 9</a>.</span>
+            </div>
+            <div class="dtree-answer">
+              <span class="a-label no">NO →</span>
+              <span>Switch to the variant whose features match your content type.
+              The "keywords excluded" variant removes text features — use it only for
+              non-English or keyword-agnostic detection. The standard variants include all signals.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── Good AUC, bad F1 ── -->
+      <section id="good-auc-bad-f1">
+        <h2>Good ROC-AUC, bad F1 <span class="tag amber">Imbalance problem</span></h2>
+
+        <div class="diagnosis-card">
+          <div class="dc-symptom">
+            <div class="icon">📈</div>
+            <div>
+              <strong>What you see in the CV table</strong>
+              ROC-AUC is 0.88–0.92 across all folds (strong). But F1 @0.50 is 0.55–0.65 (weak).
+              The Best F1 ★ is much higher (0.75–0.80), achieved at a threshold of 0.20–0.35.
+            </div>
+          </div>
+          <div class="dc-body">
+            <div class="dc-why">
+              <strong>Why this happens</strong><br>
+              ROC-AUC measures <em>ranking quality</em> — does the model put spam above ham in its probability scores?
+              F1 measures <em>classification quality</em> at a specific threshold. A large gap between
+              the two means the model ranks correctly but its probabilities are compressed toward the middle —
+              it is not confidently pushing spam toward 1.0. This is classic <strong>class imbalance</strong>:
+              when ham outnumbers spam 10:1, the model's "safe" bet is to output moderate probabilities for everyone,
+              which destroys F1 at 0.50 but leaves ranking intact.
+            </div>
+            <div class="dc-fixes">
+              <div class="fix-step">
+                <div class="fix-num try1">1</div>
+                <div class="fix-body">
+                  <strong>Run "Compare Imbalance Strategies" — this is exactly what it is for</strong>
+                  <p>The comparison trains your variant 5 ways (Baseline, Class Weighted, Undersample,
+                  Oversample, SMOTE) and shows F1/Precision/Recall side by side. Pick whichever
+                  strategy improves F1 the most without collapsing Precision.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try2">2</div>
+                <div class="fix-body">
+                  <strong>Try Class Weighted first — it is the safest option</strong>
+                  <p>It does not add or remove rows — it just tells the optimizer to penalise
+                  spam mistakes more heavily. No data fabrication, no information loss.
+                  Almost always better than Baseline when spam:ham ratio exceeds 1:3.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try3">3</div>
+                <div class="fix-body">
+                  <strong>If Class Weighted is not enough, try SMOTE</strong>
+                  <p>SMOTE creates synthetic spam examples by interpolating between real spam rows
+                  in feature space. It can push the model's spam probabilities higher, closing the
+                  gap between F1 @0.50 and Best F1 ★. Check that Precision does not fall too far.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try4">4</div>
+                <div class="fix-body">
+                  <strong>If nothing helps, accept that the threshold will just be low</strong>
+                  <p>If ROC-AUC is high, the final model will have a good threshold curve — the system
+                  will automatically find the right threshold (e.g. 0.28) during training.
+                  The production scanner uses that threshold, not 0.50. Low F1 @0.50 in CV
+                  does not mean the deployed model will perform poorly.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── Imbalance strategies ── -->
+      <section id="imbalance-strategies">
+        <h2>The imbalance strategies explained <span class="tag blue">Quick reference</span></h2>
+
+        <p>
+          Every strategy is a different answer to the same question:
+          <em>"How do we stop the model from being lazy and predicting ham for everything?"</em>
+        </p>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:20px 0">
+          <table class="strategy-table">
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th>What it does</th>
+                <th>Best when</th>
+                <th>Watch out for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Baseline</strong></td>
+                <td>Does nothing. Trains on the raw labeled data as-is.</td>
+                <td>Classes are roughly balanced (ratio under 1:3). Use as a control run.</td>
+                <td class="warn">F1 will be poor if imbalance is significant.</td>
+              </tr>
+              <tr>
+                <td><strong>Class Weighted</strong></td>
+                <td>Multiplies the loss for spam mistakes by the imbalance ratio. No rows are added or removed.</td>
+                <td>Any imbalance level. The safest first step. No data mutation.</td>
+                <td>Logistic Regression uses true loss weighting. Other algorithms use a weighted bootstrap approximation, which is noisier.</td>
+              </tr>
+              <tr>
+                <td><strong>Undersample Majority</strong></td>
+                <td>Randomly removes ham rows until spam:ham is 1:1.</td>
+                <td>You have so much ham that the model never sees diverse spam. Also faster training.</td>
+                <td class="warn">Throws away ham data. The model may not learn to distinguish borderline ham from spam.</td>
+              </tr>
+              <tr>
+                <td><strong>Oversample Minority</strong></td>
+                <td>Duplicates real spam rows until classes are balanced.</td>
+                <td>You have very few spam examples and cannot afford to throw away ham.</td>
+                <td class="warn">Identical duplicates — the model memorises specific spam rows rather than generalising. SMOTE is usually better.</td>
+              </tr>
+              <tr>
+                <td><strong>SMOTE</strong></td>
+                <td>Creates <em>synthetic</em> spam rows by interpolating between real spam examples in feature space.</td>
+                <td>Severe imbalance (1:5 or worse). When Oversample causes overfitting. When Class Weighted is not strong enough.</td>
+                <td class="warn">Synthetic rows can sometimes look like ham if spam examples are very scattered. Inspect Precision after applying.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout blue">
+          <strong>The practical starting sequence:</strong>
+          Baseline → Class Weighted → SMOTE. Run "Compare Imbalance Strategies" once and it tests all five
+          simultaneously so you do not have to do them one by one. Pick the strategy where F1 is highest
+          <em>and</em> Precision does not fall below a level you can live with in production.
+        </div>
+      </section>
+
+
+      <!-- ── Algorithm choice ── -->
+      <section id="algorithm-choice">
+        <h2>Switching algorithms <span class="tag blue">Which to pick</span></h2>
+
+        <p>
+          Changing the algorithm is often the second-highest-leverage move (after imbalance strategy).
+          Here is how the five available algorithms differ in practice for this problem:
+        </p>
+
+        <div class="algo-grid">
+          <div class="algo-card" style="border-color:rgba(79,142,247,.3)">
+            <h4 style="color:var(--accent)">Logistic Regression</h4>
+            <ul>
+              <li>Fastest to train</li>
+              <li>Most interpretable</li>
+              <li>Linear decision boundary</li>
+              <li>Calibrated probabilities</li>
+            </ul>
+            <span class="algo-best">Start here. Always your baseline.</span>
+            <span class="algo-bad">Underperforms when spam/ham boundary is non-linear.</span>
+          </div>
+
+          <div class="algo-card" style="border-color:rgba(52,199,123,.3)">
+            <h4 style="color:var(--green)">Random Forest</h4>
+            <ul>
+              <li>Handles non-linearity well</li>
+              <li>Robust to outliers</li>
+              <li>Slower than LR</li>
+              <li>Good with high-dimensional features</li>
+            </ul>
+            <span class="algo-best">Try when LR F1 plateaus and variance is still high.</span>
+            <span class="algo-bad">Can overfit on very small datasets (&lt;500 rows).</span>
+          </div>
+
+          <div class="algo-card" style="border-color:rgba(246,166,35,.3)">
+            <h4 style="color:var(--amber)">Gradient Boosting</h4>
+            <ul>
+              <li>Often highest F1</li>
+              <li>Handles complex interactions</li>
+              <li>Slowest to train</li>
+              <li>Most sensitive to small datasets</li>
+            </ul>
+            <span class="algo-best">Best when you have 1,000+ labeled rows and want peak F1.</span>
+            <span class="algo-bad">Slow. Can OOM on large datasets in the worker.</span>
+          </div>
+
+          <div class="algo-card">
+            <h4 style="color:var(--muted)">Decision Tree</h4>
+            <ul>
+              <li>Very fast</li>
+              <li>Fully interpretable</li>
+              <li>Low depth = underfits</li>
+              <li>High depth = overfits badly</li>
+            </ul>
+            <span class="algo-best">Mostly useful for understanding which features matter.</span>
+            <span class="algo-bad">Almost never the right production choice on its own.</span>
+          </div>
+
+          <div class="algo-card" style="border-color:rgba(157,126,247,.3)">
+            <h4 style="color:var(--purple)">Neural Network (MLP)</h4>
+            <ul>
+              <li>Can learn complex interactions</li>
+              <li>Slow to train</li>
+              <li>Needs more data than tree models</li>
+              <li>Sensitive to feature scaling</li>
+            </ul>
+            <span class="algo-best">Worth trying when Gradient Boosting has plateaued and you have lots of data.</span>
+            <span class="algo-bad">Often no better than Gradient Boosting for tabular feature data.</span>
+          </div>
+        </div>
+
+        <div class="callout amber">
+          <strong>One rule of thumb:</strong>
+          When moving from LR to RF or Gradient Boosting, keep the imbalance strategy the same for the first comparison.
+          Changing both at once makes it impossible to know which change helped.
+          Change one thing at a time and re-run CV.
+        </div>
+      </section>
+
+
+      <!-- ── Learning curve signals ── -->
+      <section id="learning-curve-signals">
+        <h2>Reading the learning curve <span class="tag purple">Diagnose the gap</span></h2>
+
+        <p>
+          The learning curve trains on fractions of your data (10%, 25%, 50%, 75%, 100%) and tracks
+          Train F1 vs. Test F1 at each size. The shape of the gap tells you exactly what is wrong.
+        </p>
+
+        <div class="lc-diagram">
+
+          <div class="lc-card" style="border-color:rgba(224,85,85,.3)">
+            <h4 style="color:var(--red)">Pattern 1 — Persistent gap at 100%</h4>
+            <p>Train F1 stays high (0.90+) while Test F1 stays low (0.65). The model is memorising training data but not generalising. This is overfitting.</p>
+            <div class="lc-bars">
+              <div class="lc-bar-row"><span class="lc-bar-label">10% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:95%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">10% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:55%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:93%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:63%"></div></div></div>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--red)">Fix: Use a simpler algorithm (LR instead of RF). Add more data. Or both.</p>
+          </div>
+
+          <div class="lc-card" style="border-color:rgba(246,166,35,.3)">
+            <h4 style="color:var(--amber)">Pattern 2 — Gap closes as data grows</h4>
+            <p>Train F1 and Test F1 converge as you add more data. More data is genuinely helping. The gap has not fully closed at 100% yet.</p>
+            <div class="lc-bars">
+              <div class="lc-bar-row"><span class="lc-bar-label">10% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:90%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">10% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:48%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:88%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:76%"></div></div></div>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--amber)">Fix: Collect more labeled data. It will still help.</p>
+          </div>
+
+          <div class="lc-card" style="border-color:rgba(52,199,123,.3)">
+            <h4 style="color:var(--green)">Pattern 3 — Curves converge and are both high</h4>
+            <p>Train and Test F1 are both strong and close together at full data. The model is generalising well. Data saturation is reached.</p>
+            <div class="lc-bars">
+              <div class="lc-bar-row"><span class="lc-bar-label">10% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:85%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">10% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:62%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:86%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:83%"></div></div></div>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--green)">Action: Train the final model. More data will not help much. Consider better features if you need further improvement.</p>
+          </div>
+
+          <div class="lc-card" style="border-color:rgba(79,142,247,.3)">
+            <h4 style="color:var(--accent)">Pattern 4 — Both curves are low and converged</h4>
+            <p>Train F1 and Test F1 are both low (below 0.65) and track each other closely. The model is not overfitting — it just cannot learn from these features.</p>
+            <div class="lc-bars">
+              <div class="lc-bar-row"><span class="lc-bar-label">10% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:62%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">10% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:55%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% train</span><div class="lc-bar-wrap"><div class="lc-bar-inner train-bar" style="width:64%"></div></div></div>
+              <div class="lc-bar-row"><span class="lc-bar-label">100% test</span><div class="lc-bar-wrap"><div class="lc-bar-inner test-bar" style="width:60%"></div></div></div>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--accent)">Fix: The features are not discriminative enough. This is a feature engineering or label quality problem — not a data volume problem. More rows will not help.</p>
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ── Label quality ── -->
+      <section id="label-quality">
+        <h2>When data quality is the real problem <span class="tag red">Hard to spot</span></h2>
+
+        <p>
+          Label noise is the sneakiest problem because it looks exactly like "the model is bad."
+          If you have tried different algorithms and strategies and F1 is still stuck,
+          the labels themselves may be inconsistent.
+        </p>
+
+        <div class="diagnosis-card">
+          <div class="dc-symptom">
+            <div class="icon">🔍</div>
+            <div>
+              <strong>Signs of a label quality problem</strong>
+              ROC-AUC is stuck below 0.78 despite enough data and algorithm variety.
+              Train F1 and Test F1 are both low and converged (Pattern 4 above).
+              The model keeps misclassifying the same types of items across all algorithms.
+            </div>
+          </div>
+          <div class="dc-body">
+            <div class="dc-why">
+              <strong>Why this happens</strong><br>
+              If 5–10% of your spam examples are actually labeled ham (or vice versa), the model is
+              trying to learn a boundary that does not exist. No algorithm can find a pattern that is
+              not there. Label noise above ~5% is enough to suppress F1 by 0.05–0.15 and
+              ROC-AUC by 0.04–0.10.
+            </div>
+            <div class="dc-fixes">
+              <div class="fix-step">
+                <div class="fix-num try1">1</div>
+                <div class="fix-body">
+                  <strong>Score your labeled dataset with your best-performing model</strong>
+                  <p>Train the final model with your best config. Then score every labeled item.
+                  Look at high-confidence errors: items your model scores as spam=0.92 that are labeled ham.
+                  These are your mislabeling candidates. Review them manually.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try2">2</div>
+                <div class="fix-body">
+                  <strong>Focus on the "confident mistakes" — not the borderline ones</strong>
+                  <p>A model scoring something 0.95 and being wrong about it is much more suspicious
+                  than scoring something 0.55 and being wrong. The high-confidence mistakes are the
+                  ones most likely to be label errors, not hard examples.</p>
+                </div>
+              </div>
+              <div class="fix-step">
+                <div class="fix-num try3">3</div>
+                <div class="fix-body">
+                  <strong>Correct and re-run CV</strong>
+                  <p>Even fixing 20–30 mislabeled examples can unlock a 0.05–0.08 F1 improvement
+                  because it removes contradictory signal that was confusing the model across all folds.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout red">
+          <strong>The hard truth about label noise:</strong>
+          There is a theoretical upper bound on F1 given a certain noise rate. If 10% of your spam examples
+          are wrong, the best F1 you can ever achieve is roughly 0.90 — no algorithm overcomes that.
+          Improving labels is often worth more than any algorithmic change.
+        </div>
+
+        <hr>
+
+        <p style="color:var(--muted);font-size:13px;text-align:center;margin-top:0">
+          See also:
+          <a href="./cv-explainer.html">CV Explainer — How CV leads to a deployed model</a> ·
+          <a href="./threshold-explainer.html">Threshold Tuning Explainer</a> ·
+          <a href="./modeling.html">Model Lab</a>
+        </p>
+      </section>
+
+    </main>
+  </body>
+</html>

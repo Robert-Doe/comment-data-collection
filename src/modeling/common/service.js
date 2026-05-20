@@ -8,7 +8,8 @@ const { trainLogisticRegression, predictProbability } = require('./logisticRegre
 const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree } = require('./decisionTree');
 const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
 const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
-const { computeAllMetrics } = require('./metrics');
+const { trainNeuralNetwork, predictProbabilityNeuralNetwork, explainNeuralNetwork } = require('./neuralNetwork');
+const { computeAllMetrics, computeBinaryMetrics } = require('./metrics');
 const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
 const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
@@ -173,6 +174,10 @@ const TRAINING_ALGORITHMS = [
   {
     id: 'gradient_boosting',
     title: 'Gradient Boosting',
+  },
+  {
+    id: 'neural_network',
+    title: 'Neural Network (MLP)',
   },
 ];
 
@@ -603,6 +608,8 @@ function trainModelByAlgorithm(algorithm, vectors, labels, trainingOptions = {})
       return trainRandomForest(vectors, labels, trainingOptions);
     case 'gradient_boosting':
       return trainGradientBoosting(vectors, labels, trainingOptions);
+    case 'neural_network':
+      return trainNeuralNetwork(vectors, labels, trainingOptions);
     case 'logistic_regression':
     default:
       return trainLogisticRegression(vectors, labels, trainingOptions);
@@ -618,6 +625,8 @@ function predictProbabilityForArtifact(artifact, vector) {
       return predictProbabilityRandomForest(model, vector);
     case 'gradient_boosting':
       return predictProbabilityGradientBoosting(model, vector);
+    case 'neural_network':
+      return predictProbabilityNeuralNetwork(model, vector);
     case 'logistic_regression':
     default:
       return predictProbability(model, vector);
@@ -637,6 +646,8 @@ function explainModelContributions(artifact, vector, vectorizer) {
       return explainRandomForest(model, vector, dimension);
     case 'gradient_boosting':
       return explainGradientBoosting(model, vector, dimension);
+    case 'neural_network':
+      return explainNeuralNetwork(model, vector, dimension);
     case 'logistic_regression':
     default: {
       const contributions = new Array(dimension).fill(0);
@@ -1258,7 +1269,11 @@ function buildRuntimeModelBundle(artifact, options = {}) {
     algorithm: artifact.algorithm,
     feature_count: artifact.feature_count,
     thresholds: {
-      positive: Number.isFinite(positiveThreshold) ? positiveThreshold : 0.5,
+      // Prefer an explicit caller override, then the optimal threshold baked into
+      // the artifact during training, then fall back to the naive 0.5 default.
+      positive: Number.isFinite(positiveThreshold) ? positiveThreshold
+        : Number.isFinite(Number(artifact.optimal_threshold)) ? Number(artifact.optimal_threshold)
+          : 0.5,
       manual_review_low: Number.isFinite(manualReviewLow) ? manualReviewLow : 0.2,
       manual_review_high: Number.isFinite(manualReviewHigh) ? manualReviewHigh : 0.8,
     },
@@ -1290,6 +1305,25 @@ function buildRuntimeModelBundle(artifact, options = {}) {
         : [],
     },
   };
+}
+
+// Find the decision threshold (0–1, step 0.01) that maximises F1 score on the
+// provided scored rows. Always derived from the TRAINING split so we never peek
+// at the test holdout. The returned value replaces the naive 0.5 default when
+// reporting final metrics and when bundling a runtime model.
+function findOptimalF1Threshold(scoredRows) {
+  if (!scoredRows || !scoredRows.length) return 0.5;
+  let bestF1 = -1;
+  let bestThreshold = 0.5;
+  for (let ti = 1; ti < 100; ti++) {
+    const t = ti / 100;
+    const m = computeBinaryMetrics(scoredRows, t);
+    if (m.f1 > bestF1) {
+      bestF1 = m.f1;
+      bestThreshold = t;
+    }
+  }
+  return bestThreshold;
 }
 
 function computeThresholdCurve(scoredRows) {
@@ -1431,9 +1465,16 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
       stage: 'training',
     }) : null,
   });
+  // Derive optimal threshold from training rows only — never from the test holdout.
+  // Using the train F1-maximising threshold instead of the naive 0.5 default is the
+  // single most impactful change for recall on imbalanced datasets: the model's
+  // probability scores are well-ordered (ROC-AUC 0.93) but 0.5 is rarely the
+  // best cut-point when positives are a small fraction of the data.
+  const optimalThreshold = findOptimalF1Threshold(scoredTrainRows);
+
   const evaluation = {
-    train: computeAllMetrics(scoredTrainRows, {}),
-    test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
+    train: computeAllMetrics(scoredTrainRows, { threshold: optimalThreshold }),
+    test: split.testRows.length ? computeAllMetrics(scoredTestRows, { threshold: optimalThreshold }) : null,
   };
   const thresholdCurve = split.testRows.length >= 4 ? computeThresholdCurve(scoredTestRows) : [];
   emitProgress(progress, {
@@ -1478,6 +1519,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     },
     dataset_summary: dataset.summary,
     evaluation,
+    optimal_threshold: optimalThreshold,
     threshold_curve: thresholdCurve,
     reliance,
   };
@@ -2052,6 +2094,298 @@ async function computeCommentArchetype(artifactRoot, artifactId, items) {
   };
 }
 
+// ─── CROSS-VALIDATION & DIAGNOSTICS ──────────────────────────────────────────
+
+// t-critical values for 95% CI (two-tailed, df = n-1, n=2..29)
+const T_CRIT_95_CV = [
+  12.706, 4.303, 3.182, 2.776, 2.571,
+  2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.160, 2.145, 2.131,
+  2.120, 2.110, 2.101, 2.093, 2.086,
+  2.080, 2.074, 2.069, 2.064, 2.060,
+  2.056, 2.052, 2.048,
+];
+
+function computeStatSummaryCv(values) {
+  const valid = (Array.isArray(values) ? values : []).filter((v) => typeof v === 'number' && isFinite(v));
+  if (!valid.length) return { mean: null, std: null, ci95_lo: null, ci95_hi: null, n: 0 };
+  const n = valid.length;
+  const mean = valid.reduce((sum, v) => sum + v, 0) / n;
+  const variance = n > 1 ? valid.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (n - 1) : 0;
+  const std = Math.sqrt(variance);
+  const tCritical = n >= 30 ? 1.96 : (T_CRIT_95_CV[n - 1] || 2.045);
+  const se = n > 1 ? std / Math.sqrt(n) : 0;
+  return {
+    mean: roundNumber(mean),
+    std: roundNumber(std),
+    ci95_lo: roundNumber(mean - tCritical * se),
+    ci95_hi: roundNumber(mean + tCritical * se),
+    n,
+  };
+}
+
+function computeCalibrationCurveCv(rows, nBins = 10) {
+  const bins = Math.max(2, Math.min(20, Number(nBins) || 10));
+  const labeled = (Array.isArray(rows) ? rows : []).filter(
+    (row) => (row.binary_label === 0 || row.binary_label === 1)
+      && typeof row.probability === 'number' && isFinite(row.probability),
+  );
+  const buckets = Array.from({ length: bins }, () => ({ count: 0, positives: 0, probSum: 0 }));
+  labeled.forEach((row) => {
+    const prob = Math.max(0, Math.min(1, row.probability));
+    const idx = Math.min(Math.floor(prob * bins), bins - 1);
+    buckets[idx].count += 1;
+    buckets[idx].positives += row.binary_label;
+    buckets[idx].probSum += prob;
+  });
+  return buckets.map((bucket, idx) => ({
+    bin: idx,
+    bin_start: roundNumber(idx / bins),
+    bin_end: roundNumber((idx + 1) / bins),
+    count: bucket.count,
+    mean_predicted: bucket.count > 0 ? roundNumber(bucket.probSum / bucket.count) : null,
+    fraction_positive: bucket.count > 0 ? roundNumber(bucket.positives / bucket.count) : null,
+  }));
+}
+
+/**
+ * Run 5-fold cross-validation using domain holdout splitting.
+ * Each fold rotates which domain bucket (0-4) is the held-out test set.
+ * Returns per-fold metrics and aggregate mean ± std / 95% CI statistics.
+ */
+async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  if (labeledRows.length < 10) {
+    throw new Error('Cross-validation needs at least 10 labeled rows');
+  }
+
+  const nFolds = 5;
+  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
+  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+  const foldResults = [];
+
+  for (let fold = 0; fold < nFolds; fold++) {
+    const split = splitRowsByDomain(labeledRows, { modulo: nFolds, holdoutBucket: fold });
+    if (!canTrainRows(split.trainRows) || !canTrainRows(split.testRows)) {
+      foldResults.push({ fold, skipped: true, reason: 'Insufficient class diversity in this fold split' });
+      continue;
+    }
+
+    const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
+    const trainingPreparation = prepareImbalanceTrainingRows(
+      split.trainRows,
+      dataset.featureCatalog,
+      vectorizer,
+      normalizedStrategy,
+      { algorithm: normalizedAlgorithm, seed: `cv:fold${fold}:${labeledRows.length}` },
+    );
+    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : split.trainRows;
+    const trainVectors = transformRows(preparedTrainRows, vectorizer);
+    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
+    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
+      classWeighting: trainingPreparation.classWeighting,
+    });
+    const trainingArtifact = { algorithm: model.algorithm, model };
+    const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+    const metrics = computeAllMetrics(scoredTestRows, {});
+    const calibration = computeCalibrationCurveCv(scoredTestRows, 10);
+
+    const foldCurve = computeThresholdCurve(scoredTestRows);
+    let bestThresholdMetrics = null;
+    if (foldCurve.length > 0) {
+      const bestPt = foldCurve.reduce((prev, curr) => (curr.f1 > prev.f1 ? curr : prev));
+      bestThresholdMetrics = {
+        threshold: bestPt.t,
+        precision: bestPt.precision,
+        recall: bestPt.recall,
+        f1: bestPt.f1,
+        confusion: { true_positive: bestPt.tp, true_negative: bestPt.tn, false_positive: bestPt.fp, false_negative: bestPt.fn },
+      };
+    }
+
+    foldResults.push({
+      fold,
+      skipped: false,
+      train_count: split.trainRows.length,
+      effective_train_count: preparedTrainRows.length,
+      test_count: split.testRows.length,
+      train_label_counts: countBinaryLabels(split.trainRows),
+      test_label_counts: countBinaryLabels(split.testRows),
+      metrics,
+      best_threshold_metrics: bestThresholdMetrics,
+      calibration,
+    });
+  }
+
+  const completedFolds = foldResults.filter((f) => !f.skipped);
+
+  function extractValues(accessor) {
+    return completedFolds.map(accessor).filter((v) => typeof v === 'number' && isFinite(v));
+  }
+
+  const aggregate = {
+    f1:                 computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.f1)),
+    precision:          computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.precision)),
+    recall:             computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.recall)),
+    roc_auc:            computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.roc_auc)),
+    pr_auc:             computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.pr_auc)),
+    top_1_accuracy:     computeStatSummaryCv(extractValues((f) => f.metrics.ranking_metrics.top_1_accuracy)),
+    mean_reciprocal_rank: computeStatSummaryCv(extractValues((f) => f.metrics.ranking_metrics.mean_reciprocal_rank)),
+    best_f1:            computeStatSummaryCv(extractValues((f) => f.best_threshold_metrics && f.best_threshold_metrics.f1)),
+  };
+
+  return {
+    n_folds: nFolds,
+    total_labeled: labeledRows.length,
+    algorithm: normalizedAlgorithm,
+    imbalance_strategy: normalizedStrategy,
+    folds: foldResults,
+    aggregate,
+  };
+}
+
+/**
+ * Compute a learning curve by training on increasing fractions of the training split
+ * while evaluating on a fixed held-out test set (domain bucket 0).
+ * Fractions: [0.2, 0.4, 0.6, 0.8, 1.0]
+ */
+async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  if (labeledRows.length < 10) {
+    throw new Error('Learning curve needs at least 10 labeled rows');
+  }
+
+  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
+  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
+
+  let baseSplit = splitRowsByDomain(labeledRows, { modulo: 5, holdoutBucket: 0 });
+  if (!canTrainRows(baseSplit.trainRows)) {
+    baseSplit = splitRowsByCandidate(labeledRows, { modulo: 5, holdoutBucket: 0 });
+  }
+  if (!canTrainRows(baseSplit.trainRows) || !canTrainRows(baseSplit.testRows)) {
+    throw new Error('Dataset does not have enough class diversity for a learning curve');
+  }
+
+  const fractions = [0.2, 0.4, 0.6, 0.8, 1.0];
+  const points = [];
+
+  for (const fraction of fractions) {
+    const positiveTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 1);
+    const negativeTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 0);
+    const nPos = Math.max(1, Math.round(positiveTrainRows.length * fraction));
+    const nNeg = Math.max(1, Math.round(negativeTrainRows.length * fraction));
+    const sampledTrainRows = [
+      ...positiveTrainRows.slice(0, nPos),
+      ...negativeTrainRows.slice(0, nNeg),
+    ];
+
+    if (!canTrainRows(sampledTrainRows)) {
+      points.push({ fraction, skipped: true, reason: 'Insufficient class diversity at this fraction' });
+      continue;
+    }
+
+    const vectorizer = fitVectorizer(sampledTrainRows, dataset.featureCatalog);
+    const trainingPreparation = prepareImbalanceTrainingRows(
+      sampledTrainRows,
+      dataset.featureCatalog,
+      vectorizer,
+      normalizedStrategy,
+      { algorithm: normalizedAlgorithm, seed: `lc:${fraction}:${labeledRows.length}` },
+    );
+    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : sampledTrainRows;
+    const trainVectors = transformRows(preparedTrainRows, vectorizer);
+    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
+    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
+      classWeighting: trainingPreparation.classWeighting,
+    });
+    const trainingArtifact = { algorithm: model.algorithm, model };
+    const scoredTrainRows = scoreRows(sampledTrainRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+    const scoredTestRows = scoreRows(baseSplit.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
+    const trainMetrics = computeAllMetrics(scoredTrainRows, {});
+    const testMetrics = computeAllMetrics(scoredTestRows, {});
+
+    points.push({
+      fraction,
+      skipped: false,
+      train_count: sampledTrainRows.length,
+      test_count: baseSplit.testRows.length,
+      train_metrics: {
+        f1: trainMetrics.candidate_metrics.f1,
+        roc_auc: trainMetrics.candidate_metrics.roc_auc,
+        pr_auc: trainMetrics.candidate_metrics.pr_auc,
+      },
+      test_metrics: {
+        f1: testMetrics.candidate_metrics.f1,
+        roc_auc: testMetrics.candidate_metrics.roc_auc,
+        pr_auc: testMetrics.candidate_metrics.pr_auc,
+        precision: testMetrics.candidate_metrics.precision,
+        recall: testMetrics.candidate_metrics.recall,
+      },
+    });
+  }
+
+  return {
+    algorithm: normalizedAlgorithm,
+    imbalance_strategy: normalizedStrategy,
+    total_labeled: labeledRows.length,
+    test_count: baseSplit.testRows.length,
+    points,
+  };
+}
+
+/**
+ * Inspect how labeled rows distribute across the 5 domain holdout buckets.
+ * Useful for identifying imbalanced folds before running cross-validation.
+ */
+async function getDomainBuckets(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+
+  const nBuckets = 5;
+  const byBucket = Array.from({ length: nBuckets }, () => new Map());
+
+  for (const row of labeledRows) {
+    const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '';
+    if (!stableKey) continue;
+    const bucket = hashString(stableKey) % nBuckets;
+    const domainMap = byBucket[bucket];
+    if (!domainMap.has(stableKey)) {
+      domainMap.set(stableKey, { domain: stableKey, count: 0, positive_count: 0 });
+    }
+    const entry = domainMap.get(stableKey);
+    entry.count += 1;
+    if (row.binary_label === 1) entry.positive_count += 1;
+  }
+
+  return {
+    n_buckets: nBuckets,
+    total_labeled: labeledRows.length,
+    buckets: byBucket.map((domainMap, bucket) => {
+      const domains = Array.from(domainMap.values())
+        .map((d) => ({ ...d, positive_rate: d.count > 0 ? roundNumber(d.positive_count / d.count, 3) : 0 }))
+        .sort((a, b) => b.count - a.count);
+      return {
+        bucket,
+        domain_count: domains.length,
+        row_count: domains.reduce((s, d) => s + d.count, 0),
+        positive_count: domains.reduce((s, d) => s + d.positive_count, 0),
+        domains,
+      };
+    }),
+  };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2060,6 +2394,9 @@ module.exports = {
   normalizeImbalanceStrategy,
   trainModel,
   compareImbalanceStrategies,
+  runCrossValidation,
+  computeLearningCurve,
+  getDomainBuckets,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,
