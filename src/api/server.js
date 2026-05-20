@@ -27,6 +27,7 @@ const { analyzeManualCapture } = require('../shared/manualCapture');
 const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot, scanUrl } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
+const { createAuthModule } = require('./auth');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { loadInBatches } = require('../shared/loadInBatches');
 const { createRequestTracker } = require('../shared/requestTracker');
@@ -352,6 +353,27 @@ function createApp(config = getConfig()) {
     scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
     getJobLabelSummaries: () => getJobLabelSummaries(config.databaseUrl),
   }));
+
+  // ── Auth + Admin routes ───────────────────────────────────────────────────────
+  // Auth middleware is applied per-route (not globally) so existing unprotected
+  // API endpoints keep working for scanner workers and CLI tooling.
+  const auth = createAuthModule(config.databaseUrl);
+  const adminOnly = [auth.authMiddleware, auth.requireRole('admin')];
+
+  app.get ('/api/auth/setup-status', auth.setupStatusHandler);
+  app.post('/api/auth/setup',        auth.setupHandler);
+  app.post('/api/auth/login',        auth.loginHandler);
+  app.post('/api/auth/guest-login',  auth.guestLoginHandler);
+  app.post('/api/auth/logout',       auth.logoutHandler);
+  app.get ('/api/auth/check',        auth.checkHandler);
+
+  app.get   ('/api/admin/users',       ...adminOnly, auth.listUsersHandler);
+  app.post  ('/api/admin/users',       ...adminOnly, auth.createUserHandler);
+  app.patch ('/api/admin/users/:id',   ...adminOnly, auth.updateUserHandler);
+  app.delete('/api/admin/users/:id',   ...adminOnly, auth.deleteUserHandler);
+  app.get   ('/api/admin/tokens',      ...adminOnly, auth.listGuestTokensHandler);
+  app.post  ('/api/admin/tokens',      ...adminOnly, auth.createGuestTokenHandler);
+  app.delete('/api/admin/tokens/:id',  ...adminOnly, auth.revokeGuestTokenHandler);
 
   app.get('/api/health', async (_req, res) => {
     res.json({ ok: true });
