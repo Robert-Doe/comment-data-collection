@@ -3193,11 +3193,11 @@
           <summary style="padding:8px 12px;cursor:pointer;background:var(--surface-2,#1e293b);display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucketColors[b.bucket]};flex-shrink:0"></span>
             Bucket ${b.bucket} — Fold ${b.bucket} test set
-            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} spam</span>
+            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} positive</span>
           </summary>
           <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
             <table style="margin:0">
-              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>Spam Count</th><th>Spam Rate</th></tr></thead>
+              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>Positive Count</th><th>Positive Rate</th></tr></thead>
               <tbody>
                 ${b.domains.map((d) => `
                   <tr>
@@ -3215,14 +3215,31 @@
     `;
   }
 
+  // Resolves a diag API response that may be either:
+  //   - Synchronous: { ok, folds/points/buckets, ... }  (server returns result inline)
+  //   - Async/202:   { ok, jobId, status: 'running' }   (server forks; poll diag-status)
+  async function resolveDiagResponse(res, dataKey, onProgress) {
+    if (res.jobId && !res[dataKey]) {
+      const startedAt = Date.now();
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const status = await fetchJson(`/api/modeling/diag-status/${res.jobId}`);
+        if (status.status === 'done') return status.result;
+        if (status.status === 'error') throw new Error(status.error || 'Diagnostics failed on the server');
+        onProgress && onProgress(Math.round((Date.now() - startedAt) / 1000));
+      }
+    }
+    return res;
+  }
+
   if (diagCrossValidateButton) {
     diagCrossValidateButton.addEventListener('click', () => {
       const variantId = diagVariantId ? diagVariantId.value : '';
       if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
       runElementAction(diagCrossValidateButton, async () => {
-        setMessage(diagMessage, 'Submitting cross-validation job…', false);
+        setMessage(diagMessage, 'Running 5-fold cross-validation…', false);
         if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Running…'; }
-        const { jobId } = await fetchJson('/api/modeling/cross-validate', {
+        const res = await fetchJson('/api/modeling/cross-validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3232,19 +3249,9 @@
             jobIds: diagJobIds ? diagJobIds.value.trim() : '',
           }),
         });
-        const startedAt = Date.now();
-        for (;;) {
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          const status = await fetchJson(`/api/modeling/diag-status/${jobId}`);
-          if (status.status === 'done') {
-            setMessage(diagMessage, 'Cross-validation complete.', false);
-            renderCvResult(status.result);
-            return;
-          }
-          if (status.status === 'error') throw new Error(status.error || 'Cross-validation failed on the server');
-          const elapsed = Math.round((Date.now() - startedAt) / 1000);
-          setMessage(diagMessage, `Running 5-fold cross-validation… (${elapsed}s elapsed)`, false);
-        }
+        const result = await resolveDiagResponse(res, 'folds', (s) => setMessage(diagMessage, `Running 5-fold cross-validation… (${s}s elapsed)`, false));
+        setMessage(diagMessage, 'Cross-validation complete.', false);
+        renderCvResult(result);
       }).catch((err) => {
         setMessage(diagMessage, err.message || String(err), true);
         if (diagCvResult) { diagCvResult.className = 'table-shell empty'; diagCvResult.textContent = 'Cross-validation failed.'; }
@@ -3257,9 +3264,9 @@
       const variantId = diagVariantId ? diagVariantId.value : '';
       if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
       runElementAction(diagLearningCurveButton, async () => {
-        setMessage(diagMessage, 'Submitting learning curve job…', false);
+        setMessage(diagMessage, 'Computing learning curve…', false);
         if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Running…'; }
-        const { jobId } = await fetchJson('/api/modeling/learning-curve', {
+        const res = await fetchJson('/api/modeling/learning-curve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3269,19 +3276,9 @@
             jobIds: diagJobIds ? diagJobIds.value.trim() : '',
           }),
         });
-        const startedAt = Date.now();
-        for (;;) {
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          const status = await fetchJson(`/api/modeling/diag-status/${jobId}`);
-          if (status.status === 'done') {
-            setMessage(diagMessage, 'Learning curve complete.', false);
-            renderLcResult(status.result);
-            return;
-          }
-          if (status.status === 'error') throw new Error(status.error || 'Learning curve failed on the server');
-          const elapsed = Math.round((Date.now() - startedAt) / 1000);
-          setMessage(diagMessage, `Computing learning curve… (${elapsed}s elapsed)`, false);
-        }
+        const result = await resolveDiagResponse(res, 'points', (s) => setMessage(diagMessage, `Computing learning curve… (${s}s elapsed)`, false));
+        setMessage(diagMessage, 'Learning curve complete.', false);
+        renderLcResult(result);
       }).catch((err) => {
         setMessage(diagMessage, err.message || String(err), true);
         if (diagLcResult) { diagLcResult.className = 'table-shell empty'; diagLcResult.textContent = 'Learning curve failed.'; }
