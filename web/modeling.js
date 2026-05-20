@@ -67,6 +67,8 @@
   const diagLcResult = document.getElementById('diag-lc-result');
   const diagDomainBucketsButton = document.getElementById('diag-domain-buckets');
   const diagBucketResult = document.getElementById('diag-bucket-result');
+  const diagFeatureSelectionButton = document.getElementById('diag-feature-selection');
+  const diagFsResult = document.getElementById('diag-fs-result');
   const archetypeModelId = document.getElementById('archetype-model-id');
   const archetypeJobIds = document.getElementById('archetype-job-ids');
   const archetypeTopN = document.getElementById('archetype-top-n');
@@ -3306,6 +3308,157 @@
       }).catch((err) => {
         setMessage(diagMessage, err.message || String(err), true);
         if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Domain bucket inspection failed.'; }
+      });
+    });
+  }
+
+  // ── Feature Selection render + handler ────────────────────────────────────────
+
+  function renderFeatureSelection(result) {
+    if (!diagFsResult) return;
+    if (!result || !Array.isArray(result.features)) {
+      diagFsResult.className = 'table-shell empty';
+      diagFsResult.textContent = 'No feature analysis data.';
+      return;
+    }
+
+    const { features, summary, threshold_series: tSeries, total_labeled, feature_count } = result;
+
+    const verdictColor = { drop: 'var(--red,#e05555)', review: 'var(--amber,#f6a623)', keep: 'var(--green,#34c77b)' };
+    const verdictBg    = { drop: 'rgba(224,85,85,.08)', review: 'rgba(246,166,35,.08)', keep: '' };
+
+    // Flag badge HTML
+    function flagBadge(active, label, title) {
+      const style = active
+        ? 'display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(224,85,85,.18);color:var(--red,#e05555);margin-right:3px'
+        : 'display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;color:var(--muted);margin-right:3px;opacity:.35';
+      return `<span style="${style}" title="${title}">${label}</span>`;
+    }
+
+    // Sort: drop first, then review, then keep; within each group sort by MI rank
+    const sorted = [...features].sort((a, b) => {
+      const order = { drop: 0, review: 1, keep: 2 };
+      if (order[a.verdict] !== order[b.verdict]) return order[a.verdict] - order[b.verdict];
+      return (a.mi_rank || 999) - (b.mi_rank || 999);
+    });
+
+    // Threshold series warnings
+    const tsHtml = (Array.isArray(tSeries) && tSeries.length)
+      ? `<div style="margin-bottom:16px">
+          ${tSeries.map((g) => `
+            <div style="background:rgba(246,166,35,.1);border:1px solid rgba(246,166,35,.3);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:0.83rem">
+              <strong style="color:var(--amber,#f6a623)">Structural redundancy: ${g.group}</strong><br>
+              <span style="color:var(--muted)">${g.note}</span><br>
+              <span style="margin-top:4px;display:block">${g.features.map((k) => `<code style="background:var(--surface-2,#1e293b);padding:1px 5px;border-radius:3px;margin-right:4px;font-size:11px">${k}</code>`).join('')}</span>
+            </div>
+          `).join('')}
+        </div>`
+      : '';
+
+    // Correlated pairs summary
+    const corrFeatures = features.filter((f) => f.corr_pairs && f.corr_pairs.length && f.flags.high_correlation);
+    const corrHtml = corrFeatures.length
+      ? `<div style="margin-bottom:16px;background:rgba(79,142,247,.07);border:1px solid rgba(79,142,247,.2);border-radius:6px;padding:10px 14px;font-size:0.83rem">
+          <strong style="color:var(--accent,#4f8ef7)">High correlations (|r| ≥ 0.85)</strong>
+          <span style="color:var(--muted);margin-left:6px">Lower-MI member flagged — keeping both is redundant.</span>
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+            ${corrFeatures.map((f) => f.corr_pairs.filter((p) => (f.flags.high_correlation)).map((p) =>
+              `<span style="background:var(--surface-2,#1e293b);padding:3px 8px;border-radius:4px;font-size:11px">
+                <code>${f.key}</code> ↔ <code>${p.key}</code>
+                <span style="color:var(--muted);margin-left:4px">r=${p.r}</span>
+              </span>`
+            ).join('')).join('')}
+          </div>
+        </div>`
+      : '';
+
+    // Summary bar
+    const summaryHtml = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+        <span style="font-size:0.82rem;color:var(--muted)">${feature_count} features · ${total_labeled} labeled rows · λ=${summary.chosen_l1_lambda}</span>
+        <span style="padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;background:rgba(224,85,85,.15);color:var(--red,#e05555)">Drop candidates: ${summary.drop_count}</span>
+        <span style="padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;background:rgba(246,166,35,.15);color:var(--amber,#f6a623)">Review: ${summary.review_count}</span>
+        <span style="padding:3px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;background:rgba(52,199,123,.15);color:var(--green,#34c77b)">Keep: ${summary.keep_count}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;font-size:0.78rem;color:var(--muted)">
+        <span>Flags:&nbsp;</span>
+        ${flagBadge(true, 'V', 'Near-zero variance')} near-zero variance &nbsp;
+        ${flagBadge(true, 'M', 'Low mutual information')} low MI &nbsp;
+        ${flagBadge(true, 'L', 'Lasso zeroed out')} Lasso=0 &nbsp;
+        ${flagBadge(true, 'R', 'Low RF importance')} low RF &nbsp;
+        ${flagBadge(true, 'C', 'High correlation (lower-MI member)')} correlated
+      </div>`;
+
+    // Feature table
+    const tableHtml = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);text-align:left">
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600">Feature</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600">Family</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600;text-align:right">MI rank</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600;text-align:right">MI</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600;text-align:right">Lasso coef</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600;text-align:right">RF imp</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600">Flags</th>
+              <th style="padding:6px 8px;color:var(--muted);font-weight:600">Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map((f) => {
+              const bg = verdictBg[f.verdict] || '';
+              const lassoDisplay = f.lasso_coef === null ? '—' : f.lasso_coef === 0 ? '<span style="color:var(--red,#e05555)">0</span>' : f.lasso_coef.toFixed(4);
+              const rfDisplay = f.rf_importance === null ? '—' : f.rf_importance < 0.003 ? `<span style="color:var(--red,#e05555)">${f.rf_importance.toFixed(4)}</span>` : f.rf_importance.toFixed(4);
+              const miDisplay = f.mi < 0.005 ? `<span style="color:var(--red,#e05555)">${f.mi.toFixed(4)}</span>` : f.mi.toFixed(4);
+              return `<tr style="border-bottom:1px solid var(--border);background:${bg}">
+                <td style="padding:5px 8px;font-weight:500"><code style="font-size:11px">${f.key}</code></td>
+                <td style="padding:5px 8px;color:var(--muted);font-size:11px">${f.family}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--muted)">#${f.mi_rank}</td>
+                <td style="padding:5px 8px;text-align:right">${miDisplay}</td>
+                <td style="padding:5px 8px;text-align:right">${lassoDisplay}</td>
+                <td style="padding:5px 8px;text-align:right">${rfDisplay}</td>
+                <td style="padding:5px 8px;white-space:nowrap">
+                  ${flagBadge(f.flags.near_zero_variance, 'V', 'Near-zero variance')}
+                  ${flagBadge(f.flags.low_mi,            'M', 'Low mutual information')}
+                  ${flagBadge(f.flags.lasso_zeroed,      'L', 'Lasso zeroed out')}
+                  ${flagBadge(f.flags.low_rf_importance, 'R', 'Low RF importance')}
+                  ${flagBadge(f.flags.high_correlation,  'C', 'High correlation — lower-MI member')}
+                </td>
+                <td style="padding:5px 8px">
+                  <span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${verdictBg[f.verdict]};color:${verdictColor[f.verdict]}">${f.verdict.toUpperCase()}</span>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+    diagFsResult.className = 'table-shell';
+    diagFsResult.innerHTML = summaryHtml + tsHtml + corrHtml + tableHtml;
+  }
+
+  if (diagFeatureSelectionButton) {
+    diagFeatureSelectionButton.addEventListener('click', () => {
+      const variantId = diagVariantId ? diagVariantId.value : '';
+      if (!variantId) { setMessage(diagMessage, 'Select a model variant first.', true); return; }
+      runElementAction(diagFeatureSelectionButton, async () => {
+        setMessage(diagMessage, 'Analysing features — fitting Lasso + Random Forest on your labeled data…', false);
+        if (diagFsResult) { diagFsResult.className = 'table-shell empty'; diagFsResult.textContent = 'Running…'; }
+        const res = await fetchJson('/api/modeling/feature-selection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId,
+            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+          }),
+        });
+        const result = await resolveDiagResponse(res, 'features', (s) => setMessage(diagMessage, `Analysing features… (${s}s elapsed)`, false));
+        setMessage(diagMessage, 'Feature analysis complete.', false);
+        renderFeatureSelection(result);
+      }).catch((err) => {
+        setMessage(diagMessage, err.message || String(err), true);
+        if (diagFsResult) { diagFsResult.className = 'table-shell empty'; diagFsResult.textContent = 'Feature analysis failed.'; }
       });
     });
   }

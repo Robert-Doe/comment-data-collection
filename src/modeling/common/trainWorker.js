@@ -15,7 +15,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 const { getModelVariant } = require('../variants');
-const { trainModel, compareImbalanceStrategies, runCrossValidation, computeLearningCurve } = require('./service');
+const { trainModel, compareImbalanceStrategies, runCrossValidation, computeLearningCurve, analyzeFeatures } = require('./service');
 
 function tryGC() {
   if (typeof global.gc === 'function') global.gc();
@@ -79,6 +79,9 @@ process.on('message', async (msg) => {
         type: 'done',
         result: { ok: true, ...result },
       });
+    } else if (task === 'feature-selection') {
+      const result = await analyzeFeatures(null, artifactRoot, { variantId, dataset });
+      process.send({ type: 'done', result: { ok: true, ...result } });
     } else {
       const trained = await trainModel(null, artifactRoot, {
         variantId,

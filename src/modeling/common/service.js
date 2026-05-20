@@ -11,7 +11,7 @@ const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradie
 const { trainNeuralNetwork, predictProbabilityNeuralNetwork, explainNeuralNetwork } = require('./neuralNetwork');
 const { computeAllMetrics, computeBinaryMetrics } = require('./metrics');
 const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
-const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
+const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber, sigmoid } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
 
 function emitProgress(progress, patch) {
@@ -2386,6 +2386,274 @@ async function getDomainBuckets(items, artifactRoot, trainingInput = {}) {
   };
 }
 
+/**
+ * Data-driven feature analysis: four independent filters applied to the
+ * labeled dataset.  No training configuration needed — the function fits
+ * its own L1-regularised LR (proximal gradient, λ chosen by 3-fold CV)
+ * and a 100-tree Random Forest internally.
+ *
+ * Verdict per feature:
+ *   "drop"   — 3 or more independent signals agree the feature contributes nothing
+ *   "review" — exactly 2 signals flag it; notable but not conclusive
+ *   "keep"   — 0–1 signals raised; safe to retain
+ */
+async function analyzeFeatures(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+  if (labeledRows.length < 20) throw new Error('Feature analysis needs at least 20 labeled rows');
+
+  const featureCatalog = dataset.featureCatalog;
+  const labels = labeledRows.map((row) => row.binary_label);
+  const n = labeledRows.length;
+
+  // ── Raw value arrays (one per feature, length n) ──────────────────────────────
+  const rawValues = {};
+  for (const entry of featureCatalog) {
+    rawValues[entry.key] = labeledRows.map((row) => {
+      const v = row.feature_values ? row.feature_values[entry.key] : undefined;
+      if (entry.type === 'boolean') return v ? 1 : 0;
+      if (entry.type === 'number') return Number(v) || 0;
+      return String(v == null ? '' : v);
+    });
+  }
+
+  // ── 1. Near-zero variance ─────────────────────────────────────────────────────
+  function varianceInfo(entry) {
+    const vals = rawValues[entry.key];
+    if (entry.type === 'boolean') {
+      const trueRate = vals.reduce((s, v) => s + v, 0) / n;
+      const dominant = Math.max(trueRate, 1 - trueRate);
+      return { dominant_rate: roundNumber(dominant, 3), near_zero: dominant >= 0.95 };
+    }
+    if (entry.type === 'number') {
+      const mean = vals.reduce((s, v) => s + v, 0) / n;
+      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+      const std = Math.sqrt(variance);
+      const distinct = new Set(vals.map((v) => roundNumber(v, 2))).size;
+      return { std: roundNumber(std, 4), distinct_values: distinct, near_zero: std < 0.01 || distinct <= 2 };
+    }
+    // categorical
+    const freq = {};
+    for (const v of vals) freq[v] = (freq[v] || 0) + 1;
+    const maxFreq = Math.max(...Object.values(freq));
+    return { dominant_rate: roundNumber(maxFreq / n, 3), near_zero: maxFreq / n >= 0.95 };
+  }
+
+  // ── 2. Mutual Information (joint frequency table, numeric features binned) ─────
+  function computeMI(entry) {
+    const vals = rawValues[entry.key];
+    let binned;
+    if (entry.type === 'number') {
+      const sorted = [...vals].sort((a, b) => a - b);
+      const nBins = Math.max(2, Math.min(10, Math.floor(Math.sqrt(n))));
+      const edges = [];
+      for (let b = 1; b < nBins; b++) edges.push(sorted[Math.floor(b * n / nBins)]);
+      binned = vals.map((v) => { for (let b = 0; b < edges.length; b++) if (v <= edges[b]) return b; return edges.length; });
+    } else {
+      binned = vals;
+    }
+
+    const joint = new Map();
+    for (let i = 0; i < n; i++) {
+      const xk = binned[i]; const yk = labels[i];
+      if (!joint.has(xk)) joint.set(xk, new Map());
+      const inner = joint.get(xk);
+      inner.set(yk, (inner.get(yk) || 0) + 1);
+    }
+
+    const mX = new Map(); const mY = new Map();
+    for (const [xk, inner] of joint) {
+      for (const [yk, cnt] of inner) {
+        mX.set(xk, (mX.get(xk) || 0) + cnt);
+        mY.set(yk, (mY.get(yk) || 0) + cnt);
+      }
+    }
+
+    let mi = 0;
+    for (const [xk, inner] of joint) {
+      for (const [yk, cnt] of inner) {
+        if (!cnt) continue;
+        const pxy = cnt / n; const px = mX.get(xk) / n; const py = mY.get(yk) / n;
+        if (px > 0 && py > 0) mi += pxy * Math.log(pxy / (px * py));
+      }
+    }
+    return Math.max(0, mi);
+  }
+
+  // ── 3. Pairwise Pearson correlation (numeric + boolean) ───────────────────────
+  const numericKeys = featureCatalog.filter((e) => e.type === 'number' || e.type === 'boolean').map((e) => e.key);
+  const fMeans = {}; const fStds = {};
+  for (const key of numericKeys) {
+    const vals = rawValues[key];
+    const mean = vals.reduce((s, v) => s + v, 0) / n;
+    const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+    fMeans[key] = mean; fStds[key] = Math.sqrt(variance) || 1e-10;
+  }
+  const corrPairs = {};
+  for (let i = 0; i < numericKeys.length; i++) {
+    const ki = numericKeys[i]; const vi = rawValues[ki];
+    for (let j = i + 1; j < numericKeys.length; j++) {
+      const kj = numericKeys[j]; const vj = rawValues[kj];
+      let cov = 0;
+      for (let row = 0; row < n; row++) cov += (vi[row] - fMeans[ki]) * (vj[row] - fMeans[kj]);
+      const r = (cov / n) / (fStds[ki] * fStds[kj]);
+      if (Math.abs(r) >= 0.85) {
+        if (!corrPairs[ki]) corrPairs[ki] = [];
+        if (!corrPairs[kj]) corrPairs[kj] = [];
+        corrPairs[ki].push({ key: kj, r: roundNumber(r, 3) });
+        corrPairs[kj].push({ key: ki, r: roundNumber(r, 3) });
+      }
+    }
+  }
+
+  // ── 4. L1 Logistic Regression via proximal gradient (soft-thresholding) ───────
+  const vectorizer = fitVectorizer(labeledRows, featureCatalog);
+  const trainVectors = transformRows(labeledRows, vectorizer);
+  const dim = vectorizer.dimension;
+
+  function fitL1(vecs, lbls, lambda, iters) {
+    const w = new Array(dim).fill(0); let b = 0;
+    const lr = 0.05; const m = vecs.length;
+    for (let it = 0; it < iters; it++) {
+      const grads = new Array(dim).fill(0); let bg = 0;
+      for (let r = 0; r < m; r++) {
+        const vec = vecs[r]; let logit = b;
+        for (let f = 0; f < dim; f++) logit += w[f] * vec[f];
+        const err = sigmoid(logit) - lbls[r];
+        bg += err;
+        for (let f = 0; f < dim; f++) grads[f] += err * vec[f];
+      }
+      b -= (lr / m) * bg;
+      const thr = lambda * lr;
+      for (let f = 0; f < dim; f++) {
+        w[f] -= (lr / m) * grads[f];
+        if (w[f] > thr) w[f] -= thr;
+        else if (w[f] < -thr) w[f] += thr;
+        else w[f] = 0;
+      }
+    }
+    return { w, b };
+  }
+
+  function logLoss(vecs, lbls, w, b) {
+    let loss = 0;
+    for (let r = 0; r < vecs.length; r++) {
+      let logit = b;
+      for (let f = 0; f < vecs[r].length; f++) logit += w[f] * vecs[r][f];
+      const p = Math.max(1e-7, Math.min(1 - 1e-7, sigmoid(logit)));
+      loss -= lbls[r] === 1 ? Math.log(p) : Math.log(1 - p);
+    }
+    return loss / vecs.length;
+  }
+
+  // Pick λ via 3-fold log-loss CV
+  const foldSize = Math.floor(n / 3);
+  let bestLambda = 0.01; let bestCvLoss = Infinity;
+  for (const lambda of [0.001, 0.005, 0.01, 0.05]) {
+    let totalLoss = 0;
+    for (let fold = 0; fold < 3; fold++) {
+      const ts = fold * foldSize; const te = fold === 2 ? n : ts + foldSize;
+      const tV = [...trainVectors.slice(0, ts), ...trainVectors.slice(te)];
+      const tL = [...labels.slice(0, ts), ...labels.slice(te)];
+      const { w, b } = fitL1(tV, tL, lambda, 150);
+      totalLoss += logLoss(trainVectors.slice(ts, te), labels.slice(ts, te), w, b);
+    }
+    const avg = totalLoss / 3;
+    if (avg < bestCvLoss) { bestCvLoss = avg; bestLambda = lambda; }
+  }
+  const { w: l1Weights } = fitL1(trainVectors, labels, bestLambda, 300);
+
+  // Aggregate one-hot encoded categoricals back to the original feature key
+  const l1ByKey = {};
+  for (const desc of vectorizer.descriptors) {
+    const abs = Math.abs(l1Weights[desc.index]);
+    if (l1ByKey[desc.feature_key] === undefined || abs > Math.abs(l1ByKey[desc.feature_key])) {
+      l1ByKey[desc.feature_key] = l1Weights[desc.index];
+    }
+  }
+
+  // ── 5. Random Forest importances ─────────────────────────────────────────────
+  const rf = trainRandomForest(trainVectors, labels, { trees: 100, maxDepth: 7 });
+  const rfImps = rf.feature_importances || [];
+  const rfByKey = {};
+  for (const desc of vectorizer.descriptors) {
+    rfByKey[desc.feature_key] = (rfByKey[desc.feature_key] || 0) + (rfImps[desc.index] || 0);
+  }
+
+  // ── 6. MI scores + ranks ──────────────────────────────────────────────────────
+  const miScores = {};
+  for (const entry of featureCatalog) miScores[entry.key] = roundNumber(computeMI(entry), 4);
+  const sortedByMI = [...featureCatalog].sort((a, b) => (miScores[b.key] || 0) - (miScores[a.key] || 0));
+  const miRank = {}; sortedByMI.forEach((e, i) => { miRank[e.key] = i + 1; });
+
+  // ── 7. Per-feature verdict ────────────────────────────────────────────────────
+  // For correlated pairs, flag only the member with lower MI (the weaker signal).
+  const corrLowerMI = new Set();
+  for (const [ki, pairs] of Object.entries(corrPairs)) {
+    for (const { key: kj } of pairs) {
+      if (ki < kj) corrLowerMI.add((miScores[ki] || 0) <= (miScores[kj] || 0) ? ki : kj);
+    }
+  }
+
+  const features = featureCatalog.map((entry) => {
+    const vi = varianceInfo(entry);
+    const mi = miScores[entry.key] || 0;
+    const l1Coef = l1ByKey[entry.key] !== undefined ? roundNumber(l1ByKey[entry.key], 4) : null;
+    const rfImp = rfByKey[entry.key] !== undefined ? roundNumber(rfByKey[entry.key], 4) : null;
+
+    const flags = {
+      near_zero_variance:  vi.near_zero,
+      low_mi:              mi < 0.005,
+      lasso_zeroed:        l1Coef !== null && l1Coef === 0,
+      low_rf_importance:   rfImp !== null && rfImp < 0.003,
+      high_correlation:    corrLowerMI.has(entry.key),
+    };
+
+    const flagCount = Object.values(flags).filter(Boolean).length;
+    const verdict = flagCount >= 3 ? 'drop' : flagCount >= 2 ? 'review' : 'keep';
+
+    return {
+      key: entry.key, title: entry.title, family: entry.family, type: entry.type,
+      variance: vi, mi, mi_rank: miRank[entry.key],
+      lasso_coef: l1Coef, rf_importance: rfImp,
+      corr_pairs: corrPairs[entry.key] || [],
+      flags, verdict,
+    };
+  });
+
+  // ── 8. Known threshold series (structural, data-independent) ─────────────────
+  const THRESHOLD_SERIES = [
+    {
+      group: 'Repeat Count Thresholds',
+      features: ['min_k_threshold_pass_3', 'min_k_threshold_pass_5', 'min_k_threshold_pass_8', 'min_k_threshold_pass_15'],
+      note: 'Perfectly nested booleans: pass_15 ⊆ pass_8 ⊆ pass_5 ⊆ pass_3. At most one is needed — the MI scores above show which threshold is most discriminative.',
+    },
+    {
+      group: 'Signature Repetition Strength',
+      features: ['sig_id_count_weak', 'sig_id_count_medium', 'sig_id_count_strong'],
+      note: 'Nested severity tiers: strong ⊆ medium ⊆ weak. Consider replacing all three with the continuous repeating_group_count, which already carries this information.',
+    },
+  ].filter((group) => group.features.some((k) => featureCatalog.some((e) => e.key === k)));
+
+  // ── 9. Summary counts ─────────────────────────────────────────────────────────
+  const summary = {
+    drop_count:              features.filter((f) => f.verdict === 'drop').length,
+    review_count:            features.filter((f) => f.verdict === 'review').length,
+    keep_count:              features.filter((f) => f.verdict === 'keep').length,
+    near_zero_variance_count: features.filter((f) => f.flags.near_zero_variance).length,
+    low_mi_count:            features.filter((f) => f.flags.low_mi).length,
+    lasso_zeroed_count:      features.filter((f) => f.flags.lasso_zeroed).length,
+    low_rf_count:            features.filter((f) => f.flags.low_rf_importance).length,
+    high_corr_count:         features.filter((f) => f.flags.high_correlation).length,
+    chosen_l1_lambda:        bestLambda,
+  };
+
+  return { total_labeled: n, feature_count: featureCatalog.length, threshold_series: THRESHOLD_SERIES, features, summary };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2397,6 +2665,7 @@ module.exports = {
   runCrossValidation,
   computeLearningCurve,
   getDomainBuckets,
+  analyzeFeatures,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

@@ -189,6 +189,11 @@
             <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">See which sites fall into each CV fold's test bucket — useful for investigating weak folds.</span>
           </div>
           <div id="diag-bucket-result" class="table-shell empty" style="margin-top:12px">Domain bucket results will appear here.</div>
+          <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+            <button id="diag-feature-selection" class="secondary compact" type="button">Analyse Feature Relevance</button>
+            <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">Score all features by variance, mutual information, Lasso coefficient, and RF importance — flags noise and redundancy.</span>
+          </div>
+          <div id="diag-fs-result" class="table-shell empty" style="margin-top:12px">Feature analysis results will appear here.</div>
         </section>
 
         <section class="panel">
@@ -290,6 +295,11 @@
           <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">See which sites fall into each CV fold's test bucket — useful for investigating weak folds.</span>
         </div>
         <div id="diag-bucket-result" class="table-shell empty" style="margin-top:12px">Domain bucket results will appear here.</div>
+        <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <button id="diag-feature-selection" class="secondary compact" type="button">Analyse Feature Relevance</button>
+          <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">Score all features by variance, mutual information, Lasso coefficient, and RF importance — flags noise and redundancy.</span>
+        </div>
+        <div id="diag-fs-result" class="table-shell empty" style="margin-top:12px">Feature analysis results will appear here.</div>
       </section>
 
       <section class="panel">

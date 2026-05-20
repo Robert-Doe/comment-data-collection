@@ -826,6 +826,19 @@ function createModelingRouter(dependencies) {
     } catch (error) { next(error); }
   });
 
+  // POST /feature-selection — data-driven feature analysis (async fork).
+  // Fits L1 LR + RF internally; no algorithm or strategy param needed.
+  router.post('/feature-selection', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) return res.status(400).json({ error: 'Select a valid model variant' });
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const jobId  = crypto.randomUUID();
+      res.status(202).json({ ok: true, jobId, status: 'running' });
+      forkDiagTask('feature-selection', jobId, variantId, null, null, jobIds);
+    } catch (error) { next(error); }
+  });
+
   router.post('/score-job', async (req, res, next) => {
     try {
       const modelId = String(req.body && req.body.modelId || '').trim();
