@@ -62,6 +62,7 @@ async function buildOverview(items, artifactRoot, options = {}) {
       title: family.title,
       description: family.description,
       feature_count: family.features.length,
+      features: family.features.map((f) => ({ key: f.key, title: f.title, type: f.type })),
     })),
     imbalance_strategies: listImbalanceStrategies(),
     models,

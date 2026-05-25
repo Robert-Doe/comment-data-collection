@@ -135,29 +135,45 @@
               <div id="imbalance-strategy-note" class="summary empty">Select a strategy to see how it changes the in-memory training split.</div>
             </div>
           </div>
-          <details id="feature-exclusion-details" style="margin-top:4px">
-            <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--muted);padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
-              <span id="feature-exclusion-arrow" style="font-size:0.7rem;transition:transform .15s">&#9654;</span>
-              Feature Selection
-              <span id="feature-exclusion-badge" style="font-size:0.77rem;font-weight:500;color:var(--accent);display:none"></span>
-            </summary>
-            <div style="padding:12px 0 4px">
-              <p style="font-size:0.82rem;color:var(--muted);margin:0 0 10px">
-                All features are included by default. Uncheck any feature to exclude it from the next training run. Use <strong>Analyse Feature Relevance</strong> in Diagnostics to get data-driven suggestions, then click <strong>Apply Suggestions</strong> here.
-              </p>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-                <span id="feature-exclusion-status" style="font-size:0.82rem;color:var(--muted)">Loading features…</span>
-                <button id="feature-exclusion-clear" class="secondary compact" type="button" style="display:none">Clear all exclusions</button>
+          <div id="feature-exclusion-block" style="margin-top:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+
+            <!-- always-visible header row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--surface-2,#1e293b)">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-size:0.84rem;font-weight:600">Feature Selection</span>
+                <span id="feature-exclusion-status" style="font-size:0.8rem;color:var(--muted)">Loading…</span>
               </div>
-              <div id="feature-exclusion-apply-bar" style="display:none;margin-bottom:14px;padding:10px 14px;background:rgba(79,142,247,.07);border:1px solid rgba(79,142,247,.2);border-radius:6px;font-size:0.82rem">
-                <strong style="color:var(--accent)">Suggestions ready</strong>
-                <span id="feature-exclusion-apply-summary" style="color:var(--muted);margin:0 10px"></span>
-                <button id="feature-exclusion-apply-drop" class="primary compact" type="button" style="margin-right:6px">Apply drop only</button>
-                <button id="feature-exclusion-apply-both" class="secondary compact" type="button">Apply drop + review</button>
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                <button id="feature-exclusion-clear" class="secondary compact" type="button" style="display:none">Clear all</button>
+                <button id="feature-exclusion-toggle" class="secondary compact" type="button">Edit manually</button>
               </div>
-              <div id="feature-exclusion-families" style="display:flex;flex-direction:column;gap:14px"></div>
             </div>
-          </details>
+
+            <!-- suggestions bar — hidden until Analyse Feature Relevance runs -->
+            <div id="feature-exclusion-apply-bar" style="display:none;padding:10px 14px;border-top:1px solid rgba(79,142,247,.25);background:rgba(79,142,247,.07);font-size:0.82rem;align-items:center;flex-wrap:wrap;gap:8px">
+              <strong style="color:var(--accent)">Suggestions ready</strong>
+              <span id="feature-exclusion-apply-summary" style="color:var(--muted)"></span>
+              <button id="feature-exclusion-apply-drop" class="primary compact" type="button">Apply drop only</button>
+              <button id="feature-exclusion-apply-both" class="secondary compact" type="button">Apply drop + review</button>
+            </div>
+
+            <!-- excluded-feature tag strip — hidden when nothing excluded -->
+            <div id="feature-exclusion-tags" style="display:none;padding:10px 14px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px;align-items:center">
+              <span style="font-size:0.78rem;color:var(--muted);margin-right:2px;flex-shrink:0">Excluded:</span>
+            </div>
+
+            <!-- manual checkbox grid — collapsed by default -->
+            <details id="feature-exclusion-details" style="border-top:1px solid var(--border)">
+              <summary style="cursor:pointer;font-size:0.8rem;color:var(--muted);padding:8px 14px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
+                <span id="feature-exclusion-arrow" style="font-size:0.65rem;transition:transform .15s">&#9654;</span>
+                <span id="feature-exclusion-manual-label">Edit manually</span>
+              </summary>
+              <div style="padding:12px 14px 14px">
+                <p style="font-size:0.8rem;color:var(--muted);margin:0 0 12px">Uncheck any feature to exclude it from the next training run. Use the family header checkbox to toggle an entire group.</p>
+                <div id="feature-exclusion-families" style="display:flex;flex-direction:column;gap:12px"></div>
+              </div>
+            </details>
+          </div>
 
           <div class="panel-actions">
             <button id="compare-imbalance" class="secondary" type="button" title="Train the same model across every imbalance strategy and compare the results.">Compare Strategies</button>

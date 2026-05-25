@@ -69,11 +69,14 @@
   const diagBucketResult = document.getElementById('diag-bucket-result');
   const diagFeatureSelectionButton = document.getElementById('diag-feature-selection');
   const diagFsResult = document.getElementById('diag-fs-result');
+  const featureExclusionBlock = document.getElementById('feature-exclusion-block');
   const featureExclusionDetails = document.getElementById('feature-exclusion-details');
   const featureExclusionArrow = document.getElementById('feature-exclusion-arrow');
-  const featureExclusionBadge = document.getElementById('feature-exclusion-badge');
+  const featureExclusionManualLabel = document.getElementById('feature-exclusion-manual-label');
   const featureExclusionStatus = document.getElementById('feature-exclusion-status');
   const featureExclusionClear = document.getElementById('feature-exclusion-clear');
+  const featureExclusionToggle = document.getElementById('feature-exclusion-toggle');
+  const featureExclusionTags = document.getElementById('feature-exclusion-tags');
   const featureExclusionFamilies = document.getElementById('feature-exclusion-families');
   const featureExclusionApplyBar = document.getElementById('feature-exclusion-apply-bar');
   const featureExclusionApplySummary = document.getElementById('feature-exclusion-apply-summary');
@@ -3330,160 +3333,224 @@
   }
 
   // ── Feature Exclusion panel ───────────────────────────────────────────────────
+  // State: a Set of excluded feature keys — single source of truth.
+  const excludedFeatureKeys = new Set();
+
+  // Map of key → {title, type} for building tags; populated when panel is built.
+  const featureMeta = new Map();
 
   function getExcludedFeatures() {
-    if (!featureExclusionFamilies) return [];
-    const boxes = featureExclusionFamilies.querySelectorAll('input[type=checkbox][data-feature-key]');
-    const excluded = [];
-    boxes.forEach((box) => { if (!box.checked) excluded.push(box.dataset.featureKey); });
-    return excluded;
+    return Array.from(excludedFeatureKeys);
   }
 
-  function updateFeatureExclusionStatus() {
-    if (!featureExclusionFamilies) return;
-    const boxes = featureExclusionFamilies.querySelectorAll('input[type=checkbox][data-feature-key]');
-    const total = boxes.length;
-    if (!total) return;
-    const excluded = [];
-    boxes.forEach((box) => { if (!box.checked) excluded.push(box.dataset.featureKey); });
-    const active = total - excluded.length;
-
-    if (featureExclusionStatus) {
-      featureExclusionStatus.textContent = excluded.length
-        ? `${active} of ${total} features active · ${excluded.length} excluded`
-        : `All ${total} features active`;
-      featureExclusionStatus.style.color = excluded.length ? 'var(--amber,#f6a623)' : 'var(--muted)';
+  function renderExclusionTags() {
+    if (!featureExclusionTags) return;
+    // Clear everything after the static "Excluded:" label (first child)
+    while (featureExclusionTags.children.length > 1) {
+      featureExclusionTags.removeChild(featureExclusionTags.lastChild);
     }
-    if (featureExclusionBadge) {
-      if (excluded.length) {
-        featureExclusionBadge.textContent = `${excluded.length} excluded`;
-        featureExclusionBadge.style.display = '';
+
+    if (excludedFeatureKeys.size === 0) {
+      featureExclusionTags.style.display = 'none';
+      return;
+    }
+
+    featureExclusionTags.style.cssText = featureExclusionTags.style.cssText.replace('display:none', '');
+    featureExclusionTags.style.display = 'flex';
+    excludedFeatureKeys.forEach((key) => {
+      const meta = featureMeta.get(key) || { title: key };
+      const tag = document.createElement('span');
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;background:rgba(224,85,85,.13);border:1px solid rgba(224,85,85,.3);border-radius:12px;font-size:0.77rem;color:var(--red,#e05555)';
+      const label = document.createElement('code');
+      label.style.cssText = 'font-size:0.75rem';
+      label.textContent = key;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.title = `Re-include ${key}`;
+      removeBtn.style.cssText = 'background:none;border:none;padding:0;cursor:pointer;color:var(--red,#e05555);font-size:0.85rem;line-height:1;opacity:.7;display:flex;align-items:center';
+      removeBtn.innerHTML = '&#215;';
+      removeBtn.addEventListener('click', () => {
+        excludedFeatureKeys.delete(key);
+        // Re-check the matching checkbox if the grid is built
+        if (featureExclusionFamilies) {
+          const cb = featureExclusionFamilies.querySelector(`input[type=checkbox][data-feature-key="${CSS.escape(key)}"]`);
+          if (cb) {
+            cb.checked = true;
+            syncFamilyCheckbox(cb);
+          }
+        }
+        updateExclusionUI();
+      });
+      tag.appendChild(label);
+      tag.appendChild(removeBtn);
+      featureExclusionTags.appendChild(tag);
+    });
+  }
+
+  function syncFamilyCheckbox(featureCheckbox) {
+    const familyEl = featureCheckbox.closest('[data-family-el]');
+    if (!familyEl) return;
+    const familyBox = familyEl.querySelector('input[type=checkbox][data-family-check]');
+    const childBoxes = Array.from(familyEl.querySelectorAll('input[type=checkbox][data-feature-key]'));
+    if (!familyBox || !childBoxes.length) return;
+    const checkedCount = childBoxes.filter((b) => b.checked).length;
+    if (checkedCount === childBoxes.length) { familyBox.checked = true; familyBox.indeterminate = false; }
+    else if (checkedCount === 0) { familyBox.checked = false; familyBox.indeterminate = false; }
+    else { familyBox.indeterminate = true; }
+  }
+
+  function updateExclusionUI() {
+    const total = featureMeta.size;
+    const excluded = excludedFeatureKeys.size;
+    const active = total - excluded;
+
+    // Status text
+    if (featureExclusionStatus) {
+      if (!total) {
+        featureExclusionStatus.textContent = 'Loading…';
+        featureExclusionStatus.style.color = 'var(--muted)';
+      } else if (excluded) {
+        featureExclusionStatus.textContent = `${active} of ${total} features active · ${excluded} excluded`;
+        featureExclusionStatus.style.color = 'var(--amber,#f6a623)';
       } else {
-        featureExclusionBadge.style.display = 'none';
+        featureExclusionStatus.textContent = `All ${total} features active`;
+        featureExclusionStatus.style.color = 'var(--muted)';
       }
     }
-    if (featureExclusionClear) {
-      featureExclusionClear.style.display = excluded.length ? '' : 'none';
+
+    // Clear button
+    if (featureExclusionClear) featureExclusionClear.style.display = excluded ? '' : 'none';
+
+    // Manual label count
+    if (featureExclusionManualLabel) {
+      featureExclusionManualLabel.textContent = total ? `Edit manually (${total} features)` : 'Edit manually';
     }
+
+    // Tag strip
+    renderExclusionTags();
   }
 
   function buildFeatureExclusionPanel(featureFamilies) {
     if (!featureExclusionFamilies || !Array.isArray(featureFamilies) || !featureFamilies.length) return;
+    // Only build once
+    if (featureMeta.size) return;
+
     featureExclusionFamilies.innerHTML = '';
 
     featureFamilies.forEach((family) => {
       if (!Array.isArray(family.features) || !family.features.length) return;
 
+      // Register meta for tag rendering
+      family.features.forEach((f) => featureMeta.set(f.key, { title: f.title, type: f.type }));
+
       const familyEl = document.createElement('div');
+      familyEl.setAttribute('data-family-el', '');
       familyEl.style.cssText = 'border:1px solid var(--border);border-radius:6px;overflow:hidden';
 
-      // Family header row
+      // Family header
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--surface-2,#1e293b);border-bottom:1px solid var(--border)';
+      header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--surface-2,#1e293b);border-bottom:1px solid var(--border)';
 
       const familyCheck = document.createElement('input');
       familyCheck.type = 'checkbox';
       familyCheck.checked = true;
-      familyCheck.title = 'Toggle all features in this family';
+      familyCheck.setAttribute('data-family-check', '');
+      familyCheck.title = `Toggle all ${family.title} features`;
       familyCheck.style.cssText = 'margin:0;cursor:pointer';
 
       const familyLabel = document.createElement('span');
-      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600';
+      familyLabel.style.cssText = 'font-size:0.81rem;font-weight:600';
       familyLabel.textContent = family.title;
 
-      const familyDesc = document.createElement('span');
-      familyDesc.style.cssText = 'font-size:0.77rem;color:var(--muted);margin-left:4px';
-      familyDesc.textContent = `· ${family.features.length} feature${family.features.length !== 1 ? 's' : ''}`;
+      const familyCount = document.createElement('span');
+      familyCount.style.cssText = 'font-size:0.75rem;color:var(--muted)';
+      familyCount.textContent = `${family.features.length} feature${family.features.length !== 1 ? 's' : ''}`;
 
       header.appendChild(familyCheck);
       header.appendChild(familyLabel);
-      header.appendChild(familyDesc);
+      header.appendChild(familyCount);
       familyEl.appendChild(header);
 
-      // Feature rows
+      // Feature checkbox grid
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0;padding:4px 0';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));padding:4px 0';
 
       const featureCheckboxes = [];
 
       family.features.forEach((feature) => {
         const row = document.createElement('label');
-        row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;border-radius:4px';
-        row.title = feature.description || '';
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 12px;cursor:pointer;font-size:0.79rem';
+        row.title = feature.title || feature.key;
 
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = true;
         cb.dataset.featureKey = feature.key;
-        cb.style.cssText = 'margin:2px 0 0;flex-shrink:0;cursor:pointer';
+        cb.style.cssText = 'flex-shrink:0;cursor:pointer';
         cb.addEventListener('change', () => {
-          // Sync family checkbox indeterminate state
-          const checkedCount = featureCheckboxes.filter((b) => b.checked).length;
-          if (checkedCount === featureCheckboxes.length) {
-            familyCheck.checked = true;
-            familyCheck.indeterminate = false;
-          } else if (checkedCount === 0) {
-            familyCheck.checked = false;
-            familyCheck.indeterminate = false;
-          } else {
-            familyCheck.indeterminate = true;
-          }
-          updateFeatureExclusionStatus();
+          if (cb.checked) excludedFeatureKeys.delete(feature.key);
+          else excludedFeatureKeys.add(feature.key);
+          syncFamilyCheckbox(cb);
+          updateExclusionUI();
         });
 
-        const textWrap = document.createElement('span');
         const keyEl = document.createElement('code');
-        keyEl.style.cssText = 'font-size:0.77rem;background:var(--surface-2,#1e293b);padding:1px 4px;border-radius:3px';
+        keyEl.style.cssText = 'font-size:0.75rem;background:var(--surface-2,#1e293b);padding:1px 4px;border-radius:3px';
         keyEl.textContent = feature.key;
+
         const typeTag = document.createElement('span');
-        typeTag.style.cssText = 'margin-left:5px;font-size:0.7rem;color:var(--muted)';
+        typeTag.style.cssText = 'font-size:0.68rem;color:var(--muted)';
         typeTag.textContent = feature.type;
-        textWrap.appendChild(keyEl);
-        textWrap.appendChild(typeTag);
 
         row.appendChild(cb);
-        row.appendChild(textWrap);
+        row.appendChild(keyEl);
+        row.appendChild(typeTag);
         grid.appendChild(row);
         featureCheckboxes.push(cb);
       });
 
-      // Family checkbox toggles all children
+      // Family toggle wires all its children
       familyCheck.addEventListener('change', () => {
-        featureCheckboxes.forEach((cb) => { cb.checked = familyCheck.checked; });
+        featureCheckboxes.forEach((cb) => {
+          cb.checked = familyCheck.checked;
+          if (familyCheck.checked) excludedFeatureKeys.delete(cb.dataset.featureKey);
+          else excludedFeatureKeys.add(cb.dataset.featureKey);
+        });
         familyCheck.indeterminate = false;
-        updateFeatureExclusionStatus();
+        updateExclusionUI();
       });
 
       familyEl.appendChild(grid);
       featureExclusionFamilies.appendChild(familyEl);
     });
 
-    updateFeatureExclusionStatus();
-    if (featureExclusionStatus) featureExclusionStatus.style.display = '';
+    updateExclusionUI();
   }
 
-  function applyFeatureSuggestions(features, includeReview) {
-    if (!featureExclusionFamilies || !Array.isArray(features)) return;
-    const toExclude = new Set(
-      features
-        .filter((f) => f.verdict === 'drop' || (includeReview && f.verdict === 'review'))
-        .map((f) => f.key),
-    );
-    // Set each feature checkbox
-    const featureBoxes = featureExclusionFamilies.querySelectorAll('input[type=checkbox][data-feature-key]');
-    featureBoxes.forEach((box) => { box.checked = !toExclude.has(box.dataset.featureKey); });
-    // Re-sync family (group) checkboxes — each family container is a direct child of featureExclusionFamilies
-    Array.from(featureExclusionFamilies.children).forEach((familyEl) => {
-      const familyBox = familyEl.querySelector('input[type=checkbox]:not([data-feature-key])');
-      const childBoxes = Array.from(familyEl.querySelectorAll('input[type=checkbox][data-feature-key]'));
-      if (!familyBox || !childBoxes.length) return;
-      const checkedCount = childBoxes.filter((b) => b.checked).length;
-      if (checkedCount === childBoxes.length) { familyBox.checked = true; familyBox.indeterminate = false; }
-      else if (checkedCount === 0) { familyBox.checked = false; familyBox.indeterminate = false; }
-      else { familyBox.indeterminate = true; }
+  function applyFeatureSuggestions(fsFeatures, includeReview) {
+    if (!Array.isArray(fsFeatures)) return;
+    // Update the Set (source of truth)
+    fsFeatures.forEach((f) => {
+      if (f.verdict === 'drop' || (includeReview && f.verdict === 'review')) {
+        excludedFeatureKeys.add(f.key);
+      }
     });
-    updateFeatureExclusionStatus();
-    if (featureExclusionDetails && !featureExclusionDetails.open) featureExclusionDetails.open = true;
+    // Sync checkboxes in the grid (if it's been built)
+    if (featureExclusionFamilies) {
+      const boxes = featureExclusionFamilies.querySelectorAll('input[type=checkbox][data-feature-key]');
+      boxes.forEach((box) => {
+        box.checked = !excludedFeatureKeys.has(box.dataset.featureKey);
+        syncFamilyCheckbox(box);
+      });
+    }
+    updateExclusionUI();
+    // Scroll the tag strip into view so the user sees the result
+    if (featureExclusionTags) {
+      featureExclusionTags.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      featureExclusionTags.style.transition = 'background .4s';
+      featureExclusionTags.style.background = 'rgba(224,85,85,.08)';
+      setTimeout(() => { featureExclusionTags.style.background = ''; }, 800);
+    }
   }
 
   if (featureExclusionDetails) {
@@ -3494,11 +3561,22 @@
     });
   }
 
+  if (featureExclusionToggle) {
+    featureExclusionToggle.addEventListener('click', () => {
+      if (featureExclusionDetails) featureExclusionDetails.open = !featureExclusionDetails.open;
+    });
+  }
+
   if (featureExclusionClear) {
     featureExclusionClear.addEventListener('click', () => {
-      const boxes = featureExclusionFamilies ? featureExclusionFamilies.querySelectorAll('input[type=checkbox]') : [];
-      boxes.forEach((box) => { box.checked = true; box.indeterminate = false; });
-      updateFeatureExclusionStatus();
+      excludedFeatureKeys.clear();
+      if (featureExclusionFamilies) {
+        featureExclusionFamilies.querySelectorAll('input[type=checkbox]').forEach((box) => {
+          box.checked = true;
+          box.indeterminate = false;
+        });
+      }
+      updateExclusionUI();
     });
   }
 
@@ -3540,7 +3618,7 @@
           reviewCount ? `${reviewCount} review` : '',
         ].filter(Boolean).join(' · ');
       }
-      featureExclusionApplyBar.style.display = '';
+      featureExclusionApplyBar.style.display = 'flex';
     }
 
     const { features, summary, threshold_series: tSeries, total_labeled, feature_count } = result;
