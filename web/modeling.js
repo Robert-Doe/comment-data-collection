@@ -3459,7 +3459,7 @@
       familyCheck.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0';
 
       const familyLabel = document.createElement('span');
-      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600;color:var(--text,#1f2937)';
+      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600;color:#111';
       familyLabel.textContent = family.title;
 
       const familyCount = document.createElement('span');
@@ -3506,7 +3506,7 @@
         keyEl.style.cssText = [
           'font-size:0.77rem',
           'font-family:ui-monospace,monospace',
-          'color:var(--text,#1f2937)',   // --text is #1f2937 in styles.css
+          'color:#111'
           'overflow:hidden',
           'text-overflow:ellipsis',
           'white-space:nowrap',
