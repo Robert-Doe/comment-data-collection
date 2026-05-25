@@ -3449,7 +3449,7 @@
 
       // Family header
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--surface-2,rgba(0,0,0,.06));border-bottom:1px solid var(--border)';
+      header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel-soft,#f8faff);border-bottom:1px solid var(--line,rgba(17,24,39,.1))';
 
       const familyCheck = document.createElement('input');
       familyCheck.type = 'checkbox';
@@ -3459,11 +3459,11 @@
       familyCheck.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0';
 
       const familyLabel = document.createElement('span');
-      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600';
+      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600;color:var(--text,#1f2937)';
       familyLabel.textContent = family.title;
 
       const familyCount = document.createElement('span');
-      familyCount.style.cssText = 'font-size:0.74rem;color:var(--muted);margin-left:auto;flex-shrink:0';
+      familyCount.style.cssText = 'font-size:0.74rem;color:var(--muted,#66758a);margin-left:auto;flex-shrink:0';
       familyCount.textContent = `${family.features.length} feature${family.features.length !== 1 ? 's' : ''}`;
 
       header.appendChild(familyCheck);
@@ -3471,17 +3471,23 @@
       header.appendChild(familyCount);
       familyEl.appendChild(header);
 
-      // Feature list — single column, no overflow bleed between cells
+      // Feature grid — two columns, each row strictly contained
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))';
 
       const featureCheckboxes = [];
 
       family.features.forEach((feature) => {
         const row = document.createElement('label');
-        // overflow:hidden is critical — prevents text from the code tag bleeding
-        // into the adjacent cell and creating a phantom second checkbox
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;overflow:hidden;border-bottom:1px solid var(--border)';
+        row.style.cssText = [
+          'display:flex',
+          'align-items:center',
+          'gap:8px',
+          'padding:5px 14px',
+          'cursor:pointer',
+          'overflow:hidden',           // prevents key text bleeding into adjacent cell
+          'border-bottom:1px solid var(--line,rgba(17,24,39,.1))',
+        ].join(';');
         row.title = feature.title || feature.key;
 
         const cb = document.createElement('input');
@@ -3496,13 +3502,30 @@
           updateExclusionUI();
         });
 
-        // Plain span with truncation — no explicit color so it inherits from the theme
         const keyEl = document.createElement('span');
-        keyEl.style.cssText = 'font-size:0.78rem;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0';
+        keyEl.style.cssText = [
+          'font-size:0.77rem',
+          'font-family:ui-monospace,monospace',
+          'color:var(--text,#1f2937)',   // --text is #1f2937 in styles.css
+          'overflow:hidden',
+          'text-overflow:ellipsis',
+          'white-space:nowrap',
+          'flex:1',
+          'min-width:0',                 // allows flex child to shrink below content size
+        ].join(';');
         keyEl.textContent = feature.key;
 
         const typeTag = document.createElement('span');
-        typeTag.style.cssText = 'font-size:0.68rem;color:var(--muted);flex-shrink:0;padding:1px 5px;border:1px solid var(--border);border-radius:3px';
+        typeTag.style.cssText = [
+          'font-size:0.67rem',
+          'color:var(--muted,#66758a)',
+          'background:var(--panel-soft,#f8faff)',
+          'border:1px solid var(--line,rgba(17,24,39,.1))',
+          'padding:1px 5px',
+          'border-radius:3px',
+          'white-space:nowrap',
+          'flex-shrink:0',
+        ].join(';');
         typeTag.textContent = feature.type;
 
         row.appendChild(cb);

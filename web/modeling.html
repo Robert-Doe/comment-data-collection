@@ -135,7 +135,7 @@
               <div id="imbalance-strategy-note" class="summary empty">Select a strategy to see how it changes the in-memory training split.</div>
             </div>
           </div>
-          <div id="feature-exclusion-block" style="margin-top:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div id="feature-exclusion-block" style="margin-top:16px;border:1px solid var(--line,rgba(17,24,39,.1));border-radius:8px;overflow:hidden">
 
             <!-- always-visible header row -->
             <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--surface-2,#1e293b)">
@@ -158,12 +158,12 @@
             </div>
 
             <!-- excluded-feature tag strip — hidden when nothing excluded -->
-            <div id="feature-exclusion-tags" style="display:none;padding:10px 14px;border-top:1px solid var(--border);flex-wrap:wrap;gap:6px;align-items:center">
-              <span style="font-size:0.78rem;color:var(--muted);margin-right:2px;flex-shrink:0">Excluded:</span>
+            <div id="feature-exclusion-tags" style="display:none;padding:10px 14px;border-top:1px solid var(--line,rgba(17,24,39,.1));flex-wrap:wrap;gap:6px;align-items:center">
+              <span style="font-size:0.78rem;color:var(--muted,#66758a);margin-right:2px;flex-shrink:0">Excluded:</span>
             </div>
 
             <!-- manual checkbox grid — collapsed by default -->
-            <details id="feature-exclusion-details" style="border-top:1px solid var(--border)">
+            <details id="feature-exclusion-details" style="border-top:1px solid var(--line,rgba(17,24,39,.1))">
               <summary style="cursor:pointer;font-size:0.8rem;color:var(--muted);padding:8px 14px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
                 <span id="feature-exclusion-arrow" style="font-size:0.65rem;transition:transform .15s">&#9654;</span>
                 <span id="feature-exclusion-manual-label">Edit manually</span>
@@ -224,12 +224,12 @@
           <p id="diag-message" class="message"></p>
           <div id="diag-cv-result" class="table-shell empty" style="margin-top:16px">Cross-validation results will appear here.</div>
           <div id="diag-lc-result" class="table-shell empty" style="margin-top:16px">Learning curve results will appear here.</div>
-          <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line,rgba(17,24,39,.1))">
             <button id="diag-domain-buckets" class="secondary compact" type="button">Inspect Domain Buckets</button>
             <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">See which sites fall into each CV fold's test bucket — useful for investigating weak folds.</span>
           </div>
           <div id="diag-bucket-result" class="table-shell empty" style="margin-top:12px">Domain bucket results will appear here.</div>
-          <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line,rgba(17,24,39,.1))">
             <button id="diag-feature-selection" class="secondary compact" type="button">Analyse Feature Relevance</button>
             <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">Score all features by variance, mutual information, Lasso coefficient, and RF importance — flags noise and redundancy.</span>
           </div>
@@ -330,12 +330,12 @@
         <p id="diag-message" class="message"></p>
         <div id="diag-cv-result" class="table-shell empty" style="margin-top:16px">Cross-validation results will appear here.</div>
         <div id="diag-lc-result" class="table-shell empty" style="margin-top:16px">Learning curve results will appear here.</div>
-        <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line,rgba(17,24,39,.1))">
           <button id="diag-domain-buckets" class="secondary compact" type="button">Inspect Domain Buckets</button>
           <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">See which sites fall into each CV fold's test bucket — useful for investigating weak folds.</span>
         </div>
         <div id="diag-bucket-result" class="table-shell empty" style="margin-top:12px">Domain bucket results will appear here.</div>
-        <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="panel-actions" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line,rgba(17,24,39,.1))">
           <button id="diag-feature-selection" class="secondary compact" type="button">Analyse Feature Relevance</button>
           <span style="font-size:0.82rem;color:var(--muted);margin-left:8px">Score all features by variance, mutual information, Lasso coefficient, and RF importance — flags noise and redundancy.</span>
         </div>
