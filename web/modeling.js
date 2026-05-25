@@ -3445,7 +3445,7 @@
 
       const familyEl = document.createElement('div');
       familyEl.setAttribute('data-family-el', '');
-      familyEl.style.cssText = 'border:1px solid var(--border);border-radius:6px;overflow:hidden';
+      familyEl.style.cssText = 'border:1px solid var(--line,rgba(17,24,39,.1));border-radius:6px;overflow:hidden';
 
       // Family header
       const header = document.createElement('div');
@@ -3506,7 +3506,7 @@
         keyEl.style.cssText = [
           'font-size:0.77rem',
           'font-family:ui-monospace,monospace',
-          'color:#111'
+          'color:#111',
           'overflow:hidden',
           'text-overflow:ellipsis',
           'white-space:nowrap',
