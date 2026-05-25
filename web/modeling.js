@@ -3449,21 +3449,21 @@
 
       // Family header
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--surface-2,#1e293b);border-bottom:1px solid var(--border)';
+      header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(255,255,255,.04);border-bottom:1px solid var(--border)';
 
       const familyCheck = document.createElement('input');
       familyCheck.type = 'checkbox';
       familyCheck.checked = true;
       familyCheck.setAttribute('data-family-check', '');
       familyCheck.title = `Toggle all ${family.title} features`;
-      familyCheck.style.cssText = 'margin:0;cursor:pointer';
+      familyCheck.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0';
 
       const familyLabel = document.createElement('span');
-      familyLabel.style.cssText = 'font-size:0.81rem;font-weight:600';
+      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600;color:var(--fg,#e2e8f0)';
       familyLabel.textContent = family.title;
 
       const familyCount = document.createElement('span');
-      familyCount.style.cssText = 'font-size:0.75rem;color:var(--muted)';
+      familyCount.style.cssText = 'font-size:0.74rem;color:var(--muted);margin-left:auto';
       familyCount.textContent = `${family.features.length} feature${family.features.length !== 1 ? 's' : ''}`;
 
       header.appendChild(familyCheck);
@@ -3473,13 +3473,13 @@
 
       // Feature checkbox grid
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));padding:4px 0';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));padding:6px 0;background:rgba(255,255,255,.01)';
 
       const featureCheckboxes = [];
 
       family.features.forEach((feature) => {
         const row = document.createElement('label');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 12px;cursor:pointer;font-size:0.79rem';
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 14px;cursor:pointer;font-size:0.79rem;color:var(--fg,#e2e8f0)';
         row.title = feature.title || feature.key;
 
         const cb = document.createElement('input');
@@ -3495,11 +3495,11 @@
         });
 
         const keyEl = document.createElement('code');
-        keyEl.style.cssText = 'font-size:0.75rem;background:var(--surface-2,#1e293b);padding:1px 4px;border-radius:3px';
+        keyEl.style.cssText = 'font-size:0.75rem;color:var(--fg,#e2e8f0);border:1px solid rgba(255,255,255,.12);padding:1px 5px;border-radius:3px;background:transparent';
         keyEl.textContent = feature.key;
 
         const typeTag = document.createElement('span');
-        typeTag.style.cssText = 'font-size:0.68rem;color:var(--muted)';
+        typeTag.style.cssText = 'font-size:0.68rem;color:var(--muted);flex-shrink:0';
         typeTag.textContent = feature.type;
 
         row.appendChild(cb);
