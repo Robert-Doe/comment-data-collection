@@ -3445,56 +3445,49 @@
 
       const familyEl = document.createElement('div');
       familyEl.setAttribute('data-family-el', '');
-      familyEl.style.cssText = 'border:1px solid var(--line,rgba(17,24,39,.1));border-radius:6px;overflow:hidden';
+      familyEl.style.cssText = 'border:1px solid rgba(17,24,39,0.15);border-radius:8px;overflow:hidden';
 
-      // Family header
+      // ── Family header: checkbox left, group name CENTERED, count right ──
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel-soft,#f8faff);border-bottom:1px solid var(--line,rgba(17,24,39,.1))';
+      header.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;padding:9px 48px;background:#dde4f0;border-bottom:1px solid rgba(17,24,39,0.15)';
 
       const familyCheck = document.createElement('input');
       familyCheck.type = 'checkbox';
       familyCheck.checked = true;
       familyCheck.setAttribute('data-family-check', '');
       familyCheck.title = `Toggle all ${family.title} features`;
-      familyCheck.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0';
+      familyCheck.style.cssText = 'position:absolute;left:14px;top:50%;transform:translateY(-50%);margin:0;cursor:pointer;width:15px;height:15px';
 
-      const familyLabel = document.createElement('span');
-      familyLabel.style.cssText = 'font-size:0.82rem;font-weight:600;color:#111';
+      const familyLabel = document.createElement('strong');
+      familyLabel.style.cssText = 'font-size:0.84rem;font-weight:700;color:#111827;text-align:center;letter-spacing:0.01em';
       familyLabel.textContent = family.title;
 
       const familyCount = document.createElement('span');
-      familyCount.style.cssText = 'font-size:0.74rem;color:var(--muted,#66758a);margin-left:auto;flex-shrink:0';
-      familyCount.textContent = `${family.features.length} feature${family.features.length !== 1 ? 's' : ''}`;
+      familyCount.style.cssText = 'position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:0.71rem;color:#4b5563;background:#fff;border:1px solid rgba(17,24,39,0.15);padding:1px 7px;border-radius:10px;white-space:nowrap';
+      familyCount.textContent = `${family.features.length} feat.`;
 
       header.appendChild(familyCheck);
       header.appendChild(familyLabel);
       header.appendChild(familyCount);
       familyEl.appendChild(header);
 
-      // Feature grid — two columns, each row strictly contained
+      // ── Feature grid: explicit 2-column layout ──
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))';
+      grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;background:#ffffff';
 
       const featureCheckboxes = [];
 
-      family.features.forEach((feature) => {
+      family.features.forEach((feature, idx) => {
         const row = document.createElement('label');
-        row.style.cssText = [
-          'display:flex',
-          'align-items:center',
-          'gap:8px',
-          'padding:5px 14px',
-          'cursor:pointer',
-          'overflow:hidden',           // prevents key text bleeding into adjacent cell
-          'border-bottom:1px solid var(--line,rgba(17,24,39,.1))',
-        ].join(';');
+        const borderRight = (idx % 2 === 0) ? ';border-right:1px solid rgba(17,24,39,0.1)' : '';
+        row.style.cssText = 'display:flex;align-items:center;gap:7px;padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(17,24,39,0.08);box-sizing:border-box' + borderRight;
         row.title = feature.title || feature.key;
 
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = true;
         cb.dataset.featureKey = feature.key;
-        cb.style.cssText = 'flex-shrink:0;cursor:pointer';
+        cb.style.cssText = 'flex-shrink:0;margin:0;cursor:pointer;width:14px;height:14px';
         cb.addEventListener('change', () => {
           if (cb.checked) excludedFeatureKeys.delete(feature.key);
           else excludedFeatureKeys.add(feature.key);
@@ -3503,29 +3496,11 @@
         });
 
         const keyEl = document.createElement('span');
-        keyEl.style.cssText = [
-          'font-size:0.77rem',
-          'font-family:ui-monospace,monospace',
-          'color:#111',
-          'overflow:hidden',
-          'text-overflow:ellipsis',
-          'white-space:nowrap',
-          'flex:1',
-          'min-width:0',                 // allows flex child to shrink below content size
-        ].join(';');
+        keyEl.style.cssText = 'display:block;font-size:0.78rem;font-family:ui-monospace,Consolas,monospace;color:#111827;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
         keyEl.textContent = feature.key;
 
         const typeTag = document.createElement('span');
-        typeTag.style.cssText = [
-          'font-size:0.67rem',
-          'color:var(--muted,#66758a)',
-          'background:var(--panel-soft,#f8faff)',
-          'border:1px solid var(--line,rgba(17,24,39,.1))',
-          'padding:1px 5px',
-          'border-radius:3px',
-          'white-space:nowrap',
-          'flex-shrink:0',
-        ].join(';');
+        typeTag.style.cssText = 'display:block;font-size:0.66rem;color:#4b5563;background:#f3f4f6;border:1px solid rgba(17,24,39,0.12);padding:1px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0';
         typeTag.textContent = feature.type;
 
         row.appendChild(cb);
