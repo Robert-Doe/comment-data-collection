@@ -507,11 +507,13 @@ function createModelingRouter(dependencies) {
       }
 
       const jobIds   = normalizeJobIds(req.body && req.body.jobIds || '');
+      const excludeFeatures = Array.isArray(req.body && req.body.excludeFeatures) ? req.body.excludeFeatures.map(String) : [];
       const jobId    = crypto.randomUUID();
       const bodySnap = {
         imbalanceStrategy: req.body && req.body.imbalanceStrategy || undefined,
         split:             req.body && req.body.split             || undefined,
         trainingOptions:   req.body && req.body.trainingOptions   || undefined,
+        excludeFeatures,
       };
 
       pruneJobs(trainingJobs);
@@ -563,10 +565,11 @@ function createModelingRouter(dependencies) {
               variantId,
               algorithm,
               jobIds,
-              imbalanceStrategy: bodySnap.imbalanceStrategy,
-              split:             bodySnap.split,
-              trainingOptions:   bodySnap.trainingOptions,
-              artifactRoot:      dependencies.artifactRoot,
+              imbalanceStrategy:  bodySnap.imbalanceStrategy,
+              split:              bodySnap.split,
+              trainingOptions:    bodySnap.trainingOptions,
+              excludeFeatures:    bodySnap.excludeFeatures,
+              artifactRoot:       dependencies.artifactRoot,
               dataset,
             });
           });

@@ -31,6 +31,7 @@ process.on('message', async (msg) => {
       imbalanceStrategy,
       split,
       trainingOptions,
+      excludeFeatures,
       artifactRoot,
       strategies,
       dataset,       // pre-built lightweight dataset from parent
@@ -89,6 +90,7 @@ process.on('message', async (msg) => {
         imbalanceStrategy,
         split,
         trainingOptions,
+        excludeFeatures,
         dataset,
       });
       // Send only the compact summary — not the full artifact with weights.

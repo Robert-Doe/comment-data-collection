@@ -1406,7 +1406,13 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   }
   ensureTrainableRows(split.trainRows, 'Training split');
 
-  const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
+  const excludeKeys = Array.isArray(trainingInput.excludeFeatures) ? new Set(trainingInput.excludeFeatures) : null;
+  const effectiveCatalog = excludeKeys && excludeKeys.size
+    ? dataset.featureCatalog.filter((f) => !excludeKeys.has(f.key))
+    : dataset.featureCatalog;
+  if (effectiveCatalog.length < 1) throw new Error('At least one feature must remain after exclusions');
+
+  const vectorizer = fitVectorizer(split.trainRows, effectiveCatalog);
   const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm);
   if (!normalizedAlgorithm) {
     throw new Error('Select a valid training algorithm');
@@ -1418,7 +1424,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   }
   const trainingPreparation = prepareImbalanceTrainingRows(
     split.trainRows,
-    dataset.featureCatalog,
+    effectiveCatalog,
     vectorizer,
     normalizedStrategy,
     {
@@ -1503,8 +1509,8 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     algorithm: trainingArtifact.algorithm,
     imbalance_strategy: trainingPreparation.summary,
     created_at: new Date().toISOString(),
-    feature_count: dataset.featureCatalog.length,
-    feature_catalog: dataset.featureCatalog,
+    feature_count: effectiveCatalog.length,
+    feature_catalog: effectiveCatalog,
     vectorizer,
     model,
     split: summarizeSplit(split, labeledRows.length),
