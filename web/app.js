@@ -3370,7 +3370,10 @@
 
     const rows = jobs.map((job) => `
       <tr data-job-id="${escapeHtml(job.id)}" class="${currentJobId === job.id ? 'is-current' : ''}">
-        <td class="mono">${escapeHtml(job.id)}</td>
+        <td>
+          <div style="font-weight:600;line-height:1.3">${escapeHtml(job.source_filename || job.id)}</div>
+          <div class="mono" style="font-size:0.72rem;color:var(--muted);margin-top:2px" title="${escapeHtml(job.id)}">${escapeHtml(job.id.slice(0, 8))}…</div>
+        </td>
         <td>${escapeHtml(job.status)}</td>
         <td>${escapeHtml(job.completed_count)}/${escapeHtml(job.total_urls)}</td>
         <td>${escapeHtml(job.detected_count)}</td>
