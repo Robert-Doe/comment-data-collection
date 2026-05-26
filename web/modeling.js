@@ -2115,19 +2115,21 @@
     `).join('');
 
     // ── feature importance rows ───────────────────────────────────────────────
+    // reliance entries have: title, feature_key, output_key, weight, absolute_weight
     function importanceRows(items, dir) {
       if (!Array.isArray(items) || !items.length) return `<tr><td colspan="3" style="color:#9ca3af;text-align:center;padding:10px">—</td></tr>`;
       return items.slice(0, 12).map((item, i) => {
-        const w = typeof item.weight === 'number' ? item.weight : 0;
-        const bar = Math.min(100, Math.abs(w) * 120);
+        const w    = typeof item.weight === 'number' ? item.weight : 0;
+        const name = item.title || item.feature_key || item.output_key || '';
+        const bar  = Math.min(100, Math.abs(w) * 120);
         const barColor = dir === 'pos' ? '#16a34a' : '#dc2626';
         return `<tr>
-          <td style="padding:3px 8px;font-size:0.72rem;color:#6b7280;text-align:right">${i + 1}</td>
-          <td style="padding:3px 8px;font-family:ui-monospace,monospace;font-size:0.73rem;color:#111827">${escapeHtml(item.feature || item.key || '')}</td>
-          <td style="padding:3px 8px;min-width:120px">
+          <td style="padding:3px 8px;font-size:0.72rem;color:#6b7280;text-align:right;white-space:nowrap">${i + 1}</td>
+          <td style="padding:3px 8px;font-size:0.75rem;color:#111827;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(item.feature_key || name)}">${escapeHtml(name)}</td>
+          <td style="padding:3px 8px;min-width:100px">
             <div style="display:flex;align-items:center;gap:6px">
-              <div style="height:8px;width:${bar.toFixed(0)}px;background:${barColor};border-radius:2px;min-width:2px"></div>
-              <span style="font-size:0.71rem;color:#374151">${w.toFixed(3)}</span>
+              <div style="height:8px;width:${Math.max(2, bar).toFixed(0)}px;background:${barColor};border-radius:2px;flex-shrink:0"></div>
+              <span style="font-size:0.71rem;color:#374151;white-space:nowrap">${w.toFixed(3)}</span>
             </div>
           </td>
         </tr>`;
@@ -2232,13 +2234,13 @@
       ${(Array.isArray(reliance.positive_weights) && reliance.positive_weights.length) || (Array.isArray(reliance.negative_weights) && reliance.negative_weights.length) ? `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:#fff;border:1px solid rgba(17,24,39,0.1);border-radius:8px;padding:14px;overflow:hidden">
-          <p style="margin:0 0 8px;font-size:0.75rem;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.04em">↑ Positive drivers (spam signals)</p>
+          <p style="margin:0 0 8px;font-size:0.75rem;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:0.04em">↑ Positive drivers — UGC comment present</p>
           <table style="margin:0;width:100%">
             <tbody>${importanceRows(reliance.positive_weights, 'pos')}</tbody>
           </table>
         </div>
         <div style="background:#fff;border:1px solid rgba(17,24,39,0.1);border-radius:8px;padding:14px;overflow:hidden">
-          <p style="margin:0 0 8px;font-size:0.75rem;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.04em">↓ Negative drivers (clean signals)</p>
+          <p style="margin:0 0 8px;font-size:0.75rem;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.04em">↓ Negative drivers — no comment region</p>
           <table style="margin:0;width:100%">
             <tbody>${importanceRows(reliance.negative_weights, 'neg')}</tbody>
           </table>
