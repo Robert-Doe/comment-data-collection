@@ -25,14 +25,18 @@
   }
 
   // ── DOM refs ─────────────────────────────────────────────────────────────────
-  var previewEl    = document.getElementById('preview-stats');
-  var jobsEl       = document.getElementById('source-jobs');
-  var refreshBtn   = document.getElementById('refresh-btn');
-  var nameInput    = document.getElementById('job-name');
-  var inferredCb   = document.getElementById('include-inferred');
-  var createBtn    = document.getElementById('create-btn');
-  var statusEl     = document.getElementById('create-status');
-  var resultEl     = document.getElementById('create-result');
+  var previewEl      = document.getElementById('preview-stats');
+  var jobsEl         = document.getElementById('source-jobs');
+  var refreshBtn     = document.getElementById('refresh-btn');
+  var nameInput      = document.getElementById('job-name');
+  var inferredCb     = document.getElementById('include-inferred');
+  var createBtn      = document.getElementById('create-btn');
+  var statusEl       = document.getElementById('create-status');
+  var resultEl       = document.getElementById('create-result');
+  var downloadLink   = document.getElementById('download-urls-link');
+
+  // Point the download link at the API endpoint
+  if (downloadLink) downloadLink.href = apiBase + '/api/unifier/export-urls.csv';
 
   // ── Utils ─────────────────────────────────────────────────────────────────────
   function escHtml(s) {
@@ -73,13 +77,15 @@
   }
 
   function renderPreview(data) {
+    var totalUrls   = data.total_unique_urls || data.unique_urls || 0;
+    var labeledUrls = data.labeled_urls      || 0;
     previewEl.innerHTML = [
-      statCard('Unique URLs',       fmtNum(data.unique_urls),       'After deduplication by normalized URL'),
-      statCard('Total Labeled',     fmtNum(data.total_labeled),     'Candidate reviews with a binary label'),
-      statCard('Human Labeled',     fmtNum(data.human_labeled),     'source: web_review'),
-      statCard('Inferred Labels',   fmtNum(data.inferred_labeled),  'source: inferred (model-generated)'),
-      statCard('Source Jobs',       fmtNum(data.source_job_count),  'Jobs contributing labeled items'),
-      statCard('Cross-job Dupes',   fmtNum(data.duplicate_urls),    'URLs in more than one job'),
+      statCard('Total Unique URLs',  fmtNum(totalUrls),              'Every URL ever submitted, deduplicated'),
+      statCard('Labeled URLs',       fmtNum(labeledUrls),            'Have at least one binary candidate review'),
+      statCard('Human Labels',       fmtNum(data.human_labeled),     'source: web_review'),
+      statCard('Inferred Labels',    fmtNum(data.inferred_labeled),  'source: inferred (model-generated)'),
+      statCard('Source Jobs',        fmtNum(data.source_job_count),  'Non-unified jobs in scope'),
+      statCard('Cross-job Dupes',    fmtNum(data.duplicate_urls),    'URLs appearing in more than one job'),
     ].join('');
 
     var jobs = Array.isArray(data.source_jobs) ? data.source_jobs : [];
@@ -154,7 +160,8 @@
       + ' &nbsp;·&nbsp; ID: <code style="font-size:0.82rem;user-select:all">' + escHtml(data.jobId) + '</code>'
       + '</p>'
       + '<ul style="margin:0 0 16px;padding-left:20px;font-size:0.875rem;line-height:1.8">'
-      + '<li><strong>' + fmtNum(data.totalUrls)          + '</strong> unique URLs merged</li>'
+      + '<li><strong>' + fmtNum(data.totalUrls)          + '</strong> unique URLs (entire corpus)</li>'
+      + '<li><strong>' + fmtNum(data.labeledUrls)         + '</strong> of those have candidate labels</li>'
       + '<li><strong>' + fmtNum(data.detectedCount)       + '</strong> detected as comment regions</li>'
       + '<li><strong>' + fmtNum(data.sourceJobCount)      + '</strong> source jobs merged</li>'
       + '<li><strong>' + fmtNum(data.duplicatesRemoved)   + '</strong> cross-job duplicates removed</li>'

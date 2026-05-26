@@ -81,8 +81,11 @@
             <span>Include model-inferred labels (<code>source: inferred</code>)</span>
           </label>
         </div>
-        <div class="panel-actions" style="margin-top:20px;display:flex;align-items:center;gap:16px">
+        <div class="panel-actions" style="margin-top:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <button class="btn" id="create-btn" type="button">Create Unified Job</button>
+          <a id="download-urls-link" class="secondary" href="#" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:0.875rem">
+            ↓ Download All URLs (.csv)
+          </a>
           <span id="create-status" style="font-size:0.875rem;color:var(--muted)"></span>
         </div>
         <div id="create-result" style="margin-top:20px"></div>

@@ -4,10 +4,11 @@
  * Unifier Routes
  *
  * Creates a single "Unified Dataset" job that spans all existing jobs:
- *   - Collects every job_item that has at least one labeled candidate_review
+ *   - Collects EVERY job_item across all non-unified, non-deleted jobs
  *   - Groups items by normalized_url so each URL appears exactly once
  *   - Deduplicates candidate_reviews across jobs: same candidate_key → keep earliest label
  *   - Picks the "best" source item per URL (prefers items with full scan data / screenshots)
+ *   - ugc_detected: derived from labeled reviews when present, else from the best item's scan result
  *   - Inserts a new job + new job_items into the database
  */
 
@@ -23,8 +24,12 @@ function getPool(databaseUrl) {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-// Labels that carry no binary signal for training — excluded from the unified set
+// Labels that carry no binary signal for training — excluded from merged reviews
 const SKIP_LABELS = new Set(['', 'uncertain']);
+
+// source_column values that mark derived / synthetic jobs — excluded from source pull
+// to avoid circular references and double-counting rolled-up data.
+const EXCLUDE_SOURCE_COLUMNS = new Set(['unified']);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -82,38 +87,49 @@ function createUnifierRouter({ databaseUrl }) {
   const router = express.Router();
 
   // ── GET /preview ─────────────────────────────────────────────────────────────
-  // Returns statistics about what a unification run would produce — does not
-  // write anything to the database.
+  // Returns statistics about what a unification run would produce — no DB writes.
   router.get('/preview', async (_req, res, next) => {
     try {
       const db = getPool(databaseUrl);
 
-      // All non-deleted jobs
+      // All non-unified, non-deleted jobs
       const jobsRes = await db.query(`
-        SELECT id, source_filename, total_urls, completed_count, detected_count, created_at
+        SELECT id, source_filename, source_column, total_urls, completed_count, detected_count, created_at
         FROM   jobs
         WHERE  deleted_at IS NULL
+          AND  source_column NOT IN ('unified')
         ORDER  BY created_at ASC
       `);
 
-      // Aggregate stats across all labeled candidate_reviews
-      const statsRes = await db.query(`
+      // All-URLs stats (no label requirement)
+      const allStatsRes = await db.query(`
         SELECT
-          COUNT(DISTINCT ji.normalized_url)                                         AS unique_urls,
-          COUNT(*)                                                                  AS total_labeled,
-          COUNT(CASE WHEN r->>'source' = 'web_review' THEN 1 END)                  AS human_labeled,
-          COUNT(CASE WHEN r->>'source' = 'inferred'   THEN 1 END)                  AS inferred_labeled,
-          COUNT(DISTINCT ji.job_id)                                                 AS source_job_count,
-          COUNT(DISTINCT ji.id)                                                     AS source_item_count
+          COUNT(DISTINCT ji.normalized_url)  AS total_unique_urls,
+          COUNT(DISTINCT ji.id)              AS total_items,
+          COUNT(DISTINCT ji.job_id)          AS source_job_count
+        FROM   jobs j
+        JOIN   job_items ji ON ji.job_id = j.id
+        WHERE  j.deleted_at IS NULL
+          AND  j.source_column NOT IN ('unified')
+      `);
+
+      // Labeled-candidate stats (for training signal info)
+      const labelStatsRes = await db.query(`
+        SELECT
+          COUNT(DISTINCT ji.normalized_url)                        AS labeled_urls,
+          COUNT(*)                                                 AS total_labeled,
+          COUNT(CASE WHEN r->>'source' = 'web_review' THEN 1 END) AS human_labeled,
+          COUNT(CASE WHEN r->>'source' = 'inferred'   THEN 1 END) AS inferred_labeled
         FROM   jobs j
         JOIN   job_items ji ON ji.job_id = j.id,
         LATERAL jsonb_array_elements(ji.candidate_reviews) r
         WHERE  j.deleted_at IS NULL
+          AND  j.source_column NOT IN ('unified')
           AND  r->>'label' IS NOT NULL
           AND  r->>'label' NOT IN ('', 'uncertain')
       `);
 
-      // URLs that appear in more than one job (true cross-job duplicates)
+      // URLs that appear in more than one source job
       const dupRes = await db.query(`
         SELECT COUNT(*) AS duplicate_urls
         FROM (
@@ -121,27 +137,82 @@ function createUnifierRouter({ databaseUrl }) {
           FROM     jobs j
           JOIN     job_items ji ON ji.job_id = j.id
           WHERE    j.deleted_at IS NULL
-            AND    EXISTS (
-              SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
-              WHERE  r->>'label' IS NOT NULL AND r->>'label' NOT IN ('', 'uncertain')
-            )
+            AND    j.source_column NOT IN ('unified')
           GROUP BY ji.normalized_url
           HAVING   COUNT(DISTINCT ji.job_id) > 1
         ) dups
       `);
 
-      const s = statsRes.rows[0];
+      const a = allStatsRes.rows[0];
+      const l = labelStatsRes.rows[0];
       res.json({
         ok:                 true,
         source_jobs:        jobsRes.rows,
-        unique_urls:        Number(s.unique_urls)        || 0,
-        total_labeled:      Number(s.total_labeled)      || 0,
-        human_labeled:      Number(s.human_labeled)      || 0,
-        inferred_labeled:   Number(s.inferred_labeled)   || 0,
-        source_job_count:   Number(s.source_job_count)   || 0,
-        source_item_count:  Number(s.source_item_count)  || 0,
+        total_unique_urls:  Number(a.total_unique_urls)  || 0,
+        total_items:        Number(a.total_items)        || 0,
+        source_job_count:   Number(a.source_job_count)   || 0,
+        labeled_urls:       Number(l.labeled_urls)       || 0,
+        total_labeled:      Number(l.total_labeled)      || 0,
+        human_labeled:      Number(l.human_labeled)      || 0,
+        inferred_labeled:   Number(l.inferred_labeled)   || 0,
         duplicate_urls:     Number(dupRes.rows[0].duplicate_urls) || 0,
+        // legacy aliases kept for older clients
+        unique_urls:        Number(a.total_unique_urls)  || 0,
+        source_item_count:  Number(a.total_items)        || 0,
       });
+    } catch (err) { next(err); }
+  });
+
+  // ── GET /export-urls.csv ──────────────────────────────────────────────────────
+  // Streams every unique normalized_url with basic metadata as a CSV — no job created.
+  router.get('/export-urls.csv', async (_req, res, next) => {
+    try {
+      const db = getPool(databaseUrl);
+
+      const result = await db.query(`
+        SELECT
+          ji.normalized_url,
+          ji.input_url,
+          ji.title,
+          ji.final_url,
+          ji.status,
+          bool_or(ji.ugc_detected)                                    AS ugc_detected,
+          COUNT(DISTINCT ji.job_id)                                   AS job_count,
+          MIN(ji.created_at)                                          AS first_seen,
+          MAX(ji.created_at)                                          AS last_seen,
+          bool_or(EXISTS (
+            SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+            WHERE  r->>'label' NOT IN ('', 'uncertain')
+          ))                                                          AS has_label,
+          string_agg(DISTINCT j.source_filename, ' | '
+                     ORDER BY j.source_filename)                     AS source_jobs
+        FROM   jobs j
+        JOIN   job_items ji ON ji.job_id = j.id
+        WHERE  j.deleted_at IS NULL
+          AND  j.source_column NOT IN ('unified')
+        GROUP BY
+          ji.normalized_url, ji.input_url, ji.title, ji.final_url, ji.status
+        ORDER BY ji.normalized_url
+      `);
+
+      const escape = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? '"' + s.replace(/"/g, '""') + '"'
+          : s;
+      };
+
+      const header = 'normalized_url,input_url,title,final_url,status,ugc_detected,job_count,first_seen,last_seen,has_label,source_jobs\n';
+      const rows   = result.rows.map((r) => [
+        r.normalized_url, r.input_url, r.title, r.final_url,
+        r.status, r.ugc_detected, r.job_count,
+        r.first_seen, r.last_seen, r.has_label, r.source_jobs,
+      ].map(escape).join(',')).join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="all-urls.csv"');
+      res.send(header + rows + '\n');
     } catch (err) { next(err); }
   });
 
@@ -152,47 +223,47 @@ function createUnifierRouter({ databaseUrl }) {
   //   { name: string, includeInferred: boolean }
   router.post('/create', async (req, res, next) => {
     try {
-      const db             = getPool(databaseUrl);
-      const jobName        = String((req.body && req.body.name) || 'Unified Dataset').trim().slice(0, 200) || 'Unified Dataset';
-      const inclInferred   = req.body && req.body.includeInferred !== false; // default: true
+      const db           = getPool(databaseUrl);
+      const jobName      = String((req.body && req.body.name) || 'Unified Dataset').trim().slice(0, 200) || 'Unified Dataset';
+      const inclInferred = req.body && req.body.includeInferred !== false; // default: true
 
-      // ── 1. Load all job_items that have at least one qualifying labeled review ──
-      const sourceFilter = inclInferred
-        ? "r->>'label' NOT IN ('', 'uncertain')"
-        : "r->>'label' NOT IN ('', 'uncertain') AND r->>'source' = 'web_review'";
-
+      // ── 1. Load ALL job_items from every non-unified, non-deleted job ─────────
+      // No label requirement — every URL ever submitted is included.
       const itemsRes = await db.query(`
         SELECT ji.*
         FROM   jobs j
         JOIN   job_items ji ON ji.job_id = j.id
         WHERE  j.deleted_at IS NULL
-          AND  EXISTS (
-            SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
-            WHERE  ${sourceFilter}
-          )
+          AND  j.source_column NOT IN ('unified')
         ORDER  BY ji.created_at ASC
       `);
 
       if (!itemsRes.rows.length) {
-        return res.status(400).json({ error: 'No labeled candidates found across any job.' });
+        return res.status(400).json({ error: 'No job items found across any job.' });
       }
 
-      // ── 2. Group by normalized_url, collect all qualifying reviews per URL ────
+      // ── 2. Group by normalized_url ────────────────────────────────────────────
+      // For each URL: collect ALL items (for pickBestItem) and ALL qualifying
+      // labeled reviews (for training signal / ugc_detected override).
       const urlMap = new Map(); // normalized_url → { items: [], allReviews: [] }
 
       for (const item of itemsRes.rows) {
-        const url     = item.normalized_url;
+        const url = item.normalized_url;
+        if (!url) continue;
+
         const reviews = parseJsonb(item.candidate_reviews);
-        if (!Array.isArray(reviews)) continue;
 
         if (!urlMap.has(url)) urlMap.set(url, { items: [], allReviews: [] });
         const entry = urlMap.get(url);
         entry.items.push(item);
 
-        for (const r of reviews) {
-          if (!r || !r.label || SKIP_LABELS.has(r.label)) continue;
-          if (!inclInferred && r.source !== 'web_review') continue;
-          entry.allReviews.push(r);
+        // Collect labeled reviews for this item (training signal only)
+        if (Array.isArray(reviews)) {
+          for (const r of reviews) {
+            if (!r || !r.label || SKIP_LABELS.has(r.label)) continue;
+            if (!inclInferred && r.source !== 'web_review') continue;
+            entry.allReviews.push(r);
+          }
         }
       }
 
@@ -202,42 +273,45 @@ function createUnifierRouter({ databaseUrl }) {
       let   rowNumber = 1;
 
       for (const [, { items, allReviews }] of urlMap) {
-        if (!allReviews.length) continue;
         const best    = pickBestItem(items);
         const deduped = deduplicateReviews(allReviews);
 
-        // Compute ugc_detected from the deduped reviews
-        const hasPositive  = deduped.some((r) => r.label === 'comment_region');
+        // ugc_detected:
+        //   - If we have labeled reviews → derive from positive label presence
+        //   - Otherwise → carry forward the best item's original scan result
+        const ugcDetected = deduped.length > 0
+          ? deduped.some((r) => r.label === 'comment_region')
+          : !!best.ugc_detected;
 
         newItems.push({
-          id:               crypto.randomUUID(),
-          job_id:           newJobId,
-          row_number:       rowNumber,
-          input_url:        best.input_url,
-          normalized_url:   best.normalized_url,
-          status:           'completed',
-          title:            best.title             || null,
-          final_url:        best.final_url         || null,
-          ugc_detected:     hasPositive,
-          best_score:       best.best_score        || null,
-          best_confidence:  best.best_confidence   || null,
-          best_xpath:       best.best_xpath        || null,
-          best_css_path:    best.best_css_path     || null,
-          best_sample_text: best.best_sample_text  || null,
-          screenshot_path:  best.screenshot_path   || null,
-          screenshot_url:   best.screenshot_url    || null,
-          candidates:       parseJsonb(best.candidates),
+          id:                crypto.randomUUID(),
+          job_id:            newJobId,
+          row_number:        rowNumber,
+          input_url:         best.input_url,
+          normalized_url:    best.normalized_url,
+          status:            best.status || 'completed',
+          title:             best.title             || null,
+          final_url:         best.final_url         || null,
+          ugc_detected:      ugcDetected,
+          best_score:        best.best_score        || null,
+          best_confidence:   best.best_confidence   || null,
+          best_xpath:        best.best_xpath        || null,
+          best_css_path:     best.best_css_path     || null,
+          best_sample_text:  best.best_sample_text  || null,
+          screenshot_path:   best.screenshot_path   || null,
+          screenshot_url:    best.screenshot_url    || null,
+          candidates:        parseJsonb(best.candidates),
           candidate_reviews: deduped,
-          best_candidate:   parseJsonb(best.best_candidate),
-          source_job_id:    best.job_id,
-          source_item_id:   best.id,
+          best_candidate:    parseJsonb(best.best_candidate),
+          source_job_id:     best.job_id,
+          source_item_id:    best.id,
           source_row_number: best.row_number,
         });
         rowNumber++;
       }
 
       if (!newItems.length) {
-        return res.status(400).json({ error: 'After deduplication, no valid labeled candidates remain.' });
+        return res.status(400).json({ error: 'No unique URLs found after deduplication.' });
       }
 
       // ── 4. Compute the source_job_ids list ────────────────────────────────────
@@ -250,6 +324,7 @@ function createUnifierRouter({ databaseUrl }) {
 
         const now          = new Date().toISOString();
         const detectedCount = newItems.filter((i) => i.ugc_detected).length;
+        const labeledCount  = newItems.filter((i) => i.candidate_reviews.length > 0).length;
 
         // Create the unified job
         await client.query(`
@@ -307,12 +382,13 @@ function createUnifierRouter({ databaseUrl }) {
         await client.query('COMMIT');
 
         res.json({
-          ok:            true,
-          jobId:         newJobId,
+          ok:               true,
+          jobId:            newJobId,
           jobName,
-          totalUrls:     newItems.length,
+          totalUrls:        newItems.length,
+          labeledUrls:      labeledCount,
           detectedCount,
-          sourceJobCount: sourceJobIds.length,
+          sourceJobCount:   sourceJobIds.length,
           duplicatesRemoved: itemsRes.rows.length - newItems.length,
         });
       } catch (err) {
