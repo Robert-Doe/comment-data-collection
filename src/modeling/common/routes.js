@@ -26,6 +26,7 @@ const {
   deleteModelArtifact,
   computeCommentArchetype,
   getDomainBuckets,
+  getDomainCandidates,
 } = require('./service');
 const { extractCandidateDataset } = require('./dataset');
 const { parseJobIdList } = require('./utils');
@@ -825,6 +826,21 @@ function createModelingRouter(dependencies) {
       const jobIds  = normalizeJobIds(req.body && req.body.jobIds || '');
       const dataset = await buildLightDataset(jobIds, variantId);
       const result  = await getDomainBuckets(null, dependencies.artifactRoot, { variantId, dataset });
+      res.json({ ok: true, ...result });
+    } catch (error) { next(error); }
+  });
+
+  // POST /domain-candidates — returns the individual labeled rows for a specific domain key.
+  // Used by the bucket inspector drill-down to verify per-domain candidate counts.
+  router.post('/domain-candidates', async (req, res, next) => {
+    try {
+      const variantId = String(req.body && req.body.variantId || '').trim();
+      if (!getModelVariant(variantId)) return res.status(400).json({ error: 'Select a valid model variant' });
+      const jobIds = normalizeJobIds(req.body && req.body.jobIds || '');
+      const domain = String(req.body && req.body.domain || '').trim();
+      if (!domain) return res.status(400).json({ error: 'domain is required' });
+      const dataset = await buildLightDataset(jobIds, variantId);
+      const result  = await getDomainCandidates(null, dependencies.artifactRoot, { variantId, domain, dataset });
       res.json({ ok: true, ...result });
     } catch (error) { next(error); }
   });

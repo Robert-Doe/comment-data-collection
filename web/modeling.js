@@ -3198,6 +3198,9 @@
     `;
   }
 
+  // Stores the variant + jobIds context so domain drill-down clicks know what to fetch
+  let currentDiagBucketContext = null;
+
   function renderDomainBuckets(result) {
     if (!diagBucketResult) return;
     if (!result || !Array.isArray(result.buckets)) {
@@ -3205,28 +3208,36 @@
       diagBucketResult.textContent = 'No domain bucket data.';
       return;
     }
-    const bucketColors = ['var(--accent)', '#60a5fa', '#f87171', '#34d399', '#a78bfa'];
+    const bucketColors = ['#3b82f6', '#60a5fa', '#f87171', '#34d399', '#a78bfa'];
     diagBucketResult.className = 'table-shell';
     diagBucketResult.innerHTML = `
       <h3 style="margin:0 0 6px">Domain Bucket Inspector — ${result.total_labeled} labeled rows across ${result.n_buckets} buckets</h3>
-      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 12px">Each domain is deterministically assigned to a bucket by <code>hash(hostname) % 5</code>. Bucket N is the held-out test set for Fold N in cross-validation.</p>
+      <p style="font-size:0.82rem;color:#6b7280;margin:0 0 4px">Each domain is deterministically assigned to a bucket by <code>hash(hostname) % 5</code>. Bucket N is the held-out test set for Fold N in cross-validation.</p>
+      <p style="font-size:0.79rem;color:#3b82f6;margin:0 0 12px">💡 Click any domain to inspect its labeled candidates and verify the counts.</p>
       ${result.buckets.map((b) => `
-        <details style="margin-bottom:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
-          <summary style="padding:8px 12px;cursor:pointer;background:var(--surface-2,#1e293b);display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600">
+        <details style="margin-bottom:10px;border:1px solid rgba(17,24,39,0.15);border-radius:6px;overflow:hidden">
+          <summary style="padding:8px 12px;cursor:pointer;background:#1e293b;display:flex;align-items:center;gap:10px;font-size:0.88rem;font-weight:600;color:#f1f5f9">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${bucketColors[b.bucket]};flex-shrink:0"></span>
             Bucket ${b.bucket} — Fold ${b.bucket} test set
-            <span style="color:var(--muted);font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} with comments</span>
+            <span style="color:#94a3b8;font-weight:400;margin-left:4px">${b.domain_count} domain${b.domain_count !== 1 ? 's' : ''} · ${b.row_count} rows · ${b.positive_count} with comments</span>
           </summary>
-          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+          <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
             <table style="margin:0">
-              <thead><tr><th>Domain</th><th>Labeled Rows</th><th>With Comments</th><th>Comment Rate</th></tr></thead>
+              <thead><tr>
+                <th style="min-width:220px">Domain <span style="font-weight:400;font-size:0.74rem;color:#94a3b8">(click to inspect)</span></th>
+                <th>Labeled Rows</th><th>With Comments</th><th>Comment Rate</th>
+              </tr></thead>
               <tbody>
                 ${b.domains.map((d) => `
-                  <tr>
-                    <td class="mono" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(d.domain)}">${escapeHtml(d.domain)}</td>
+                  <tr class="domain-bucket-row">
+                    <td class="mono" style="cursor:pointer;color:#2563eb;text-decoration:underline;text-decoration-style:dotted;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                        data-domain="${escapeHtml(d.domain)}"
+                        title="Click to view ${d.count} candidate row${d.count !== 1 ? 's' : ''} for ${escapeHtml(d.domain)}">
+                      ${escapeHtml(d.domain)}
+                    </td>
                     <td class="mono">${d.count}</td>
                     <td class="mono">${d.positive_count}</td>
-                    <td class="mono" style="${d.positive_rate > 0.7 ? 'color:var(--accent)' : d.positive_rate < 0.2 ? 'color:var(--muted)' : ''}">${(d.positive_rate * 100).toFixed(1)}%</td>
+                    <td class="mono" style="${d.positive_rate > 0.7 ? 'color:#16a34a;font-weight:600' : d.positive_rate < 0.1 ? 'color:#9ca3af' : ''}">${(d.positive_rate * 100).toFixed(1)}%</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -3315,13 +3326,13 @@
       runElementAction(diagDomainBucketsButton, async () => {
         setMessage(diagMessage, 'Inspecting domain buckets…', false);
         if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Loading…'; }
+        const jobIds = diagJobIds ? diagJobIds.value.trim() : '';
+        // Save context so domain drill-down clicks know what variant+jobs to query against
+        currentDiagBucketContext = { variantId, jobIds };
         const result = await fetchJson('/api/modeling/domain-buckets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            variantId,
-            jobIds: diagJobIds ? diagJobIds.value.trim() : '',
-          }),
+          body: JSON.stringify({ variantId, jobIds }),
         });
         setMessage(diagMessage, '', false);
         renderDomainBuckets(result);
@@ -3329,6 +3340,131 @@
         setMessage(diagMessage, err.message || String(err), true);
         if (diagBucketResult) { diagBucketResult.className = 'table-shell empty'; diagBucketResult.textContent = 'Domain bucket inspection failed.'; }
       });
+    });
+  }
+
+  // ── Domain drill-down: click a domain row to see its individual candidates ────
+  if (diagBucketResult) {
+    diagBucketResult.addEventListener('click', async (e) => {
+      const domainCell = e.target.closest('[data-domain]');
+      if (!domainCell || !currentDiagBucketContext) return;
+
+      const domain = domainCell.dataset.domain;
+      const parentRow = domainCell.closest('tr');
+      if (!parentRow) return;
+
+      // Toggle: clicking the same domain again collapses the panel
+      const nextRow = parentRow.nextElementSibling;
+      if (nextRow && nextRow.dataset.detailFor === domain) {
+        nextRow.remove();
+        domainCell.style.fontWeight = '';
+        return;
+      }
+
+      // Close any currently open detail panels within the same table
+      const parentTable = parentRow.closest('table');
+      if (parentTable) {
+        parentTable.querySelectorAll('[data-detail-for]').forEach((r) => r.remove());
+        parentTable.querySelectorAll('[data-domain]').forEach((c) => { c.style.fontWeight = ''; });
+      }
+
+      // Show loading row
+      domainCell.style.fontWeight = '700';
+      const loadingRow = document.createElement('tr');
+      loadingRow.dataset.detailFor = domain;
+      loadingRow.innerHTML = `<td colspan="4" style="padding:10px 16px;color:#6b7280;font-size:0.82rem;background:#f8faff;border-top:2px solid #3b82f6">
+        Loading candidates for <strong style="color:#1d4ed8">${escapeHtml(domain)}</strong>…
+      </td>`;
+      parentRow.insertAdjacentElement('afterend', loadingRow);
+
+      try {
+        const data = await fetchJson('/api/modeling/domain-candidates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...currentDiagBucketContext, domain }),
+        });
+
+        loadingRow.remove();
+        const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+        const positives  = candidates.filter((c) => c.label === 1).length;
+        const negatives  = candidates.length - positives;
+        const uniqueJobs = [...new Set(candidates.map((c) => c.job_id).filter(Boolean))];
+
+        const candidateRowsHtml = candidates.length
+          ? candidates.map((c, i) => `
+              <tr style="background:${i % 2 === 0 ? '#fff' : '#f8faff'}">
+                <td style="padding:5px 10px;color:#9ca3af;font-size:0.75rem;text-align:right">${i + 1}</td>
+                <td style="padding:5px 10px;font-family:ui-monospace,Consolas,monospace;font-size:0.74rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151" title="${escapeHtml(c.candidate_id)}">${escapeHtml(c.candidate_id)}</td>
+                <td style="padding:5px 10px;font-family:ui-monospace,Consolas,monospace;font-size:0.74rem;color:#374151">${escapeHtml(c.job_id || '—')}</td>
+                <td style="padding:5px 10px;font-size:0.8rem;text-align:center">
+                  ${c.label === 1
+                    ? '<span style="color:#16a34a;font-weight:700" title="Positive — labeled as having spam/UGC comments">✓ spam</span>'
+                    : '<span style="color:#9ca3af" title="Negative — labeled as clean">✗ clean</span>'}
+                </td>
+                <td style="padding:5px 10px">
+                  ${c.job_id
+                    ? `<a href="./index.html?jobId=${encodeURIComponent(c.job_id)}" target="_blank"
+                          style="font-size:0.74rem;color:#3b82f6;text-decoration:none;white-space:nowrap"
+                          title="Open job ${escapeHtml(c.job_id)} in the Scanner">View job ↗</a>`
+                    : ''}
+                </td>
+              </tr>`)
+            .join('')
+          : `<tr><td colspan="5" style="padding:14px;color:#9ca3af;text-align:center;font-size:0.82rem">No labeled rows found for this domain in the current dataset scope.</td></tr>`;
+
+        const detailRow = document.createElement('tr');
+        detailRow.dataset.detailFor = domain;
+        detailRow.innerHTML = `
+          <td colspan="4" style="padding:0;border-top:2px solid #3b82f6">
+            <div style="background:#eff6ff;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+              <span style="font-size:0.82rem;font-weight:600;color:#1d4ed8">${escapeHtml(domain)}</span>
+              <span style="font-size:0.79rem;color:#374151">
+                ${candidates.length} row${candidates.length !== 1 ? 's' : ''} total &nbsp;·&nbsp;
+                <span style="color:#16a34a;font-weight:600">${positives} spam</span> &nbsp;/&nbsp;
+                <span style="color:#6b7280">${negatives} clean</span>
+                ${uniqueJobs.length ? ' &nbsp;·&nbsp; Jobs: <code style="font-size:0.74rem">' + uniqueJobs.map((j) => escapeHtml(j)).join(', ') + '</code>' : ''}
+              </span>
+              <button data-collapse-domain="${escapeHtml(domain)}"
+                      style="font-size:0.74rem;padding:2px 8px;border:1px solid #bfdbfe;border-radius:4px;background:#fff;color:#1d4ed8;cursor:pointer">
+                ✕ Close
+              </button>
+            </div>
+            <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+              <table style="margin:0;border:none;width:100%;table-layout:fixed">
+                <colgroup>
+                  <col style="width:40px"><col style="width:auto"><col style="width:120px"><col style="width:90px"><col style="width:80px">
+                </colgroup>
+                <thead><tr style="background:#dbeafe;position:sticky;top:0">
+                  <th style="padding:5px 10px;font-size:0.74rem;text-align:right">#</th>
+                  <th style="padding:5px 10px;font-size:0.74rem">Candidate ID</th>
+                  <th style="padding:5px 10px;font-size:0.74rem">Job ID</th>
+                  <th style="padding:5px 10px;font-size:0.74rem;text-align:center">Label</th>
+                  <th style="padding:5px 10px;font-size:0.74rem">Link</th>
+                </tr></thead>
+                <tbody>${candidateRowsHtml}</tbody>
+              </table>
+            </div>
+          </td>`;
+
+        parentRow.insertAdjacentElement('afterend', detailRow);
+      } catch (err) {
+        loadingRow.innerHTML = `<td colspan="4" style="padding:10px 16px;color:#dc2626;font-size:0.82rem;background:#fef2f2;border-top:2px solid #f87171">
+          Error loading candidates: ${escapeHtml(err.message || String(err))}
+        </td>`;
+      }
+    });
+
+    // Close button inside a detail panel
+    diagBucketResult.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-collapse-domain]');
+      if (!btn) return;
+      const domain = btn.dataset.collapseDomain;
+      if (diagBucketResult) {
+        diagBucketResult.querySelectorAll(`[data-detail-for="${CSS.escape(domain)}"]`).forEach((r) => r.remove());
+        diagBucketResult.querySelectorAll('[data-domain]').forEach((c) => {
+          if (c.dataset.domain === domain) c.style.fontWeight = '';
+        });
+      }
     });
   }
 

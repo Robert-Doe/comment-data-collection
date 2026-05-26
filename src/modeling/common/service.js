@@ -2394,6 +2394,39 @@ async function getDomainBuckets(items, artifactRoot, trainingInput = {}) {
 }
 
 /**
+ * Return the individual labeled rows that belong to a given domain key
+ * (hostname / frame_host / item_id fallback chain — same key used by getDomainBuckets).
+ * Used by the bucket inspector drill-down so users can verify which candidates
+ * contributed to the row/comment counts shown per domain.
+ */
+async function getDomainCandidates(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const domain = String(trainingInput.domain || '').trim();
+  if (!domain) throw new Error('domain is required');
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
+
+  const nBuckets = 5;
+  const candidates = [];
+  for (const row of labeledRows) {
+    const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '';
+    if (stableKey !== domain) continue;
+    candidates.push({
+      candidate_id: row.dataset_row_id || row.item_id || row.candidate_key || String(row.row_number) || '',
+      item_id:      row.item_id || '',
+      job_id:       row.job_id  || '',
+      label:        row.binary_label, // 1 = positive (has spam comments), 0 = negative (clean)
+      bucket:       hashString(stableKey) % nBuckets,
+    });
+  }
+
+  return { domain, total: candidates.length, positives: candidates.filter((c) => c.label === 1).length, candidates };
+}
+
+/**
  * Data-driven feature analysis: four independent filters applied to the
  * labeled dataset.  No training configuration needed — the function fits
  * its own L1-regularised LR (proximal gradient, λ chosen by 3-fold CV)
@@ -2672,6 +2705,7 @@ module.exports = {
   runCrossValidation,
   computeLearningCurve,
   getDomainBuckets,
+  getDomainCandidates,
   analyzeFeatures,
   getModelDetails,
   buildRuntimeModelBundle,
