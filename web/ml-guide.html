@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ML Guide — UGC Scanner</title>
   <script src="./config.js"></script>
+  <script src="./auth.js"></script>
   <script>
     (function () {
       var appConfig = window.__APP_CONFIG__ || {};
@@ -173,6 +174,7 @@
     <a class="site-nav-link" href="./domain-metrics.html">Domain Metrics</a>
         <a class="site-nav-link" href="./crawler.html">Crawler</a>
     <a class="site-nav-link" href="./supervisor.html">Supervisor</a>
+    <button class="site-nav-signout" onclick="window.__AUTH__ && window.__AUTH__.logout()">Sign out</button>
   </nav>
 
   <section class="hero">
