@@ -238,10 +238,29 @@
 
         <section class="panel">
           <div class="panel-header"><h2>Trained Models</h2></div>
-          <p class="lede manual-lede">Use <code>Runtime JSON</code> when another browser component needs a compact deployable inference bundle. The full saved artifact remains available through the API for research and debugging.</p>
+          <p class="lede manual-lede">Each row shows the variant, algorithm, and key performance metrics. Click <strong>Details</strong> for a full breakdown of training configuration, dataset scope, features used, and per-metric scores.</p>
           <div id="model-list" class="table-shell empty">No trained models saved yet.</div>
           <div id="model-threshold-tuner-panel"></div>
         </section>
+
+        <!-- ── Model Detail Modal ─────────────────────────────────── -->
+        <dialog id="model-detail-dialog" style="border:none;border-radius:12px;padding:0;width:min(900px,96vw);max-height:92vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
+          <div style="display:flex;flex-direction:column;max-height:92vh">
+            <!-- header bar -->
+            <div id="model-detail-header" style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;background:#1e293b;flex-shrink:0">
+              <div>
+                <p id="model-detail-eyebrow" style="margin:0;font-size:0.74rem;color:#94a3b8;letter-spacing:0.04em;text-transform:uppercase"></p>
+                <h2 id="model-detail-title" style="margin:0;font-size:1.05rem;color:#f1f5f9;font-family:ui-monospace,Consolas,monospace"></h2>
+              </div>
+              <button id="model-detail-close" type="button"
+                      style="background:rgba(255,255,255,0.08);border:none;color:#94a3b8;font-size:1.2rem;width:32px;height:32px;border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>
+            </div>
+            <!-- scrollable body -->
+            <div id="model-detail-body" style="overflow-y:auto;padding:22px;flex:1;background:#f8faff">
+              <p style="color:#6b7280;text-align:center;margin:40px 0">Loading model details…</p>
+            </div>
+          </div>
+        </dialog>
 
         <section class="panel">
           <div class="panel-header"><h2>Score Existing Job</h2></div>
