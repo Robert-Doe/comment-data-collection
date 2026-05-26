@@ -27,6 +27,7 @@ const { analyzeManualCapture } = require('../shared/manualCapture');
 const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSnapshot, scanUrl } = require('../shared/scanner');
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
+const { createUnifierRouter } = require('./unifierRoutes');
 const { createAuthModule } = require('./auth');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { loadInBatches } = require('../shared/loadInBatches');
@@ -2460,6 +2461,8 @@ function createApp(config = getConfig()) {
     },
   }));
   // ── End Synthetic Data Bank ───────────────────────────────────────────────────
+
+  app.use('/api/unifier', createUnifierRouter({ databaseUrl: config.databaseUrl }));
 
   app.use((error, _req, res, _next) => {
     console.error(error);
