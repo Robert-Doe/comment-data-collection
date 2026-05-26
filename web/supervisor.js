@@ -75,6 +75,25 @@
     return map[alg] || alg || '—';
   }
 
+  function formatAlgorithmShort(alg) {
+    const map = {
+      logistic_regression: 'LR',
+      decision_tree:       'DT',
+      random_forest:       'RF',
+      gradient_boosting:   'GB',
+      neural_network:      'NN',
+    };
+    return map[alg] || (alg ? String(alg).toUpperCase().slice(0, 3) : '?');
+  }
+
+  // Shorten a variant title for compact display (max ~16 chars)
+  function shortVariantLabel(title, id) {
+    const src = title || id || '';
+    // Strip common generic suffixes
+    const cleaned = src.replace(/\s*(full\s+features?|variant|model)\s*/gi, '').trim();
+    return cleaned.length > 16 ? cleaned.slice(0, 15) + '…' : (cleaned || src.slice(0, 16));
+  }
+
   function strategyLabel(s) {
     if (!s) return 'Baseline';
     if (typeof s === 'object') return s.title || s.id || 'Unknown';
@@ -94,81 +113,118 @@
       return;
     }
 
-    // Populate select
-    supModelSelect.innerHTML = models.map((m) =>
-      `<option value="${escapeHtml(m.id)}">${escapeHtml(m.id)}</option>`
-    ).join('');
+    // Populate select with human-readable labels so every entry is distinguishable
+    supModelSelect.innerHTML = models.map((m, i) => {
+      const date  = (m.created_at || '').slice(0, 16).replace('T', ' ');
+      const alg   = formatAlgorithmShort(m.algorithm);
+      const feat  = m.feature_count != null ? m.feature_count + ' feat' : '';
+      const label = `#${i + 1} — ${date}  ·  ${alg}${feat ? '  ·  ' + feat : ''}`;
+      return `<option value="${escapeHtml(m.id)}">${escapeHtml(label)}</option>`;
+    }).join('');
 
     supModelHistory.className = 'table-shell';
+
+    const thStyle = 'padding:8px 10px;font-size:0.72rem;font-weight:700;color:#374151;white-space:nowrap;border-bottom:2px solid rgba(17,24,39,0.1)';
+    const thC     = thStyle + ';text-align:center';
+
     supModelHistory.innerHTML = `
-      <table>
+      <div style="overflow-x:auto">
+      <table style="table-layout:fixed;width:100%;min-width:760px;border-collapse:collapse">
+        <colgroup>
+          <col style="width:38px">
+          <col style="width:132px">
+          <col style="width:150px">
+          <col style="width:108px">
+          <col style="width:110px">
+          <col style="width:52px">
+          <col style="width:74px">
+          <col style="width:74px">
+          <col style="width:74px">
+          <col style="width:74px">
+          <col style="width:48px">
+        </colgroup>
         <thead>
-          <tr>
-            <th style="min-width:170px">Artifact ID</th>
-            <th>Variant</th>
-            <th>Algorithm</th>
-            <th>Strategy</th>
-            <th title="Features the model was trained on">Feat.</th>
-            <th title="F1 score">F1</th>
-            <th title="Precision">Prec</th>
-            <th title="Recall">Rec</th>
-            <th title="Top-1 ranking accuracy">Top-1</th>
-            <th title="Source of metrics">Set</th>
-            <th>Trained</th>
+          <tr style="background:#f8faff">
+            <th style="${thC}">#</th>
+            <th style="${thStyle}">Trained</th>
+            <th style="${thStyle}">Algorithm</th>
+            <th style="${thStyle}">Strategy</th>
+            <th style="${thStyle}">Variant</th>
+            <th style="${thC}" title="Number of features the model was trained on">Feat.</th>
+            <th style="${thC}" title="F1 score (harmonic mean of precision and recall)">F1</th>
+            <th style="${thC}" title="Precision — of predicted positives, how many were correct">Prec</th>
+            <th style="${thC}" title="Recall — of all actual positives, how many were found">Rec</th>
+            <th style="${thC}" title="Top-1 ranking accuracy">Top-1</th>
+            <th style="${thC}" title="Whether metrics are from the held-out test set or training set">Set</th>
           </tr>
         </thead>
         <tbody>
           ${models.map((m, idx) => {
-            const ev  = m.evaluation && m.evaluation.test  ? m.evaluation.test
-                      : m.evaluation && m.evaluation.train ? m.evaluation.train : null;
-            const cm  = ev && ev.candidate_metrics ? ev.candidate_metrics : null;
-            const rm  = ev && ev.ranking_metrics   ? ev.ranking_metrics   : null;
+            const ev     = m.evaluation && m.evaluation.test  ? m.evaluation.test
+                         : m.evaluation && m.evaluation.train ? m.evaluation.train : null;
+            const cm     = ev && ev.candidate_metrics ? ev.candidate_metrics : null;
+            const rm     = ev && ev.ranking_metrics   ? ev.ranking_metrics   : null;
             const isTest = !!(m.evaluation && m.evaluation.test);
-            const f1  = cm ? cm.f1        : null;
-            const pre = cm ? cm.precision : null;
-            const rec = cm ? cm.recall    : null;
-            const t1  = rm ? rm.top_1_accuracy : null;
-            const vId = String(m.variant_id || '').toLowerCase();
-            const vBg = vId === 'full' || vId === 'default' ? '#dcfce7'
-                      : vId.includes('ablat') ? '#fef3c7' : '#dbeafe';
-            const vColor = vId === 'full' || vId === 'default' ? '#166534'
-                         : vId.includes('ablat') ? '#92400e' : '#1e40af';
-            return `<tr style="${idx === 0 ? 'background:#fafff8' : ''}">
-              <td class="mono" style="font-size:0.76rem;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(m.id)}">${escapeHtml(m.id)}</td>
-              <td><span style="font-size:0.7rem;font-weight:600;color:${vColor};background:${vBg};border-radius:4px;padding:1px 6px;white-space:nowrap">${escapeHtml(m.variant_title || m.variant_id || '')}</span></td>
-              <td style="font-size:0.8rem;white-space:nowrap">${escapeHtml(formatAlgorithm(m.algorithm))}</td>
-              <td style="font-size:0.78rem;white-space:nowrap">${escapeHtml(strategyLabel(m.imbalance_strategy))}</td>
-              <td style="text-align:center;font-size:0.8rem;font-weight:600;color:#374151">${m.feature_count != null ? m.feature_count : '—'}</td>
-              <td style="text-align:center;font-weight:700;color:${metricColor(f1)}">${fmt(f1)}</td>
-              <td style="text-align:center;color:${metricColor(pre)}">${fmt(pre)}</td>
-              <td style="text-align:center;color:${metricColor(rec)}">${fmt(rec)}</td>
-              <td style="text-align:center;color:${metricColor(t1)}">${fmt(t1)}</td>
-              <td style="text-align:center;font-size:0.7rem;color:${isTest ? '#16a34a' : '#9ca3af'}">${isTest ? 'test' : 'train'}</td>
-              <td style="font-size:0.76rem;color:#6b7280;white-space:nowrap">${escapeHtml((m.created_at || '').slice(0, 16).replace('T', ' '))}</td>
+            const f1     = cm ? cm.f1        : null;
+            const pre    = cm ? cm.precision : null;
+            const rec    = cm ? cm.recall    : null;
+            const t1     = rm ? rm.top_1_accuracy : null;
+
+            // Variant badge colours
+            const vId    = String(m.variant_id || '').toLowerCase();
+            const vBg    = vId.includes('ablat') ? '#fef3c7' : vId.includes('custom') ? '#dbeafe' : '#eff6ff';
+            const vColor = vId.includes('ablat') ? '#92400e' : vId.includes('custom') ? '#1e40af' : '#1d4ed8';
+            const vLabel = shortVariantLabel(m.variant_title, m.variant_id);
+
+            const rowBg  = idx === 0 ? '#fafff8' : idx % 2 === 0 ? '#fff' : '#f9fafb';
+            const tdBase = 'padding:9px 10px;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid rgba(17,24,39,0.06)';
+            const tdC    = tdBase + ';text-align:center';
+
+            // Human-readable date: "May 26, 00:22"
+            const raw    = m.created_at || '';
+            const dateParts = raw.slice(0, 16).replace('T', ' ');  // "2026-05-26 00:22"
+
+            return `<tr style="background:${rowBg}" title="Artifact: ${escapeHtml(m.id)}">
+              <td style="${tdC};font-size:0.72rem;color:#9ca3af;font-weight:600">${idx + 1}</td>
+              <td style="${tdBase};font-size:0.76rem;color:#374151;font-weight:600" title="${escapeHtml(raw)}">${escapeHtml(dateParts)}</td>
+              <td style="${tdBase}">${escapeHtml(formatAlgorithm(m.algorithm))}</td>
+              <td style="${tdBase};font-size:0.78rem;color:#6b7280">${escapeHtml(strategyLabel(m.imbalance_strategy))}</td>
+              <td style="${tdBase}">
+                <span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:0.69rem;font-weight:700;color:${vColor};background:${vBg};border-radius:4px;padding:2px 7px;white-space:nowrap" title="${escapeHtml(m.variant_title || m.variant_id || '')}">${escapeHtml(vLabel)}</span>
+              </td>
+              <td style="${tdC};font-weight:700;color:#374151">${m.feature_count != null ? m.feature_count : '—'}</td>
+              <td style="${tdC};font-weight:700;color:${metricColor(f1)}">${fmt(f1)}</td>
+              <td style="${tdC};color:${metricColor(pre)}">${fmt(pre)}</td>
+              <td style="${tdC};color:${metricColor(rec)}">${fmt(rec)}</td>
+              <td style="${tdC};color:${metricColor(t1)}">${fmt(t1)}</td>
+              <td style="${tdC};font-size:0.69rem;font-weight:600;color:${isTest ? '#16a34a' : '#9ca3af'}">${isTest ? 'test' : 'train'}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
+      </div>
       ${models.length > 1 ? renderF1Sparkline(models) : ''}
     `;
   }
 
   function renderF1Sparkline(models) {
-    // Simple inline F1 bar chart showing progression newest → oldest
-    const sorted = [...models].reverse(); // oldest first for chart
-    const max = 1;
-    const bars = sorted.map((m) => {
-      const ev = m.evaluation && m.evaluation.test ? m.evaluation.test
-               : m.evaluation && m.evaluation.train ? m.evaluation.train : null;
-      const f1 = ev && ev.candidate_metrics ? ev.candidate_metrics.f1 : null;
-      const pct = f1 != null ? Math.round(f1 * 100) : 0;
+    // Bar chart oldest → newest; label each bar with "algShort · MM-DD" so bars are distinguishable
+    const sorted = [...models].reverse(); // oldest first
+    const bars = sorted.map((m, i) => {
+      const ev    = m.evaluation && m.evaluation.test ? m.evaluation.test
+                  : m.evaluation && m.evaluation.train ? m.evaluation.train : null;
+      const f1    = ev && ev.candidate_metrics ? ev.candidate_metrics.f1 : null;
+      const pct   = f1 != null ? Math.round(f1 * 100) : 0;
       const color = metricColor(f1);
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;min-width:0">
+      const alg   = formatAlgorithmShort(m.algorithm);
+      const mmdd  = (m.created_at || '').slice(5, 10); // "05-26"
+      const lbl   = `${alg} ${mmdd}`;
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;min-width:0" title="${escapeHtml(m.id)}">
         <div style="width:100%;background:#f3f4f6;border-radius:3px;height:80px;position:relative;overflow:hidden">
           <div style="position:absolute;bottom:0;left:0;right:0;background:${color};height:${pct}%;border-radius:3px 3px 0 0;transition:height 0.3s"></div>
           <span style="position:absolute;top:4px;left:0;right:0;text-align:center;font-size:0.68rem;font-weight:700;color:${pct > 50 ? '#fff' : color}">${pct ? pct + '%' : '—'}</span>
         </div>
-        <span style="font-size:0.62rem;color:#6b7280;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;max-width:70px" title="${escapeHtml(m.id)}">${escapeHtml((m.variant_title || m.variant_id || '').slice(0, 10))}</span>
+        <span style="font-size:0.61rem;color:#6b7280;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%" title="${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>
       </div>`;
     }).join('');
     return `
