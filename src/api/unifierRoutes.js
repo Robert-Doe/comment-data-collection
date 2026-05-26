@@ -164,32 +164,73 @@ function createUnifierRouter({ databaseUrl }) {
   });
 
   // ── GET /export-urls.csv ──────────────────────────────────────────────────────
-  // Streams every unique normalized_url with basic metadata as a CSV — no job created.
-  router.get('/export-urls.csv', async (_req, res, next) => {
+  // Streams every unique URL with clear descriptive columns.
+  // Query params:
+  //   ?type=all       (default) — every URL ever submitted
+  //   ?type=comments  — only URLs where a comment region was detected
+  //   ?type=labeled   — only URLs that have been manually/model reviewed
+  router.get('/export-urls.csv', async (req, res, next) => {
     try {
-      const db = getPool(databaseUrl);
+      const db   = getPool(databaseUrl);
+      const type = String(req.query.type || 'all').trim().toLowerCase();
+
+      let whereExtra = '';
+      let filename   = 'all-urls.csv';
+      if (type === 'comments') {
+        whereExtra = 'HAVING bool_or(ji.ugc_detected) = true';
+        filename   = 'urls-with-comment-regions.csv';
+      } else if (type === 'labeled') {
+        whereExtra = `HAVING bool_or(EXISTS (
+          SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+          WHERE r->>'label' NOT IN ('', 'uncertain')
+        )) = true`;
+        filename = 'urls-labeled.csv';
+      }
 
       const result = await db.query(`
         SELECT
-          ji.normalized_url,
-          MIN(ji.input_url)                                           AS input_url,
-          MIN(ji.title)                                               AS title,
-          MIN(ji.final_url)                                           AS final_url,
-          bool_or(ji.ugc_detected)                                    AS ugc_detected,
-          COUNT(DISTINCT ji.job_id)                                   AS job_count,
-          MIN(ji.created_at)                                          AS first_seen,
-          MAX(ji.updated_at)                                          AS last_seen,
+          ji.normalized_url                                             AS url,
+          MIN(ji.title)                                                 AS page_title,
+          bool_or(ji.ugc_detected)                                      AS comment_region_found,
+          CASE
+            WHEN bool_or(EXISTS (
+              SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+              WHERE r->>'label' = 'comment_region'
+            )) AND bool_or(EXISTS (
+              SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+              WHERE r->>'label' = 'not_comment_region'
+            )) THEN 'mixed'
+            WHEN bool_or(EXISTS (
+              SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+              WHERE r->>'label' = 'comment_region'
+            )) THEN 'comment_region'
+            WHEN bool_or(EXISTS (
+              SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+              WHERE r->>'label' = 'not_comment_region'
+            )) THEN 'not_comment_region'
+            ELSE 'not_reviewed'
+          END                                                           AS review_label,
           bool_or(EXISTS (
             SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
-            WHERE  r->>'label' NOT IN ('', 'uncertain')
-          ))                                                          AS has_label,
+            WHERE r->>'source' = 'web_review'
+              AND r->>'label' NOT IN ('', 'uncertain')
+          ))                                                            AS human_reviewed,
+          bool_or(EXISTS (
+            SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
+            WHERE r->>'source' = 'inferred'
+              AND r->>'label' NOT IN ('', 'uncertain')
+          ))                                                            AS model_reviewed,
+          COUNT(DISTINCT ji.job_id)                                     AS times_submitted,
+          to_char(MIN(ji.created_at), 'YYYY-MM-DD')                    AS first_submitted,
+          to_char(MAX(ji.updated_at), 'YYYY-MM-DD')                    AS last_updated,
           string_agg(DISTINCT j.source_filename, ' | '
-                     ORDER BY j.source_filename)                     AS source_jobs
+                     ORDER BY j.source_filename)                        AS source_files
         FROM   jobs j
         JOIN   job_items ji ON ji.job_id = j.id
         WHERE  j.deleted_at IS NULL
           AND  j.source_column NOT IN ('unified')
         GROUP BY ji.normalized_url
+        ${whereExtra}
         ORDER BY ji.normalized_url
       `);
 
@@ -201,15 +242,14 @@ function createUnifierRouter({ databaseUrl }) {
           : s;
       };
 
-      const header = 'normalized_url,input_url,title,final_url,status,ugc_detected,job_count,first_seen,last_seen,has_label,source_jobs\n';
-      const rows   = result.rows.map((r) => [
-        r.normalized_url, r.input_url, r.title, r.final_url,
-        r.status, r.ugc_detected, r.job_count,
-        r.first_seen, r.last_seen, r.has_label, r.source_jobs,
-      ].map(escape).join(',')).join('\n');
+      const cols   = ['url', 'page_title', 'comment_region_found', 'review_label',
+                      'human_reviewed', 'model_reviewed', 'times_submitted',
+                      'first_submitted', 'last_updated', 'source_files'];
+      const header = cols.join(',') + '\n';
+      const rows   = result.rows.map((r) => cols.map((c) => escape(r[c])).join(',')).join('\n');
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="all-urls.csv"');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(header + rows + '\n');
     } catch (err) { next(err); }
   });

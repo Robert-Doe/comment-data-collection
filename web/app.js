@@ -13,8 +13,12 @@
   const jobEvents = document.getElementById('job-events');
   const jobItems = document.getElementById('job-items');
   const recentJobs = document.getElementById('recent-jobs');
-  const downloadAllUrlsBtn = document.getElementById('download-all-urls-btn');
-  if (downloadAllUrlsBtn) downloadAllUrlsBtn.href = apiBase + '/api/unifier/export-urls.csv';
+  const dlAllUrls     = document.getElementById('dl-all-urls');
+  const dlCommentUrls = document.getElementById('dl-comment-urls');
+  const dlLabeledUrls = document.getElementById('dl-labeled-urls');
+  if (dlAllUrls)     dlAllUrls.href     = apiBase + '/api/unifier/export-urls.csv?type=all';
+  if (dlCommentUrls) dlCommentUrls.href = apiBase + '/api/unifier/export-urls.csv?type=comments';
+  if (dlLabeledUrls) dlLabeledUrls.href = apiBase + '/api/unifier/export-urls.csv?type=labeled';
   const refreshJobsButton = document.getElementById('refresh-jobs');
   const downloadReportXlsx = document.getElementById('download-report-xlsx');
   const downloadSummaryCsv = document.getElementById('download-summary-csv');

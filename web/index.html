@@ -347,12 +347,63 @@
         </div>
       </section>
 
+      <!-- ── URL Downloads ──────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>URL Downloads</h2>
+        </div>
+        <p class="lede manual-lede" style="margin-bottom:20px">
+          Every download queries the live database — no job needs to exist first. Each CSV row is one unique URL.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+          <div style="border:1px solid var(--line);border-radius:14px;padding:20px">
+            <div style="font-weight:700;font-size:1rem;margin-bottom:6px">All Submitted URLs</div>
+            <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+              Every URL ever added to the system. Includes <code>comment_region_found</code>, <code>review_label</code>, <code>human_reviewed</code>, and which source files it came from.
+            </div>
+            <a id="dl-all-urls" href="#" class="btn" style="text-decoration:none;display:inline-block;font-size:0.85rem">↓ Download All URLs (.csv)</a>
+          </div>
+          <div style="border:1px solid var(--line);border-radius:14px;padding:20px">
+            <div style="font-weight:700;font-size:1rem;margin-bottom:6px">Comment Region URLs</div>
+            <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+              Only URLs where the scanner detected a comment region (<code>comment_region_found = true</code>). Same columns as above.
+            </div>
+            <a id="dl-comment-urls" href="#" class="btn" style="text-decoration:none;display:inline-block;font-size:0.85rem">↓ Comment Region URLs (.csv)</a>
+          </div>
+          <div style="border:1px solid var(--line);border-radius:14px;padding:20px">
+            <div style="font-weight:700;font-size:1rem;margin-bottom:6px">Labeled URLs</div>
+            <div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+              Only URLs that have been reviewed by a human or model — <code>review_label</code> is <code>comment_region</code>, <code>not_comment_region</code>, or <code>mixed</code>.
+            </div>
+            <a id="dl-labeled-urls" href="#" class="btn" style="text-decoration:none;display:inline-block;font-size:0.85rem">↓ Labeled URLs (.csv)</a>
+          </div>
+        </div>
+        <details style="margin-top:18px">
+          <summary style="cursor:pointer;font-size:0.82rem;color:var(--muted);user-select:none">CSV column reference</summary>
+          <table style="margin-top:10px;width:100%;border-collapse:collapse;font-size:0.8rem">
+            <thead><tr style="border-bottom:1px solid var(--line)">
+              <th style="text-align:left;padding:6px 10px;color:var(--muted)">Column</th>
+              <th style="text-align:left;padding:6px 10px;color:var(--muted)">What it means</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:5px 10px"><code>url</code></td><td style="padding:5px 10px;color:var(--muted)">The canonical deduplicated URL</td></tr>
+              <tr><td style="padding:5px 10px"><code>page_title</code></td><td style="padding:5px 10px;color:var(--muted)">Page title from the scanner</td></tr>
+              <tr><td style="padding:5px 10px"><code>comment_region_found</code></td><td style="padding:5px 10px;color:var(--muted)">true if the scanner detected a comment section</td></tr>
+              <tr><td style="padding:5px 10px"><code>review_label</code></td><td style="padding:5px 10px;color:var(--muted)">comment_region / not_comment_region / mixed / not_reviewed</td></tr>
+              <tr><td style="padding:5px 10px"><code>human_reviewed</code></td><td style="padding:5px 10px;color:var(--muted)">true if a human labeled a candidate on this page</td></tr>
+              <tr><td style="padding:5px 10px"><code>model_reviewed</code></td><td style="padding:5px 10px;color:var(--muted)">true if the model inferred a label for this page</td></tr>
+              <tr><td style="padding:5px 10px"><code>times_submitted</code></td><td style="padding:5px 10px;color:var(--muted)">How many scan jobs included this URL</td></tr>
+              <tr><td style="padding:5px 10px"><code>first_submitted</code></td><td style="padding:5px 10px;color:var(--muted)">Date first added to the system</td></tr>
+              <tr><td style="padding:5px 10px"><code>last_updated</code></td><td style="padding:5px 10px;color:var(--muted)">Date of most recent scan or label change</td></tr>
+              <tr><td style="padding:5px 10px"><code>source_files</code></td><td style="padding:5px 10px;color:var(--muted)">Which uploaded CSV files contained this URL</td></tr>
+            </tbody>
+          </table>
+        </details>
+      </section>
+
       <section class="panel">
         <div class="panel-header">
           <h2>Recent Jobs</h2>
-          <a id="download-all-urls-btn" href="#" class="secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:0.82rem">
-            ↓ All URLs (.csv)
-          </a>
         </div>
         <div id="recent-jobs" class="table-shell empty">No jobs loaded.</div>
       </section>
