@@ -172,14 +172,13 @@ function createUnifierRouter({ databaseUrl }) {
       const result = await db.query(`
         SELECT
           ji.normalized_url,
-          ji.input_url,
-          ji.title,
-          ji.final_url,
-          ji.status,
+          MIN(ji.input_url)                                           AS input_url,
+          MIN(ji.title)                                               AS title,
+          MIN(ji.final_url)                                           AS final_url,
           bool_or(ji.ugc_detected)                                    AS ugc_detected,
           COUNT(DISTINCT ji.job_id)                                   AS job_count,
           MIN(ji.created_at)                                          AS first_seen,
-          MAX(ji.created_at)                                          AS last_seen,
+          MAX(ji.updated_at)                                          AS last_seen,
           bool_or(EXISTS (
             SELECT 1 FROM jsonb_array_elements(ji.candidate_reviews) r
             WHERE  r->>'label' NOT IN ('', 'uncertain')
@@ -190,8 +189,7 @@ function createUnifierRouter({ databaseUrl }) {
         JOIN   job_items ji ON ji.job_id = j.id
         WHERE  j.deleted_at IS NULL
           AND  j.source_column NOT IN ('unified')
-        GROUP BY
-          ji.normalized_url, ji.input_url, ji.title, ji.final_url, ji.status
+        GROUP BY ji.normalized_url
         ORDER BY ji.normalized_url
       `);
 

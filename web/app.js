@@ -13,6 +13,8 @@
   const jobEvents = document.getElementById('job-events');
   const jobItems = document.getElementById('job-items');
   const recentJobs = document.getElementById('recent-jobs');
+  const downloadAllUrlsBtn = document.getElementById('download-all-urls-btn');
+  if (downloadAllUrlsBtn) downloadAllUrlsBtn.href = apiBase + '/api/unifier/export-urls.csv';
   const refreshJobsButton = document.getElementById('refresh-jobs');
   const downloadReportXlsx = document.getElementById('download-report-xlsx');
   const downloadSummaryCsv = document.getElementById('download-summary-csv');
