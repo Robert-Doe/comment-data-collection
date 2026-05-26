@@ -3374,10 +3374,18 @@
       return;
     }
 
-    const rows = jobs.map((job) => `
+    const rows = jobs.map((job) => {
+      const isUnified = job.source_column === 'unified';
+      const isCombined = job.source_column === 'combined';
+      const typeBadge = isUnified
+        ? '<span style="display:inline-block;margin-left:6px;font-size:0.65rem;font-weight:700;background:#7c3aed;color:#fff;padding:1px 6px;border-radius:9px;vertical-align:middle">UNIFIED</span>'
+        : isCombined
+          ? '<span style="display:inline-block;margin-left:6px;font-size:0.65rem;font-weight:700;background:#0369a1;color:#fff;padding:1px 6px;border-radius:9px;vertical-align:middle">MERGED</span>'
+          : '';
+      return `
       <tr data-job-id="${escapeHtml(job.id)}" class="${currentJobId === job.id ? 'is-current' : ''}">
         <td>
-          <div style="font-weight:600;line-height:1.3">${escapeHtml(job.source_filename || job.id)}</div>
+          <div style="font-weight:600;line-height:1.3">${escapeHtml(job.source_filename || job.id)}${typeBadge}</div>
           <div class="mono" style="font-size:0.72rem;color:var(--muted);margin-top:2px" title="${escapeHtml(job.id)}">${escapeHtml(job.id.slice(0, 8))}…</div>
         </td>
         <td>${escapeHtml(job.status)}</td>
@@ -3394,7 +3402,8 @@
           </div>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     recentJobs.className = 'table-shell';
     recentJobs.innerHTML = `
@@ -3585,7 +3594,7 @@
   }
 
   async function refreshJobs(options = {}) {
-    const data = await fetchJson('/api/jobs?limit=10');
+    const data = await fetchJson('/api/jobs?limit=50');
     const jobs = data.jobs || [];
     renderRecentJobs(jobs);
     if (options.autoselect && !currentJobId) {
