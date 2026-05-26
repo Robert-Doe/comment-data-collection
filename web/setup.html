@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>First-Time Setup — UGC XSS Research Tool</title>
+  <script src="./config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left,  rgba(200,221,255,.75), transparent 34%),
+        radial-gradient(circle at top right, rgba(230,239,255,.85), transparent 28%),
+        linear-gradient(180deg, #f7f9fe 0%, #eef3fb 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #111827;
+    }
+    .card {
+      background: rgba(255,255,255,.97);
+      border: 1px solid rgba(17,24,39,.1);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.08);
+      padding: 2.5rem 2.75rem;
+      width: 100%;
+      max-width: 420px;
+    }
+    .icon { font-size: 2rem; margin-bottom: .8rem; }
+    .logo { font-size: 1.35rem; font-weight: 700; letter-spacing: -.4px; color: #1e3a5f; margin-bottom: .35rem; }
+    .subtitle { font-size: .82rem; color: #6b7280; margin-bottom: 1.8rem; line-height: 1.5; }
+    .badge {
+      display: inline-block; background: #ecfdf5; color: #065f46;
+      border: 1px solid #a7f3d0; border-radius: 20px;
+      padding: .2rem .7rem; font-size: .75rem; font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: .8rem; font-weight: 600; color: #374151; margin-bottom: .4rem; }
+    input {
+      width: 100%; padding: .65rem .85rem;
+      border: 1px solid rgba(17,24,39,.18); border-radius: 8px;
+      font-size: .93rem; font-family: inherit; background: #fafcff; color: #111827;
+      outline: none; transition: border-color .15s; margin-bottom: 1rem;
+    }
+    input:focus { border-color: #3b6fd4; box-shadow: 0 0 0 3px rgba(59,111,212,.12); }
+    .hint { font-size: .75rem; color: #9ca3af; margin-top: -.7rem; margin-bottom: 1rem; }
+    button {
+      width: 100%; padding: .7rem; background: #065f46; color: #fff;
+      border: none; border-radius: 8px; font-size: .93rem; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: background .15s;
+    }
+    button:hover  { background: #047857; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .error {
+      margin-top: .9rem; font-size: .81rem; color: #b91c1c;
+      background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: 6px; padding: .5rem .75rem; display: none;
+    }
+    .error.on { display: block; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">⚙️</div>
+  <span class="badge">One-time setup</span>
+  <div class="logo">UGC XSS Research Tool</div>
+  <div class="subtitle">
+    Welcome! Create your administrator account to get started.
+    This page is only available once — it will be disabled after your account is created.
+  </div>
+
+  <form id="setup-form">
+    <label for="name">Your Name <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+    <input type="text" id="name" placeholder="e.g. Dr. Smith" autocomplete="name">
+
+    <label for="email">Email Address</label>
+    <input type="email" id="email" autocomplete="email" placeholder="you@university.ac.uk">
+
+    <label for="pw">Password</label>
+    <input type="password" id="pw" autocomplete="new-password">
+
+    <label for="pw2">Confirm Password</label>
+    <input type="password" id="pw2" autocomplete="new-password">
+    <div class="hint">Use a strong password — you will be the only admin.</div>
+
+    <button type="submit" id="btn">Create Administrator Account</button>
+    <div class="error" id="err"></div>
+  </form>
+</div>
+
+<script>
+(function () {
+  var TOKEN_KEY = 'ugc_auth_token';
+  var ROLE_KEY  = 'ugc_auth_role';
+  var cfg       = window.__APP_CONFIG__ || {};
+  var apiBase   = (cfg.apiBaseUrl || '').replace(/\/+$/, '');
+
+  // Verify setup really is needed (redirect to login if already set up)
+  fetch(apiBase + '/api/auth/setup-status')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d.setup_needed) window.location.replace('./login.html');
+    })
+    .catch(function () {});
+
+  var btn = document.getElementById('btn');
+  var err = document.getElementById('err');
+
+  function showError(msg) {
+    err.textContent = msg; err.classList.add('on');
+    btn.disabled = false; btn.textContent = 'Create Administrator Account';
+  }
+
+  document.getElementById('setup-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name  = document.getElementById('name').value.trim();
+    var email = document.getElementById('email').value.trim();
+    var pw    = document.getElementById('pw').value;
+    var pw2   = document.getElementById('pw2').value;
+
+    if (!email || !pw) { showError('Email and password are required.'); return; }
+    if (pw.length < 8) { showError('Password must be at least 8 characters.'); return; }
+    if (pw !== pw2)    { showError('Passwords do not match.'); return; }
+
+    btn.disabled = true; btn.textContent = 'Creating account…';
+    err.classList.remove('on');
+
+    fetch(apiBase + '/api/auth/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: pw, display_name: name || undefined }),
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (result) {
+      if (result.ok && result.data.token) {
+        try {
+          localStorage.setItem(TOKEN_KEY, result.data.token);
+          localStorage.setItem(ROLE_KEY, 'admin');
+        } catch (_) {}
+        window.location.replace('./index.html');
+      } else {
+        showError(result.data.error || 'Setup failed. Please try again.');
+      }
+    })
+    .catch(function () { showError('Network error — could not reach the server.'); });
+  });
+}());
+</script>
+</body>
+</html>

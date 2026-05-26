@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UGC Region Detection — Homogeneity Approaches</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #20243a;
+    --border: #2a2d3a;
+    --text: #e2e4ed;
+    --muted: #7a7f94;
+    --accent: #4f8ef7;
+    --green: #3ecf8e;
+    --yellow: #f0b429;
+    --red: #e55353;
+    --purple: #a78bfa;
+    --orange: #fb923c;
+    --font: 'Inter', system-ui, sans-serif;
+    --mono: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 0 0 80px;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 32px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+  nav a:hover { color: var(--accent); }
+  nav .nav-title { color: var(--text); font-weight: 700; font-size: 13px; margin-right: 8px; }
+
+  /* ── LAYOUT ── */
+  .page { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .hero h1 { font-size: 28px; font-weight: 800; line-height: 1.3; margin-bottom: 12px; }
+  .hero p { color: var(--muted); font-size: 14px; max-width: 680px; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-right: 6px;
+    margin-bottom: 12px;
+  }
+  .tag.blue  { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .tag.green { background: rgba(62,207,142,0.15); color: var(--green); }
+  .tag.red   { background: rgba(229,83,83,0.15);  color: var(--red); }
+  .tag.yellow{ background: rgba(240,180,41,0.15); color: var(--yellow); }
+  .tag.purple{ background: rgba(167,139,250,0.15);color: var(--purple); }
+
+  /* ── SECTIONS ── */
+  section { margin-bottom: 56px; }
+  h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .sec-num {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0;
+  }
+  h3 { font-size: 15px; font-weight: 700; margin: 20px 0 10px; color: var(--accent); }
+  h4 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; color: var(--yellow); }
+  p { margin-bottom: 12px; color: #c8ccd8; }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-bottom: 14px;
+    tab-size: 2;
+  }
+  code { font-family: var(--mono); font-size: 12px; }
+  p code, li code {
+    background: rgba(79,142,247,0.12);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* syntax colours */
+  .kw  { color: #c792ea; }
+  .fn  { color: #82aaff; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cmt { color: #546e7a; font-style: italic; }
+  .tag-c { color: var(--yellow); }
+  .attr { color: var(--green); }
+  .val  { color: var(--orange); }
+
+  /* ── DOM TREE ── */
+  .dom-tree {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .dom-good  { color: var(--green); font-weight: 700; }
+  .dom-bad   { color: var(--red);   font-weight: 700; }
+  .dom-warn  { color: var(--yellow); }
+  .dom-muted { color: var(--muted); }
+  .dom-depth { color: #546e7a; }
+
+  /* ── CALLOUT BOXES ── */
+  .callout {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    border-left: 3px solid;
+    font-size: 13px;
+  }
+  .callout.info    { background: rgba(79,142,247,0.08);  border-color: var(--accent); }
+  .callout.warn    { background: rgba(240,180,41,0.08);  border-color: var(--yellow); }
+  .callout.danger  { background: rgba(229,83,83,0.08);   border-color: var(--red); }
+  .callout.success { background: rgba(62,207,142,0.08);  border-color: var(--green); }
+  .callout.idea    { background: rgba(167,139,250,0.08); border-color: var(--purple); }
+  .callout strong  { display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .callout.info    strong { color: var(--accent); }
+  .callout.warn    strong { color: var(--yellow); }
+  .callout.danger  strong { color: var(--red); }
+  .callout.success strong { color: var(--green); }
+  .callout.idea    strong { color: var(--purple); }
+
+  /* ── PROS / CONS ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+  .pros, .cons {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .pros { border-top: 3px solid var(--green); }
+  .cons { border-top: 3px solid var(--red); }
+  .pros h5 { color: var(--green); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .cons h5 { color: var(--red);   font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .pros li, .cons li { margin-left: 16px; margin-bottom: 5px; color: #c8ccd8; }
+
+  /* ── SCORE TABLE ── */
+  .score-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .score-table th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .score-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .score-table tr:last-child td { border-bottom: none; }
+  .score-table tr:hover td { background: var(--surface); }
+  .s-high   { color: var(--green);  font-weight: 700; }
+  .s-med    { color: var(--yellow); font-weight: 700; }
+  .s-low    { color: var(--muted);  font-weight: 700; }
+
+  /* ── DEPTH BADGE ── */
+  .depth {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono);
+    background: rgba(79,142,247,0.12);
+    color: var(--accent);
+    margin-left: 4px;
+  }
+
+  /* ── VERDICT BOX ── */
+  .verdict {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 24px;
+  }
+  .verdict h3 { color: var(--purple); margin-top: 0; }
+
+  /* ── KEYWORD CHIPS ── */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .chip {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 600;
+    background: rgba(62,207,142,0.1);
+    color: var(--green);
+    border: 1px solid rgba(62,207,142,0.25);
+  }
+  .chip.neg {
+    background: rgba(229,83,83,0.1);
+    color: var(--red);
+    border-color: rgba(229,83,83,0.25);
+  }
+  .chip.neutral {
+    background: rgba(240,180,41,0.1);
+    color: var(--yellow);
+    border-color: rgba(240,180,41,0.25);
+  }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  ol, ul { padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 6px; color: #c8ccd8; }
+  li strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-title">UGC Detection Reasoning</span>
+  <a href="#problem">Problem</a>
+  <a href="#approach1">Ancestor Penalty</a>
+  <a href="#approach2">Depth Homogeneity</a>
+  <a href="#depths">Reply Depths</a>
+  <a href="#edge-cases">Edge Cases</a>
+  <a href="#reply-keyword">Reply Keyword Feature</a>
+  <a href="#verdict">Verdict</a>
+</nav>
+
+<div class="page">
+
+  <div class="hero">
+    <span class="tag blue">Browser Extension</span>
+    <span class="tag purple">ML Features</span>
+    <span class="tag green">UGC Detection</span>
+    <h1>Detecting the Right Comment Container:<br>Homogeneity Approaches</h1>
+    <p>
+      A detailed comparison of two strategies for teaching the extension to prefer the
+      outer top-level comment list over nested reply sub-threads — and why the reply-keyword
+      feature deserves its own signal entirely.
+    </p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 1 -->
+  <section id="problem">
+    <h2><span class="sec-num">1</span> The Core Problem</h2>
+
+    <p>
+      The model keeps scoring a <strong>nested reply sub-thread</strong> higher than the
+      <strong>top-level comment list</strong>. Both are structurally similar — a container
+      of repeated, uniform children — but we want the outermost one.
+    </p>
+
+    <div class="dom-tree"><span class="dom-muted">// What a typical comment section looks like in the DOM</span>
+
+<span class="dom-good">div.comments-list</span>          <span class="dom-muted">← WE WANT THIS (top-level UGC region)</span>
+  <span class="dom-muted">div.comment</span>
+    <span class="dom-muted">img.avatar</span>
+    <span class="dom-muted">span.username</span>
+    <span class="dom-muted">p.text</span>
+    <span class="dom-bad">div.replies</span>              <span class="dom-muted">← Model keeps picking THIS instead</span>
+      <span class="dom-muted">div.reply</span>
+      <span class="dom-muted">div.reply</span>
+      <span class="dom-muted">div.reply</span>
+  <span class="dom-muted">div.comment</span>
+    <span class="dom-muted">...</span>
+  <span class="dom-muted">div.comment</span>
+    <span class="dom-muted">...</span></div>
+
+    <p>
+      Why does <code>div.replies</code> often score higher? Three compounding reasons:
+    </p>
+    <ol>
+      <li>
+        <strong>Tighter homogeneity.</strong> Reply items are simpler (just text + username).
+        The outer comment items are heterogeneous: they mix avatar, username, text, metadata,
+        reaction buttons, AND the replies section. More variety = lower homogeneity score.
+      </li>
+      <li>
+        <strong>Higher child-count density.</strong> A reply thread might have 8 children
+        in a tight container. The outer list has 30+ children but they're richer — the
+        feature extractor may reward compactness.
+      </li>
+      <li>
+        <strong>Training data bias.</strong> If training data was labeled on pages where the
+        "comment section" was itself a tight thread (e.g., Reddit threads, forum posts),
+        the model learned to associate tight homogeneous lists with UGC, regardless of
+        nesting level.
+      </li>
+    </ol>
+
+    <div class="callout info">
+      <strong>Key Insight</strong>
+      The problem is not that the reply container <em>isn't</em> a UGC region — it is.
+      The problem is we want the <em>outermost</em> meaningful UGC region, not an inner
+      sub-region, because that's what a developer targeting "the comment section" expects.
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 2 -->
+  <section id="approach1">
+    <h2><span class="sec-num">2</span> Approach 1 — Ancestor Penalty (Post-Hoc)</h2>
+
+    <p>
+      After scoring all candidates, walk each candidate's pseudo-node parent chain.
+      If any ancestor is <em>also</em> a candidate scoring above <code>UGC_LOW_THRESHOLD</code>,
+      multiply the child's score by <strong>0.6</strong>.
+    </p>
+
+    <pre><span class="cmt">// Three-pass classify() — simplified</span>
+
+<span class="cmt">// Pass 1: score everything into rawScores</span>
+<span class="kw">for</span> (<span class="kw">const</span> candidate <span class="kw">of</span> candidates) {
+  rawScores.set(candidate.id, scoreCandidate(candidate));
+}
+
+<span class="cmt">// Pass 2: walk pseudo-node parent chain</span>
+<span class="kw">for</span> (<span class="kw">const</span> candidate <span class="kw">of</span> candidates) {
+  <span class="kw">let</span> score = rawScores.get(candidate.id);
+  <span class="kw">let</span> parentId = PseudoDOM.nodes.get(candidate.id)?.parentId;
+  <span class="kw">while</span> (parentId) {
+    <span class="kw">const</span> ancestorScore = rawScores.get(parentId);
+    <span class="kw">if</span> (Number.isFinite(ancestorScore) && ancestorScore >= UGC_LOW_THRESHOLD) {
+      score *= <span class="num">0.6</span>;  <span class="cmt">// penalise — an ancestor is also a candidate</span>
+      <span class="kw">break</span>;
+    }
+    parentId = PseudoDOM.nodes.get(parentId)?.parentId;
+  }
+  finalScores.set(candidate.id, score);
+}
+
+<span class="cmt">// Pass 3: write finalScores to ugcRegionMap</span></pre>
+
+    <div class="two-col">
+      <div class="pros">
+        <h5>Pros</h5>
+        <ul>
+          <li>Simple — no feature extractor changes, no retraining</li>
+          <li>Works immediately on the current model</li>
+          <li>Handles any nesting depth transparently</li>
+          <li>Tunable multiplier (0.6 → 0.3 for stricter penalty)</li>
+        </ul>
+      </div>
+      <div class="cons">
+        <h5>Cons</h5>
+        <ul>
+          <li>Blunt — penalizes ALL nested candidates, even legitimate ones</li>
+          <li>Depends on pseudo-node parent linkage being accurate</li>
+          <li>Doesn't help when the outer container itself is not detected at all</li>
+          <li>Compound penalty issue: a reply-of-reply gets penalised twice (×0.6×0.6 = ×0.36)</li>
+          <li>Doesn't teach the model anything — the bias remains in weights</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>When the Ancestor Penalty Misfires</h3>
+
+    <h4>Case A — "Featured + All Comments" layout</h4>
+    <div class="dom-tree"><span class="dom-warn">div.comments-section</span>       <span class="dom-muted">← scores 0.72, becomes candidate</span>
+  <span class="dom-bad">div.featured-comments</span>     <span class="dom-muted">← scores 0.81, gets penalised to 0.49 ✗</span>
+    <span class="dom-muted">div.comment</span>               <span class="dom-muted">  (but this IS the real high-quality UGC!)</span>
+    <span class="dom-muted">div.comment</span>
+  <span class="dom-bad">div.all-comments</span>           <span class="dom-muted">← scores 0.78, gets penalised to 0.47 ✗</span>
+    <span class="dom-muted">div.comment</span>
+    <span class="dom-muted">div.comment</span>
+    <span class="dom-muted">div.comment</span></div>
+    <p>
+      The outer <code>div.comments-section</code> is a layout shell, not a real UGC region.
+      But it scores high enough to trigger the penalty on both real inner regions, missing both.
+    </p>
+
+    <h4>Case B — Hacker News flat threading</h4>
+    <div class="dom-tree"><span class="dom-warn">div.comment-tree</span>           <span class="dom-muted">← outer wrapper, scores 0.65</span>
+  <span class="dom-bad">div.comtr</span>                  <span class="dom-muted">← each comment IS the reply, indented by CSS</span>
+    <span class="dom-muted">div.comhead</span>               <span class="dom-muted">   penalised even though there's no real nesting</span>
+    <span class="dom-muted">div.comment-text</span>
+    <span class="dom-muted">div.reply-link</span>           <span class="dom-muted">   (just a link, not a sub-list)</span>
+  <span class="dom-bad">div.comtr</span>
+    <span class="dom-muted">...</span></div>
+    <p>
+      Here there is no reply sub-thread. The nesting in the DOM is purely structural
+      (each <code>div.comtr</code> is itself a candidate), but the penalty falsely
+      fires because <code>div.comment-tree</code> is also a weak candidate.
+    </p>
+
+    <h4>Case C — Infinite Reddit-style nesting</h4>
+    <div class="dom-tree"><span class="dom-warn">div.comments</span>               <span class="dom-muted">← depth 0 — score 0.74</span>
+  <span class="dom-warn">div.reply-list</span>            <span class="dom-muted">← depth 1 — score 0.81 → penalised to 0.49</span>
+    <span class="dom-warn">div.reply-list</span>          <span class="dom-muted">← depth 2 — score 0.79 → penalised to 0.47</span>
+      <span class="dom-warn">div.reply-list</span>        <span class="dom-muted">← depth 3 — score 0.77 → penalised to 0.46</span>
+        <span class="dom-warn">div.reply-list</span>      <span class="dom-muted">← depth 4 — score 0.75 → penalised to 0.45</span></div>
+    <p>
+      Each level gets penalised relative to its parent — compound penalties spiral quickly.
+      Legitimate deep threads in Reddit or phpBB could be missed entirely.
+    </p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 3 -->
+  <section id="approach2">
+    <h2><span class="sec-num">3</span> Approach 2 — Depth-Windowed Homogeneity (Feature-Level)</h2>
+
+    <p>
+      Instead of correcting scores after the fact, change <em>how homogeneity is measured</em>
+      so that the outer comment list naturally outscores the inner reply container in the
+      first place. The idea: measure child uniformity at <strong>multiple depth levels</strong>,
+      weighting shallower depths more heavily and tolerating divergence at deeper levels.
+    </p>
+
+    <pre><span class="cmt">/**
+ * Returns a composite homogeneity score for `element` up to `maxDepth`.
+ * Depth 1 (direct children) is weighted 1.0.
+ * Each subsequent depth is weighted at half the previous.
+ *
+ * A "signature" for a node is tagName + dominant class tokens (sorted).
+ * Homogeneity at a level = fraction of nodes sharing the most common signature.
+ */</span>
+<span class="kw">function</span> <span class="fn">depthWindowedHomogeneity</span>(element, maxDepth = <span class="num">3</span>) {
+  <span class="kw">let</span> totalScore = <span class="num">0</span>;
+  <span class="kw">let</span> weight = <span class="num">1.0</span>;
+  <span class="kw">let</span> currentLevel = [element];
+
+  <span class="kw">for</span> (<span class="kw">let</span> d = <span class="num">0</span>; d < maxDepth; d++) {
+    <span class="kw">const</span> nextLevel = currentLevel.flatMap(n => [...(n.children || [])]);
+    <span class="kw">if</span> (nextLevel.length < <span class="num">2</span>) <span class="kw">break</span>;  <span class="cmt">// not enough nodes to judge</span>
+
+    <span class="kw">const</span> signatures = nextLevel.map(n => nodeSignature(n));
+    <span class="kw">const</span> freq = <span class="kw">new</span> Map();
+    <span class="kw">for</span> (<span class="kw">const</span> sig <span class="kw">of</span> signatures)
+      freq.set(sig, (freq.get(sig) || <span class="num">0</span>) + <span class="num">1</span>);
+    <span class="kw">const</span> dominant = Math.max(...freq.values());
+    <span class="kw">const</span> homo = dominant / nextLevel.length;
+
+    totalScore += homo * weight;
+    weight *= <span class="num">0.5</span>;   <span class="cmt">// each deeper level counts half as much</span>
+    currentLevel = nextLevel;
+  }
+
+  <span class="cmt">// Normalise so max possible score is 1.0</span>
+  <span class="cmt">// (geometric series: 1 + 0.5 + 0.25 = 1.75 for maxDepth=3)</span>
+  <span class="kw">const</span> maxPossible = (<span class="num">1</span> - Math.pow(<span class="num">0.5</span>, maxDepth)) / (<span class="num">1</span> - <span class="num">0.5</span>);
+  <span class="kw">return</span> totalScore / maxPossible;
+}
+
+<span class="kw">function</span> <span class="fn">nodeSignature</span>(node) {
+  <span class="kw">const</span> classes = [...node.classList]
+    .filter(c => !/<span class="str">/(is-|has-|active|selected|loaded)/</span>.test(c))  <span class="cmt">// strip state classes</span>
+    .sort()
+    .slice(<span class="num">0</span>, <span class="num">3</span>)           <span class="cmt">// cap at 3 tokens to reduce over-specificity</span>
+    .join(<span class="str">'.'</span>);
+  <span class="kw">return</span> `${node.tagName}${classes ? <span class="str">'.'</span> + classes : <span class="str">''</span>}`;
+}</pre>
+
+    <h3>Visualising the Score Difference</h3>
+    <p>
+      Given the canonical example — a top-level comment list and a nested reply thread —
+      here is how depth-windowed homogeneity scores each container differently:
+    </p>
+
+    <table class="score-table">
+      <thead>
+        <tr>
+          <th>Element</th>
+          <th>Depth 1 (×1.0)</th>
+          <th>Depth 2 (×0.5)</th>
+          <th>Depth 3 (×0.25)</th>
+          <th>Composite (÷1.75)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code class="dom-good">div.comments-list</code></td>
+          <td>Children: <code>div.comment ×12</code><br><span class="s-high">0.92</span> (nearly all same sig)</td>
+          <td>Grandchildren: avatar, text, reactions, replies mixed<br><span class="s-med">0.44</span></td>
+          <td>Great-grandchildren: highly varied<br><span class="s-low">0.28</span></td>
+          <td><span class="s-high">0.72</span></td>
+        </tr>
+        <tr>
+          <td><code class="dom-bad">div.replies</code></td>
+          <td>Children: <code>div.reply ×5</code><br><span class="s-high">0.98</span> (identical structure)</td>
+          <td>Grandchildren: avatar + text only, no sub-replies<br><span class="s-high">0.91</span></td>
+          <td>Great-grandchildren: tiny, homogeneous too<br><span class="s-high">0.87</span></td>
+          <td><span class="s-high">0.93</span> ← still higher!</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <strong>Critical Limitation</strong>
+      Reply threads are <em>structurally simpler</em> than comment lists — they have fewer
+      child types at every depth. Depth-windowed homogeneity will therefore still give them
+      a higher raw score. The approach alone doesn't solve the problem without a second
+      signal that says "this element is a reply context, not a primary list."
+    </div>
+
+    <div class="two-col">
+      <div class="pros">
+        <h5>Pros</h5>
+        <ul>
+          <li>Model learns the right thing — feature encodes semantic structure</li>
+          <li>Tolerates developer variance at deep levels (weight tapers off)</li>
+          <li>No post-hoc correction logic needed</li>
+          <li>Generalises — trained once, works across sites</li>
+        </ul>
+      </div>
+      <div class="cons">
+        <h5>Cons</h5>
+        <ul>
+          <li>Requires retraining the model</li>
+          <li>Reply threads still outscore outer lists on raw homogeneity</li>
+          <li>Needs a <em>complementary</em> signal to distinguish reply contexts</li>
+          <li>maxDepth tuning required — too deep = slow, too shallow = misses signal</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 4 -->
+  <section id="depths">
+    <h2><span class="sec-num">4</span> Where Developers Put Reply Threads</h2>
+
+    <p>
+      The depth at which a reply container appears in the DOM varies enormously by site,
+      framework, and developer preference. This is precisely why a rigid "only penalise
+      if nesting depth > 2" rule would fail. Here are the real-world patterns:
+    </p>
+
+    <h3>Pattern A — Flat Siblings <span class="depth">reply at depth 1</span></h3>
+    <p>
+      Replies are siblings of top-level comments, not children. Visual indentation is
+      done with CSS <code>padding-left</code>. Used by: Hacker News, older phpBB, some
+      Django/Flask blog setups.
+    </p>
+    <div class="dom-tree"><span class="dom-good">div.thread</span>                    <span class="dom-muted">← target: contains everything</span>
+  <span class="dom-muted">div.comment[data-depth="0"]</span>  <span class="dom-muted">← top-level comment</span>
+  <span class="dom-muted">div.comment[data-depth="1"]</span>  <span class="dom-muted">← reply (sibling, not child!)</span>
+  <span class="dom-muted">div.comment[data-depth="2"]</span>  <span class="dom-muted">← reply to reply (also sibling)</span>
+  <span class="dom-muted">div.comment[data-depth="1"]</span>  <span class="dom-muted">← another reply to root</span>
+  <span class="dom-muted">div.comment[data-depth="0"]</span>  <span class="dom-muted">← next top-level comment</span></div>
+    <p>
+      In this case the ancestor penalty would <em>never</em> fire because there IS no
+      nested reply container — but the outer <code>div.thread</code> contains both
+      comments and their replies mixed at the same level. The homogeneity at depth 1
+      looks perfect because all children share the same <code>div.comment</code> signature.
+    </p>
+
+    <h3>Pattern B — Direct Child Container <span class="depth">reply at depth 2</span></h3>
+    <p>
+      Each comment element contains a <code>div.replies</code> directly. The most common
+      pattern. Used by: YouTube comments, Facebook, most React comment components.
+    </p>
+    <div class="dom-tree"><span class="dom-good">section.comments</span>
+  <span class="dom-muted">article.comment</span>
+    <span class="dom-muted">header.comment-header</span>
+    <span class="dom-muted">div.comment-body</span>
+    <span class="dom-bad">ul.replies</span>               <span class="dom-muted">← reply container at depth 2</span>
+      <span class="dom-muted">li.reply</span>
+      <span class="dom-muted">li.reply</span>
+  <span class="dom-muted">article.comment</span>
+    <span class="dom-muted">...</span></div>
+
+    <h3>Pattern C — Wrapper-Wrapped <span class="depth">reply at depth 3</span></h3>
+    <p>
+      A wrapper div separates the comment body from the reply region.
+      Common in WordPress with custom themes, Shopify review apps.
+    </p>
+    <div class="dom-tree"><span class="dom-good">div.comment-list</span>
+  <span class="dom-muted">div.comment-item</span>
+    <span class="dom-muted">div.comment-body</span>
+    <span class="dom-muted">div.comment-footer</span>       <span class="dom-muted">← likes, share, report</span>
+    <span class="dom-muted">div.comment-thread</span>        <span class="dom-muted">← wrapper</span>
+      <span class="dom-bad">ul.reply-list</span>           <span class="dom-muted">← reply container at depth 3</span>
+        <span class="dom-muted">li.reply-item</span>
+        <span class="dom-muted">li.reply-item</span>
+  <span class="dom-muted">div.comment-item</span>
+    <span class="dom-muted">...</span></div>
+
+    <h3>Pattern D — Framework Shell Layers <span class="depth">reply at depth 4–5</span></h3>
+    <p>
+      Vue/React component trees add wrapper elements for every component boundary.
+      A comment component wraps a thread component wraps a list component. This is
+      common on Disqus, Discourse, and modern SPA-based review platforms.
+    </p>
+    <div class="dom-tree"><span class="dom-good">div[data-component="comments"]</span>
+  <span class="dom-muted">div[data-component="comment"]</span>
+    <span class="dom-muted">div.comment-root</span>
+      <span class="dom-muted">div.comment-content</span>
+        <span class="dom-muted">div.comment-text</span>
+      <span class="dom-muted">div.comment-actions</span>
+      <span class="dom-muted">div.replies-region</span>
+        <span class="dom-muted">div[data-component="reply-list"]</span>
+          <span class="dom-bad">ul.replies</span>          <span class="dom-muted">← reply container at depth 5</span>
+            <span class="dom-muted">li.reply</span>
+            <span class="dom-muted">li.reply</span></div>
+
+    <h3>Pattern E — Infinite Nested Threading <span class="depth">reply at N+1</span></h3>
+    <p>
+      Reddit (new), some forums, and GitHub PR review threads allow recursive nesting.
+      A reply container can appear at any depth because a reply can itself have replies.
+    </p>
+    <div class="dom-tree"><span class="dom-good">div.comments</span>              <span class="dom-muted">depth 0</span>
+  <span class="dom-warn">div.thread</span>              <span class="dom-muted">depth 1 — top-level thread</span>
+    <span class="dom-muted">div.comment</span>
+    <span class="dom-warn">div.children</span>          <span class="dom-muted">depth 2 — 1st-level replies</span>
+      <span class="dom-muted">div.comment</span>
+      <span class="dom-warn">div.children</span>        <span class="dom-muted">depth 3 — 2nd-level replies</span>
+        <span class="dom-muted">div.comment</span>
+        <span class="dom-warn">div.children</span>      <span class="dom-muted">depth 4 — 3rd-level replies</span>
+          <span class="dom-muted">div.comment</span>
+          <span class="dom-warn">div.children</span>    <span class="dom-muted">depth 5 — ...</span></div>
+
+    <div class="callout warn">
+      <strong>Key Takeaway</strong>
+      Because reply containers appear at depth 1 through 5+ depending on the site,
+      any approach that uses DOM depth as a heuristic (e.g., "penalise if depth > 3")
+      will break on real sites. The signal must come from content/semantics,
+      not position in the tree.
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 5 -->
+  <section id="edge-cases">
+    <h2><span class="sec-num">5</span> Crazy Edge Cases</h2>
+
+    <h3>Edge Case 1 — Review Sites with Q&amp;A Inside Reviews</h3>
+    <p>
+      Amazon, Yelp, and Tripadvisor embed a mini Q&amp;A or "seller response" section
+      directly inside each review. Both the outer review list and the inner Q&amp;A
+      have high homogeneity. The ancestor penalty would suppress the Q&amp;A entirely,
+      but an analyst might want BOTH regions exported.
+    </p>
+    <div class="dom-tree"><span class="dom-good">div#reviews</span>              <span class="dom-muted">← 40 reviews → want this</span>
+  <span class="dom-muted">div.review</span>
+    <span class="dom-muted">div.review-body</span>
+    <span class="dom-muted">div.review-photos</span>
+    <span class="dom-bad">div.questions</span>          <span class="dom-muted">← 6 Q&amp;A items → also want this (separate UGC type!)</span>
+      <span class="dom-muted">div.question</span>
+      <span class="dom-muted">div.question</span></div>
+
+    <h3>Edge Case 2 — Shopify with Multiple Review Apps</h3>
+    <p>
+      A store uses two review widgets: Yotpo in the main product tab and Okendo in a
+      "Community" tab. Both are at completely different DOM depths and have incompatible
+      class name schemes. Neither will be a descendant of the other.
+      Both are valid top-level UGC regions and should both score high without penalty.
+    </p>
+
+    <h3>Edge Case 3 — Twitter/X Style "View replies" Lazy Load</h3>
+    <p>
+      The reply list doesn't exist in the DOM until the user clicks "View 14 replies."
+      On initial load, the outer <code>div.timeline</code> scores high and gets detected.
+      After expansion, a new <code>div.replies</code> injects into the DOM as a candidate
+      with higher homogeneity. The ancestor penalty would retroactively suppress it
+      after classification — but was it right to suppress it?
+    </p>
+
+    <h3>Edge Case 4 — Comments Inside Modal / Drawer</h3>
+    <p>
+      Figma, Linear, and Notion-style apps show comments in a side panel that is a
+      completely separate DOM subtree from the main content. The outer container is a
+      portal (<code>div#modal-root</code>) which is not an ancestor in the pseudo-DOM
+      parent chain. The ancestor penalty never fires, which is correct — but depth-windowed
+      homogeneity might also miss the portal if the feature extractor doesn't
+      traverse into portals.
+    </p>
+
+    <h3>Edge Case 5 — Shadow DOM Components</h3>
+    <p>
+      Disqus and some web-component-based comment widgets use Shadow DOM. The pseudo-DOM
+      cannot see inside shadow roots, so the candidate is the host element
+      (<code>div#disqus_thread</code>) with no visible children. Homogeneity at depth 1
+      is 0. Both approaches fail entirely here — this requires a separate "known widget
+      host" signal.
+    </p>
+
+    <h3>Edge Case 6 — Single Comment with Many Replies (Viral Post)</h3>
+    <div class="dom-tree"><span class="dom-warn">div.comments-list</span>          <span class="dom-muted">← 2 comments. Low child count → low score?</span>
+  <span class="dom-muted">div.comment</span>               <span class="dom-muted">  Comment A: 1 reply</span>
+    <span class="dom-muted">div.replies</span>
+      <span class="dom-muted">div.reply</span>
+  <span class="dom-bad">div.comment</span>               <span class="dom-muted">  Comment B: 87 replies (viral)</span>
+    <span class="dom-good">div.replies</span>              <span class="dom-muted">← 87 uniform children → scores very high</span>
+      <span class="dom-muted">div.reply ×87</span></div>
+    <p>
+      The outer <code>div.comments-list</code> only has 2 direct children, so its
+      depth-1 homogeneity is based on a tiny sample. The ancestor penalty fires on
+      the 87-reply thread inside, suppressing it. But that reply thread is arguably
+      the richest UGC source on the page. You'd want it detected, or at minimum not
+      suppressed.
+    </p>
+
+    <h3>Edge Case 7 — Comment System Built With a Table (Legacy CMS)</h3>
+    <p>
+      Old Joomla, legacy Drupal, and some WordPress themes use <code>&lt;table&gt;</code>
+      layouts for comments. Each row is a comment. The reply rows are visually indented
+      via a spacer <code>&lt;td&gt;</code>. Homogeneity-based detection fails because
+      each <code>&lt;tr&gt;</code> has a <em>different number of <code>&lt;td&gt;</code>
+      children</em> (the spacer shifts the count for nested replies).
+    </p>
+
+    <h3>Edge Case 8 — Comments Mixed with Ads</h3>
+    <p>
+      Many mobile sites inject ad units every 3–5 comments. The signature of every 4th
+      item is completely different (<code>div.ad-unit</code> vs <code>div.comment</code>).
+      Homogeneity score drops significantly even though the container is the real UGC
+      region. A reply thread with no ads scores higher. Both the ancestor penalty and
+      depth homogeneity are hurt by this — you'd need an "ad-blind" homogeneity that
+      ignores known advertising elements.
+    </p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 6 -->
+  <section id="reply-keyword">
+    <h2><span class="sec-num">6</span> The Reply Keyword Feature — Should It Exist?</h2>
+
+    <p>
+      Yes. And it's different from everything discussed above. Both homogeneity approaches
+      try to infer structure from the DOM shape. The reply keyword feature reads
+      <em>semantic signals</em> — what the developer or platform <em>named</em> this region.
+    </p>
+
+    <h3>What to Look For</h3>
+
+    <h4>Class / ID names (most reliable)</h4>
+    <div class="chip-row">
+      <span class="chip neg">reply</span>
+      <span class="chip neg">replies</span>
+      <span class="chip neg">reply-list</span>
+      <span class="chip neg">reply-thread</span>
+      <span class="chip neg">reply-container</span>
+      <span class="chip neg">nested-comments</span>
+      <span class="chip neg">child-comments</span>
+      <span class="chip neg">sub-comments</span>
+      <span class="chip neg">thread-children</span>
+      <span class="chip neg">indent</span>
+      <span class="chip neg">children</span>
+      <span class="chip neutral">thread</span>
+      <span class="chip neutral">nested</span>
+      <span class="chip neutral">depth</span>
+    </div>
+    <div class="chip-row">
+      <span class="chip">comments</span>
+      <span class="chip">comment-list</span>
+      <span class="chip">reviews</span>
+      <span class="chip">review-list</span>
+      <span class="chip">discussion</span>
+      <span class="chip">feed</span>
+      <span class="chip">timeline</span>
+      <span class="chip">forum</span>
+    </div>
+
+    <h4>data-* attributes</h4>
+    <pre><span class="cmt">// Strong reply signals</span>
+data-type=<span class="str">"reply"</span>
+data-comment-type=<span class="str">"reply"</span>
+data-depth=<span class="str">"1"</span>   <span class="cmt">// data-depth > 0 suggests nesting</span>
+data-parent-id    <span class="cmt">// anything with a parent reference is a reply</span>
+data-reply-to
+data-in-reply-to
+data-thread=<span class="str">"child"</span></pre>
+
+    <h4>ARIA labels</h4>
+    <pre>aria-label=<span class="str">"Replies"</span>
+aria-label=<span class="str">"14 replies"</span>
+aria-label=<span class="str">"Reply thread"</span>
+role=<span class="str">"list"</span> + aria-label containing <span class="str">"repl"</span></pre>
+
+    <h4>Text content of sibling/child elements</h4>
+    <pre><span class="cmt">// Patterns to look for in text nodes near the container</span>
+<span class="str">"X replies"</span>         <span class="cmt">// "14 replies" above or below the list</span>
+<span class="str">"View N more replies"</span>
+<span class="str">"Reply"</span>             <span class="cmt">// button text immediately inside each item</span>
+<span class="str">"In reply to @user"</span>  <span class="cmt">// text inside items referencing another user</span>
+<span class="str">"@mention"</span>          <span class="cmt">// items that start with @user are typically replies</span>
+<span class="str">"Replying to"</span></pre>
+
+    <h3>How to Use It as a Feature</h3>
+
+    <p>
+      The keyword feature should produce a <strong>continuous score from 0 to 1</strong>
+      rather than a hard binary, because partial signals are common.
+    </p>
+
+    <pre><span class="kw">function</span> <span class="fn">replyContextScore</span>(element) {
+  <span class="kw">let</span> score = <span class="num">0</span>;
+  <span class="kw">const</span> STRONG_REPLY_TOKENS = [
+    <span class="str">'reply'</span>, <span class="str">'replies'</span>, <span class="str">'reply-list'</span>, <span class="str">'reply-thread'</span>,
+    <span class="str">'child-comment'</span>, <span class="str">'nested-comment'</span>, <span class="str">'sub-comment'</span>
+  ];
+  <span class="kw">const</span> WEAK_REPLY_TOKENS = [
+    <span class="str">'children'</span>, <span class="str">'thread'</span>, <span class="str">'nested'</span>, <span class="str">'indent'</span>, <span class="str">'depth'</span>
+  ];
+
+  <span class="cmt">// Own class/id</span>
+  <span class="kw">const</span> ownTokens = (element.className + <span class="str">' '</span> + element.id).toLowerCase();
+  <span class="kw">if</span> (STRONG_REPLY_TOKENS.some(t => ownTokens.includes(t))) score += <span class="num">0.6</span>;
+  <span class="kw">else if</span> (WEAK_REPLY_TOKENS.some(t => ownTokens.includes(t)))  score += <span class="num">0.2</span>;
+
+  <span class="cmt">// data-depth attribute</span>
+  <span class="kw">const</span> depth = parseInt(element.dataset.depth, <span class="num">10</span>);
+  <span class="kw">if</span> (!isNaN(depth) && depth > <span class="num">0</span>) score += Math.min(<span class="num">0.3</span>, depth * <span class="num">0.1</span>);
+
+  <span class="cmt">// data-parent-id / data-reply-to present → this node is itself a reply</span>
+  <span class="kw">if</span> (element.dataset.parentId || element.dataset.replyTo) score += <span class="num">0.4</span>;
+
+  <span class="cmt">// ARIA label</span>
+  <span class="kw">const</span> aria = (element.getAttribute(<span class="str">'aria-label'</span>) || <span class="str">''</span>).toLowerCase();
+  <span class="kw">if</span> (/<span class="str">repl(y|ies)/</span>.test(aria)) score += <span class="num">0.5</span>;
+
+  <span class="cmt">// Sibling text node: "X replies" immediately before/after this element</span>
+  <span class="kw">const</span> siblingText = getSiblingText(element).toLowerCase();
+  <span class="kw">if</span> (/<span class="str">\d+\s*repl(y|ies)/</span>.test(siblingText)) score += <span class="num">0.4</span>;
+
+  <span class="kw">return</span> Math.min(<span class="num">1.0</span>, score);
+}
+
+<span class="cmt">// Use in candidate scoring: a high reply context score LOWERS the UGC region score</span>
+<span class="cmt">// but does NOT zero it out — the container is still UGC, just a sub-region</span>
+<span class="kw">const</span> ugcScore = baseUGCScore * (<span class="num">1</span> - replyContextScore * <span class="num">0.5</span>);</pre>
+
+    <h3>Why This Is a Better Discriminator Than Homogeneity Alone</h3>
+
+    <table class="score-table">
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Homogeneity</th>
+          <th>Reply Context Score</th>
+          <th>Correct Detection</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Outer <code>div.comments</code> with 30 comments</td>
+          <td><span class="s-high">High (0.85)</span></td>
+          <td><span class="s-low">Low (0.0)</span></td>
+          <td><span class="s-high">✓ Top-scored</span></td>
+        </tr>
+        <tr>
+          <td>Inner <code>ul.replies</code> with 8 replies</td>
+          <td><span class="s-high">High (0.93)</span></td>
+          <td><span class="s-high">High (0.75)</span></td>
+          <td><span class="s-med">✓ Downweighted</span></td>
+        </tr>
+        <tr>
+          <td>Flat thread <code>div.thread</code> (HN-style)</td>
+          <td><span class="s-high">High (0.88)</span></td>
+          <td><span class="s-low">Low (0.05)</span></td>
+          <td><span class="s-high">✓ Top-scored</span></td>
+        </tr>
+        <tr>
+          <td>Deeply nested <code>div.reply-list</code> depth 4</td>
+          <td><span class="s-high">High (0.95)</span></td>
+          <td><span class="s-high">High (0.80)</span></td>
+          <td><span class="s-med">✓ Downweighted</span></td>
+        </tr>
+        <tr>
+          <td>Amazon Q&amp;A <code>div.questions</code></td>
+          <td><span class="s-high">High (0.90)</span></td>
+          <td><span class="s-low">Low (0.05) — "questions" ≠ "reply"</span></td>
+          <td><span class="s-high">✓ Kept as separate UGC</span></td>
+        </tr>
+        <tr>
+          <td>Ad-injected comment list</td>
+          <td><span class="s-med">Medium (0.55)</span></td>
+          <td><span class="s-low">Low (0.0)</span></td>
+          <td><span class="s-med">~ Marginal (still a challenge)</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout idea">
+      <strong>Insight</strong>
+      The reply keyword feature works because it's <em>orthogonal</em> to homogeneity.
+      A reply container can be both highly homogeneous AND clearly labelled as a reply
+      context. Using both features together in the model lets it learn the interaction:
+      high homogeneity + low reply-context = primary UGC region.
+      High homogeneity + high reply-context = sub-region.
+    </div>
+
+    <h3>Caveats on Keyword Matching</h3>
+    <div class="callout warn">
+      <strong>Obfuscated class names</strong>
+      Sites that use CSS Modules, Tailwind, or CSS-in-JS (styled-components) produce
+      class names like <code>_3xYzt</code>, <code>sc-bdfxgF</code>, or hashed strings.
+      These carry zero semantic signal. For these sites, only structural and
+      data-attribute signals work. The reply keyword feature should degrade gracefully
+      to a score of 0, not break the pipeline.
+    </div>
+    <div class="callout warn">
+      <strong>Internationalisation</strong>
+      The word "reply" only exists in English. A Spanish site uses "respuestas",
+      French uses "réponses", German "Antworten". Either the keyword list must be
+      expanded for each language, or you should detect the page language and apply
+      a localised list — otherwise the feature silently fails on non-English sites.
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ SECTION 7 -->
+  <section id="verdict">
+    <h2><span class="sec-num">7</span> Verdict — What to Build</h2>
+
+    <div class="verdict">
+      <h3>Recommended Architecture</h3>
+      <p>
+        Neither approach alone is sufficient. The right solution layers three signals,
+        each addressing a different failure mode:
+      </p>
+
+      <h4>Signal 1 — Reply Context Score (new feature)</h4>
+      <p>
+        Extract from class names, IDs, data attributes, ARIA labels, and sibling text.
+        Returns 0–1. Used as a <em>negative modifier</em> on the UGC score for the element.
+        <strong>This is the most impactful single change.</strong> It directly encodes
+        developer intent about what the container is for.
+      </p>
+
+      <h4>Signal 2 — Depth-Windowed Homogeneity (replace current flat homogeneity)</h4>
+      <p>
+        Measure child uniformity at depth 1 (weight 1.0), depth 2 (weight 0.5), depth 3
+        (weight 0.25). Normalise to 0–1. Replace or augment the current single-level
+        homogeneity feature. Tolerates developer variation at depth 3+ by design.
+        Requires model retraining.
+      </p>
+
+      <h4>Signal 3 — Ancestor Penalty (keep as a tie-breaker, not primary logic)</h4>
+      <p>
+        Keep the current ×0.6 multiplier but only apply it when a candidate has an
+        ancestor that scores <em>above the positive threshold</em> (not just above
+        UGC_LOW_THRESHOLD). This prevents weak outer containers from triggering
+        false penalties, while still handling clear nesting cases.
+      </p>
+
+      <h4>Implementation Priority</h4>
+      <ol>
+        <li>
+          <strong>Now (no retraining):</strong> Add <code>replyContextScore()</code>
+          as a post-hoc modifier in <code>classify()</code> — same location as
+          the ancestor penalty. Multiply candidate score by
+          <code>(1 - replyContextScore * 0.5)</code>. Test on a few sites.
+        </li>
+        <li>
+          <strong>Next training run:</strong> Add depth-windowed homogeneity as an
+          additional feature in the feature extractor. Keep the old flat homogeneity
+          feature too — let the model learn which to weight. Export new labeled data
+          confirming the outer list as ground truth.
+        </li>
+        <li>
+          <strong>After validation:</strong> Raise the ancestor penalty threshold from
+          <code>UGC_LOW_THRESHOLD</code> to <code>positive_threshold</code> to reduce
+          false penalty triggers.
+        </li>
+      </ol>
+    </div>
+
+    <h3>Quick Reference</h3>
+    <table class="score-table">
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Where It Acts</th>
+          <th>Retraining?</th>
+          <th>Handles depth variance?</th>
+          <th>Handles obfuscated CSS?</th>
+          <th>Risk</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Ancestor Penalty</td>
+          <td>Post-hoc, classify()</td>
+          <td><span class="s-high">No</span></td>
+          <td><span class="s-high">Yes</span></td>
+          <td><span class="s-high">Yes</span></td>
+          <td><span class="s-med">Over-penalises legitimate sub-regions</span></td>
+        </tr>
+        <tr>
+          <td>Depth Homogeneity</td>
+          <td>Feature extraction</td>
+          <td><span class="s-med">Yes</span></td>
+          <td><span class="s-high">Yes</span></td>
+          <td><span class="s-high">Yes</span></td>
+          <td><span class="s-low">Reply threads still score higher intrinsically</span></td>
+        </tr>
+        <tr>
+          <td>Reply Keyword</td>
+          <td>Post-hoc or Feature</td>
+          <td><span class="s-med">Better with retraining</span></td>
+          <td><span class="s-high">Yes (keyword-agnostic of depth)</span></td>
+          <td><span class="s-med">No — breaks on hashed CSS classes</span></td>
+          <td><span class="s-low">Silent failure on non-English / obfuscated sites</span></td>
+        </tr>
+        <tr>
+          <td>All three combined</td>
+          <td>Both layers</td>
+          <td><span class="s-med">Eventually</span></td>
+          <td><span class="s-high">Yes</span></td>
+          <td><span class="s-med">Partial</span></td>
+          <td><span class="s-low">Low — signals are orthogonal, failures are additive not multiplied</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+</body>
+</html>

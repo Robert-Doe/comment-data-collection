@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ML Explainer — UGC Detection</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:        #0f1117;
+        --surface:   #181c27;
+        --border:    #2a2f3f;
+        --text:      #e2e8f0;
+        --muted:     #8892a4;
+        --accent:    #4f8ef7;
+        --green:     #34c77b;
+        --amber:     #f6a623;
+        --red:       #e05555;
+        --purple:    #9d7ef7;
+        --radius:    10px;
+        --max-w:     860px;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        padding: 28px 32px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+      }
+      header .eyebrow {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+      header h1 { font-size: 26px; font-weight: 700; }
+      header p  { color: var(--muted); margin-top: 8px; font-size: 14px; }
+
+      main { max-width: var(--max-w); margin: 0 auto; padding: 40px 32px 80px; }
+
+      /* ── Table of Contents ── */
+      nav.toc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 48px;
+      }
+      nav.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+      nav.toc ol { padding-left: 18px; }
+      nav.toc li { margin-bottom: 5px; }
+      nav.toc a  { color: var(--accent); text-decoration: none; }
+      nav.toc a:hover { text-decoration: underline; }
+
+      /* ── Sections ── */
+      section { margin-bottom: 56px; }
+      section h2 {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        scroll-margin-top: 24px;
+      }
+      section h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; color: var(--text); }
+      p { margin-bottom: 14px; }
+
+      /* ── Key number callout ── */
+      .kpi-row {
+        display: flex; gap: 14px; flex-wrap: wrap; margin: 20px 0;
+      }
+      .kpi {
+        flex: 1; min-width: 120px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+      }
+      .kpi .val { font-size: 26px; font-weight: 700; }
+      .kpi .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+      .kpi.good  .val { color: var(--green); }
+      .kpi.warn  .val { color: var(--amber); }
+      .kpi.bad   .val { color: var(--red); }
+      .kpi.info  .val { color: var(--accent); }
+      .kpi.purple .val { color: var(--purple); }
+
+      /* ── Comparison table ── */
+      .compare { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+      .compare th {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 10px 14px;
+        text-align: left;
+        font-weight: 600;
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+      }
+      .compare td {
+        border: 1px solid var(--border);
+        padding: 10px 14px;
+        vertical-align: top;
+      }
+      .compare tr:nth-child(even) td { background: var(--surface); }
+      .good { color: var(--green); font-weight: 600; }
+      .bad  { color: var(--red);   font-weight: 600; }
+      .warn { color: var(--amber); font-weight: 600; }
+
+      /* ── Callout boxes ── */
+      .callout {
+        border-left: 3px solid var(--accent);
+        background: var(--surface);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        padding: 14px 18px;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      .callout.green  { border-color: var(--green); }
+      .callout.amber  { border-color: var(--amber); }
+      .callout.red    { border-color: var(--red); }
+      .callout.purple { border-color: var(--purple); }
+      .callout strong { display: block; margin-bottom: 4px; }
+
+      /* ── Code blocks ── */
+      pre, code {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        font-size: 13px;
+      }
+      pre {
+        background: #11141e;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        overflow-x: auto;
+        margin: 16px 0;
+        line-height: 1.6;
+      }
+      code { background: #11141e; padding: 2px 5px; border-radius: 4px; color: var(--amber); }
+
+      /* ── Visual diagrams ── */
+      .diagram {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin: 20px 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--muted);
+        overflow-x: auto;
+      }
+      .diagram .flow {
+        display: flex; align-items: center; justify-content: center;
+        gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+      }
+      .box {
+        background: #1e2436;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-size: 13px;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .box.accent { border-color: var(--accent); color: var(--accent); }
+      .box.green  { border-color: var(--green);  color: var(--green);  }
+      .box.red    { border-color: var(--red);    color: var(--red);    }
+      .arrow { color: var(--muted); font-size: 18px; }
+
+      /* ── Threshold diagram ── */
+      .threshold-bar {
+        position: relative;
+        height: 36px;
+        border-radius: 6px;
+        background: linear-gradient(to right, #34c77b 0%, #34c77b 30%, #f6a623 30%, #f6a623 70%, #e05555 70%);
+        margin: 16px 0;
+        overflow: visible;
+      }
+      .threshold-tick {
+        position: absolute;
+        top: -22px;
+        font-size: 11px;
+        color: var(--muted);
+        transform: translateX(-50%);
+      }
+      .threshold-label {
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--muted); margin-top: 4px;
+      }
+
+      hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <p class="eyebrow">Internal Reference</p>
+      <h1>ML Explainer: Why Every Change Matters</h1>
+      <p>A plain-English walkthrough of the UGC detection model's problems, the fixes applied, and why each one improves real-world performance.</p>
+    </header>
+
+    <main>
+
+      <nav class="toc">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#metrics">What the Metrics Actually Mean</a></li>
+          <li><a href="#the-numbers">Reading the Numbers: Train vs Test</a></li>
+          <li><a href="#overfitting">Overfitting and Domain Holdout</a></li>
+          <li><a href="#threshold">Why 0.5 Was the Wrong Threshold</a></li>
+          <li><a href="#early-stopping">Early Stopping</a></li>
+          <li><a href="#regularisation">L2 Regularisation</a></li>
+          <li><a href="#dropout">Dropout</a></li>
+          <li><a href="#memory">The RAM and 504 Problems</a></li>
+          <li><a href="#expected">Expected Impact of Every Change</a></li>
+        </ol>
+      </nav>
+
+
+      <!-- ── 1. Metrics ── -->
+      <section id="metrics">
+        <h2>1. What the Metrics Actually Mean</h2>
+
+        <p>
+          The model's job is to look at a candidate region on a webpage and answer: <em>is this a comment section?</em>
+          Every prediction is either right or wrong, and there are four ways it can go:
+        </p>
+
+        <table class="compare">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Model says: Positive (comment)</th>
+              <th>Model says: Negative (not comment)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Actually Positive</strong></td>
+              <td class="good">True Positive (TP) — correct hit</td>
+              <td class="bad">False Negative (FN) — missed it</td>
+            </tr>
+            <tr>
+              <td><strong>Actually Negative</strong></td>
+              <td class="bad">False Positive (FP) — false alarm</td>
+              <td class="good">True Negative (TN) — correct rejection</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Precision</h3>
+        <p>
+          <em>Of everything the model flagged as a comment region, what fraction actually was?</em>
+        </p>
+        <pre>Precision = TP / (TP + FP)</pre>
+        <p>
+          High precision means low false-alarm rate. A model with 100% precision never flags something that isn't a comment.
+          But it could achieve this trivially by flagging almost nothing — missing real comment sections left and right.
+        </p>
+
+        <h3>Recall</h3>
+        <p>
+          <em>Of all the real comment regions that exist, what fraction did the model actually find?</em>
+        </p>
+        <pre>Recall = TP / (TP + FN)</pre>
+        <p>
+          High recall means the model finds most of the real comment sections.
+          48% recall means <strong>the model was missing more than half of all real comment regions on the test set.</strong>
+          That's the number that matters most for this product — a missed comment section is a failed detection.
+        </p>
+
+        <h3>F1 Score</h3>
+        <p>The harmonic mean of precision and recall. Harmonic mean punishes extreme imbalances more than arithmetic mean.</p>
+        <pre>F1 = 2 × Precision × Recall / (Precision + Recall)</pre>
+        <p>
+          A model that has 100% precision and 1% recall gets an F1 of about 2% — terrible, even though precision looks perfect.
+          F1 is the headline metric for imbalanced classification problems.
+        </p>
+
+        <h3>ROC-AUC</h3>
+        <p>
+          Area Under the Receiver Operating Characteristic curve.
+          It measures the model's ability to <em>rank</em> positives above negatives,
+          regardless of what threshold you use. An AUC of 1.0 is perfect; 0.5 is random guessing.
+        </p>
+        <p>
+          The test ROC-AUC was <strong>0.9272</strong> — very good. This tells us the model's
+          probability scores are genuinely informative. The problem wasn't the model's ability to
+          discriminate; it was the threshold used to convert those scores into yes/no decisions.
+        </p>
+
+        <div class="callout green">
+          <strong>Key insight</strong>
+          ROC-AUC 0.9272 with recall 48% means the model could discriminate well, but
+          the decision boundary was in the wrong place. Fixing the threshold alone
+          is expected to raise recall significantly without retraining.
+        </div>
+      </section>
+
+
+      <!-- ── 2. The numbers ── -->
+      <section id="the-numbers">
+        <h2>2. Reading the Numbers: Train vs Test</h2>
+
+        <p>The model that shipped on 2026-05-20 showed these results on 14,765 labeled candidates:</p>
+
+        <div class="kpi-row">
+          <div class="kpi good"><div class="val">97.5%</div><div class="label">Train Precision</div></div>
+          <div class="kpi good"><div class="val">98.7%</div><div class="label">Train Recall</div></div>
+          <div class="kpi good"><div class="val">98.1%</div><div class="label">Train F1</div></div>
+          <div class="kpi good"><div class="val">0.9993</div><div class="label">Train ROC-AUC</div></div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi warn"><div class="val">82.6%</div><div class="label">Test Precision</div></div>
+          <div class="kpi bad"><div class="val">48.0%</div><div class="label">Test Recall</div></div>
+          <div class="kpi bad"><div class="val">60.7%</div><div class="label">Test F1</div></div>
+          <div class="kpi info"><div class="val">0.9272</div><div class="label">Test ROC-AUC</div></div>
+        </div>
+
+        <p>
+          The gap between train and test is enormous. The model is essentially perfect on domains
+          it was trained on and mediocre on domains it has never seen.
+          This is the textbook definition of overfitting.
+        </p>
+      </section>
+
+
+      <!-- ── 3. Overfitting ── -->
+      <section id="overfitting">
+        <h2>3. Overfitting and Domain Holdout</h2>
+
+        <h3>What overfitting is</h3>
+        <p>
+          A model overfits when it memorises the training data instead of learning the
+          underlying pattern. It learns <em>which specific domains happen to have comment
+          regions</em> rather than learning <em>what features make a region look like a comment section</em>.
+        </p>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box">training.com/post<br><span style="font-size:11px;color:var(--muted)">seen during training</span></div>
+            <div class="arrow">→</div>
+            <div class="box accent">99% probability</div>
+          </div>
+          <div class="flow" style="margin-top:12px">
+            <div class="box">newsite.com/post<br><span style="font-size:11px;color:var(--muted)">never seen before</span></div>
+            <div class="arrow">→</div>
+            <div class="box red">38% probability — missed</div>
+          </div>
+          <p style="margin-top:12px">The model learned domain identity, not comment structure</p>
+        </div>
+
+        <h3>Why domain holdout makes the test so hard</h3>
+        <p>
+          The train/test split in this codebase uses a <strong>domain holdout</strong>: every URL
+          on <code>example.com</code> goes to either train or test — never both.
+          This is intentional. It reflects reality: in production, the model will constantly
+          encounter new websites it has never seen.
+        </p>
+        <p>
+          A random 80/20 split would give inflated metrics because both splits would contain
+          URLs from the same domains. The domain holdout gives an honest picture of
+          how the model generalises to new websites.
+        </p>
+
+        <div class="callout amber">
+          <strong>Trade-off</strong>
+          Domain holdout is the right split for measuring real-world performance, but it
+          makes training harder. The model must learn features that transfer across websites,
+          not just patterns specific to seen domains. That's exactly why we need
+          regularisation, dropout, and early stopping.
+        </div>
+
+        <h3>The three causes of the gap</h3>
+        <table class="compare">
+          <thead>
+            <tr><th>Cause</th><th>Effect</th><th>Fix applied</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Too many epochs (200, fixed)</td>
+              <td>Model keeps fitting training domains past the point of generalisation</td>
+              <td>Early stopping with patience=20</td>
+            </tr>
+            <tr>
+              <td>Weak regularisation (L2=0.0001)</td>
+              <td>Weights can grow large to memorise specific domain signals</td>
+              <td>L2 raised 10× to 0.001</td>
+            </tr>
+            <tr>
+              <td>No dropout</td>
+              <td>Hidden neurons co-adapt to each other on training domains</td>
+              <td>20% inverted dropout on hidden layers</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+
+      <!-- ── 4. Threshold ── -->
+      <section id="threshold">
+        <h2>4. Why 0.5 Was the Wrong Threshold</h2>
+
+        <p>
+          After training, the model outputs a probability between 0 and 1.
+          A threshold converts that probability into a yes/no decision.
+          The code was using the naive default of <strong>0.5</strong>.
+        </p>
+
+        <h3>Why 0.5 fails on imbalanced data</h3>
+        <p>
+          In this dataset, comment regions are the minority class. The model's raw probabilities
+          are calibrated to the training distribution: if 20% of candidates are positive,
+          the model will naturally output scores clustered below 0.5 even for genuine positives,
+          because the prior probability of being positive is low.
+        </p>
+        <p>
+          Using 0.5 as the cut-point on an imbalanced dataset systematically discards
+          low-confidence positive predictions that may still be correct. The result is
+          high precision (you only flag things you're very sure about) but very low recall
+          (you miss anything the model was less than 50% confident about).
+        </p>
+
+        <p>The threshold curve shows this clearly. At different thresholds on the same model:</p>
+        <table class="compare">
+          <thead>
+            <tr><th>Threshold</th><th>Precision</th><th>Recall</th><th>F1</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0.20</td><td class="warn">61%</td><td class="good">81%</td><td class="good">70%</td></tr>
+            <tr><td>0.30</td><td class="warn">72%</td><td class="good">74%</td><td class="good">73%</td></tr>
+            <tr><td>0.40</td><td class="good">79%</td><td class="warn">62%</td><td class="warn">69%</td></tr>
+            <tr><td>0.50 (old default)</td><td class="good">82.6%</td><td class="bad">48.0%</td><td class="bad">60.7%</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:13px; color: var(--muted)">Illustrative values based on ROC-AUC 0.9272 model. Exact numbers depend on the retrained model.</p>
+
+        <h3>The fix: optimal threshold from training data</h3>
+        <p>
+          After training, the code now sweeps all thresholds from 0.01 to 0.99 on the
+          scored <em>training</em> rows (never the test holdout — that would be data leakage)
+          and selects the one that maximises F1 on those rows.
+          That threshold is stored in the artifact and used as the default for both
+          metric reporting and the deployed runtime bundle.
+        </p>
+
+        <div class="callout green">
+          <strong>Why train rows, not test rows?</strong>
+          If you chose the threshold that maximises F1 on the test set, the test metrics
+          would be artificially inflated — you'd be tuning to the holdout. Using train rows
+          to pick the threshold is the honest approach: it's information the model has
+          already seen, so it's not leakage, and it still transfers to unseen data because
+          we're only choosing a scalar cut-point, not changing any weights.
+        </div>
+      </section>
+
+
+      <!-- ── 5. Early Stopping ── -->
+      <section id="early-stopping">
+        <h2>5. Early Stopping</h2>
+
+        <p>
+          Before this fix, the neural network always trained for exactly 200 epochs regardless
+          of whether the model was still improving. After epoch ~80 on a domain holdout split,
+          the model typically stops getting better on unseen domains and starts memorising the
+          training domains harder. The extra 120 epochs are pure overfitting.
+        </p>
+
+        <h3>How it works</h3>
+        <p>
+          The training data is split again inside the neural network: 85% is used for gradient
+          updates (<em>fit set</em>), and 15% is held out as a <em>validation set</em>
+          used only to measure the loss — never for weight updates.
+        </p>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box">Service.js<br>train split (80%)</div>
+            <div class="arrow">→</div>
+            <div class="box accent">NN fit set (85%)<br>weights updated here</div>
+          </div>
+          <div class="flow" style="margin-top: 8px">
+            <div class="box" style="opacity:0; pointer-events:none">placeholder</div>
+            <div class="arrow" style="opacity:0">→</div>
+            <div class="box green">NN val set (15%)<br>loss measured here</div>
+          </div>
+          <p style="margin-top:12px">
+            Service.js test set (20%) is never touched inside the NN at any point.
+          </p>
+        </div>
+
+        <p>
+          After every epoch, the validation loss is measured. If it hasn't improved for
+          <strong>20 consecutive epochs</strong> (the <em>patience</em>), training stops
+          and the weights from the best-seen epoch are restored.
+        </p>
+
+        <h3>Why 15% / patience 20?</h3>
+        <p>
+          15% of ~11,000 training rows = ~1,650 examples — enough to get a reliable
+          loss estimate each epoch. Patience 20 allows the optimiser to pass through
+          short plateaus without stopping prematurely, while still catching the moment
+          generalisation starts to degrade.
+        </p>
+
+        <div class="callout purple">
+          <strong>What you'll see in the trace</strong>
+          Each trace entry now records both <code>loss</code> (fit set) and <code>val_loss</code>
+          (validation set). When early stopping fires, <code>training_options.early_stopping</code>
+          will be <code>true</code> and <code>stopped_epoch</code> will be less than
+          <code>epochs</code>.
+        </div>
+      </section>
+
+
+      <!-- ── 6. Regularisation ── -->
+      <section id="regularisation">
+        <h2>6. L2 Regularisation</h2>
+
+        <p>
+          Regularisation adds a penalty to the loss function that discourages large weights.
+          The idea: if a weight has to be very large to fit the training data, it's probably
+          exploiting noise specific to those examples rather than a genuine signal.
+        </p>
+
+        <pre>Loss = Binary Cross-Entropy + λ/2 × Σ w²</pre>
+
+        <p>
+          The <code>λ</code> (lambda) term is the L2 coefficient. The old default was
+          <strong>0.0001</strong>. It has been raised to <strong>0.001</strong> — 10× stronger.
+        </p>
+
+        <h3>What this does in practice</h3>
+        <p>
+          Larger L2 keeps weight magnitudes smaller. Smaller weights mean the model
+          is less able to assign extreme probabilities to examples just because they
+          match a memorised training-domain pattern. The model is forced to rely on
+          features that are consistently predictive across many domains, not just one.
+        </p>
+
+        <table class="compare">
+          <thead>
+            <tr><th>L2 = 0.0001 (old)</th><th>L2 = 0.001 (new)</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Weights can grow to ±10 or higher to fit training domains</td>
+              <td>Weights are penalised heavily for growing past ±2–3</td>
+            </tr>
+            <tr>
+              <td>Model very confident on training domains</td>
+              <td>Model more cautious, better calibrated on new domains</td>
+            </tr>
+            <tr>
+              <td>Train F1 ~98%, Test F1 ~61%</td>
+              <td>Train F1 will drop; Test F1 expected to improve</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout amber">
+          <strong>The trade-off</strong>
+          Stronger regularisation deliberately hurts training performance. If you see the
+          train F1 drop from 98% to 88%, that's not a bug — it's the model being prevented
+          from memorising training domains. The goal is test F1, not train F1.
+        </div>
+      </section>
+
+
+      <!-- ── 7. Dropout ── -->
+      <section id="dropout">
+        <h2>7. Dropout</h2>
+
+        <p>
+          Dropout is one of the most effective regularisation techniques for neural networks.
+          During each training batch, a random fraction of hidden neurons are silenced
+          (their output set to zero). Dropped neurons contribute nothing to that forward
+          pass and receive no gradient update.
+        </p>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box">Input (73 features)</div>
+            <div class="arrow">→</div>
+            <div class="box accent">Hidden 1 (32 neurons)<br><span style="color:var(--red);font-size:12px">~6 neurons zeroed</span></div>
+            <div class="arrow">→</div>
+            <div class="box accent">Hidden 2 (16 neurons)<br><span style="color:var(--red);font-size:12px">~3 neurons zeroed</span></div>
+            <div class="arrow">→</div>
+            <div class="box green">Output (sigmoid)</div>
+          </div>
+          <p style="margin-top:12px">Zeroed neurons change randomly each batch. Output layer is never dropped.</p>
+        </div>
+
+        <h3>Why this helps generalisation</h3>
+        <p>
+          Without dropout, neurons can co-adapt: neuron A learns to detect a signal,
+          and neuron B learns to correct for A's errors on the training data. This
+          co-adaptation means the pair works well together on training domains but
+          neither generalises independently.
+        </p>
+        <p>
+          With dropout, neuron B can't rely on A being present. Every neuron must
+          learn to be useful on its own. The result is a more robust set of features
+          that generalise better to new domains.
+        </p>
+
+        <h3>Inverted dropout</h3>
+        <p>
+          The implementation uses <em>inverted dropout</em>: surviving neurons are scaled
+          up by <code>1 / keepProb</code> (e.g. with 20% dropout, by 1/0.8 = 1.25).
+          This keeps the expected value of each neuron unchanged, so the network
+          sees the same activation scale during training and inference.
+          At inference time (prediction), dropout is disabled entirely — no scaling
+          is needed because inverted scaling was already done during training.
+        </p>
+
+        <div class="callout purple">
+          <strong>Dropout rate 0.2</strong>
+          20% of hidden neurons are dropped each pass. Common values are 0.2–0.5.
+          Lower values are safer for smaller networks and smaller datasets.
+          With only 32 and 16 hidden neurons, 20% is conservative but impactful.
+        </div>
+      </section>
+
+
+      <!-- ── 8. RAM + 504 ── -->
+      <section id="memory">
+        <h2>8. The RAM and 504 Problems</h2>
+
+        <h3>The 504 timeout</h3>
+        <p>
+          The browser POSTs to <code>/api/modeling/train</code> and holds that HTTP connection
+          open while the server trains the model. If training takes longer than the proxy's
+          timeout (Caddy: 120 seconds), the proxy kills the connection and returns 504.
+          The training keeps running server-side — the model gets saved — but the browser
+          already received an error.
+        </p>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box">Browser POST /train</div>
+            <div class="arrow">→</div>
+            <div class="box red">120s… Caddy kills it<br>→ 504</div>
+          </div>
+          <p style="margin-top: 10px">Even though training finishes server-side at 3 minutes, the browser sees an error</p>
+        </div>
+
+        <p><strong>The fix:</strong> <code>POST /train</code> now responds in &lt;1ms with <code>{ jobId }</code>.
+        Training runs as a detached background promise. The browser polls
+        <code>GET /train-status/:jobId</code> every 3 seconds. No HTTP connection is ever
+        held open long enough to time out. It doesn't matter if training takes 30 seconds
+        or 30 minutes.</p>
+
+        <h3>The 6 GB heap crash</h3>
+        <p>
+          The training pipeline loads all labeled items from the database (up to 14,000+ rows
+          with full HTML content, candidate text, screenshots paths, etc.) into a JavaScript
+          array before feature extraction begins. All of this sits in the same heap as the
+          API server. When combined with the feature extraction intermediate objects and the
+          neural network's gradient computation, the process exceeds Node.js's default heap
+          limit and crashes — taking the API server down with it.
+        </p>
+
+        <h3>Memory fix: pre-allocated gradient buffers</h3>
+        <p>
+          The neural network training loop was allocating fresh gradient accumulation arrays
+          on every mini-batch. With 14,000 rows ÷ 32 batch size = 437 batches per epoch
+          × 200 epochs = <strong>87,400 allocation events</strong>, each creating a cluster
+          of short-lived arrays. The GC had to track and collect all of these, inflating the
+          heap and causing fragmentation.
+        </p>
+        <p>
+          The fix: allocate the gradient buffers once before the epoch loop and reset them
+          to zero at the start of each batch with <code>fill(0)</code>. Same result, a
+          fraction of the GC pressure.
+        </p>
+
+        <h3>Why the async fix also protects against OOM crashes</h3>
+        <p>
+          With training running as a detached promise: if training does OOM and the process
+          crashes, the API server is restarted by Docker without any data loss. But more
+          importantly, if training is running in the background and OOMs, the background
+          promise dies, the job status in memory is updated to <code>error</code>, and the
+          browser's next poll shows the error message. The API server continues to handle
+          other requests. The user gets a clear error instead of a 503 / connection refused.
+        </p>
+      </section>
+
+
+      <!-- ── 9. Expected Impact ── -->
+      <section id="expected">
+        <h2>9. Expected Impact of Every Change</h2>
+
+        <table class="compare">
+          <thead>
+            <tr><th>Change</th><th>File</th><th>What it fixes</th><th>Expected metric impact</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Optimal threshold from train F1</td>
+              <td><code>service.js</code></td>
+              <td>Reported metrics used 0.5 (too conservative for imbalanced data)</td>
+              <td><span class="good">Recall ↑ significantly</span><br><span class="warn">Precision ↓ slightly</span><br><span class="good">F1 ↑</span></td>
+            </tr>
+            <tr>
+              <td>Early stopping (patience=20)</td>
+              <td><code>neuralNetwork.js</code></td>
+              <td>Model trained 200 epochs even while overfitting</td>
+              <td><span class="good">Test F1 ↑</span><br><span class="warn">Train F1 ↓ (expected)</span><br>Shorter training times</td>
+            </tr>
+            <tr>
+              <td>L2 raised 0.0001 → 0.001</td>
+              <td><code>neuralNetwork.js</code></td>
+              <td>Weights grew too large; model memorised training domains</td>
+              <td><span class="good">Test generalisation ↑</span><br><span class="warn">Train metrics ↓ (expected)</span></td>
+            </tr>
+            <tr>
+              <td>Dropout 20% on hidden layers</td>
+              <td><code>neuralNetwork.js</code></td>
+              <td>Neurons co-adapted to training domain patterns</td>
+              <td><span class="good">Test F1 ↑</span><br>More robust features learned</td>
+            </tr>
+            <tr>
+              <td>Async training (202 + poll)</td>
+              <td><code>routes.js</code>, <code>modeling.js</code></td>
+              <td>HTTP connection held open → proxy 504 after 120s</td>
+              <td>No more 504 errors regardless of training duration</td>
+            </tr>
+            <tr>
+              <td>Pre-allocated gradient buffers</td>
+              <td><code>neuralNetwork.js</code></td>
+              <td>87,400 short-lived array allocations per training run</td>
+              <td>Lower peak heap usage; less GC pause time</td>
+            </tr>
+            <tr>
+              <td>Optimal threshold in runtime bundle</td>
+              <td><code>service.js</code></td>
+              <td>Runtime bundle defaulted to 0.5 threshold regardless of model</td>
+              <td>Deployed model now uses the trained-optimal threshold automatically</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout green" style="margin-top: 28px">
+          <strong>Bottom line</strong>
+          The threshold fix alone may raise test recall from 48% to 65–75% on the existing
+          model with no retraining. Retraining with early stopping, higher L2, and dropout
+          should further reduce the train/test gap. The ROC-AUC of 0.9272 tells us the
+          discrimination ability is already excellent — we just needed to put the decision
+          boundary in the right place and stop the model from memorising training domains.
+        </div>
+
+        <h3>How to verify the improvements</h3>
+        <ol style="padding-left: 20px; margin-top: 14px;">
+          <li style="margin-bottom: 8px">
+            Open <strong>Model Lab → Train Variants</strong> and train a Neural Network with the
+            default settings. The new defaults (L2=0.001, dropout=0.2, early stopping) are active
+            without any configuration change.
+          </li>
+          <li style="margin-bottom: 8px">
+            Watch the elapsed time counter — training now happens server-side. No more 504.
+          </li>
+          <li style="margin-bottom: 8px">
+            When it completes, compare the Test Recall and Test F1 to the previous 48% / 60.7%.
+          </li>
+          <li style="margin-bottom: 8px">
+            Check <code>training_options.early_stopping</code> and <code>stopped_epoch</code>
+            in the artifact JSON — these tell you whether early stopping fired and how many
+            epochs it actually trained for.
+          </li>
+          <li>
+            The <code>optimal_threshold</code> field in the artifact tells you what threshold
+            the model decided on. Compare it to 0.5 — it will almost certainly be lower.
+          </li>
+        </ol>
+      </section>
+
+    </main>
+  </body>
+</html>

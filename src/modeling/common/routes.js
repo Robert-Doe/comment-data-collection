@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const fs   = require('fs/promises');
 const { fork } = require('child_process');
 const express = require('express');
 const crypto = require('crypto');
@@ -767,14 +768,51 @@ function createModelingRouter(dependencies) {
           child.send({ task, variantId, algorithm, imbalanceStrategy, jobIds, artifactRoot: dependencies.artifactRoot, dataset });
         });
       })
-      .then((msg) => {
+      .then(async (msg) => {
         if (msg.type === 'error') throw new Error(msg.error || 'Worker error');
-        recordJob(diagJobs, jobId, { status: 'done', finishedAt: Date.now(), result: msg.result || null });
+        const result = msg.result || null;
+        recordJob(diagJobs, jobId, { status: 'done', finishedAt: Date.now(), result });
+        // Auto-save cross-validation results so the supervisor page can display them later
+        if (task === 'cross-validate' && result) {
+          try {
+            const cvDir = path.join(dependencies.artifactRoot, '_cv_history');
+            await fs.mkdir(cvDir, { recursive: true });
+            const cvId  = crypto.randomUUID().slice(0, 8);
+            const record = {
+              id: cvId,
+              variantId,
+              algorithm,
+              imbalanceStrategy: imbalanceStrategy || 'baseline',
+              jobIds: jobIds || '',
+              timestamp: new Date().toISOString(),
+              ...result,
+            };
+            await fs.writeFile(path.join(cvDir, `${cvId}.json`), JSON.stringify(record, null, 2), 'utf8');
+          } catch (_) { /* saving CV history is non-critical; swallow errors */ }
+        }
       })
       .catch((err) => {
         recordJob(diagJobs, jobId, { status: 'error', finishedAt: Date.now(), error: err && err.message ? err.message : String(err) });
       });
   }
+
+  // GET /cv-results — list all saved cross-validation history records
+  router.get('/cv-results', async (req, res, next) => {
+    try {
+      const cvDir = path.join(dependencies.artifactRoot, '_cv_history');
+      let files = [];
+      try { files = await fs.readdir(cvDir); } catch (_) { /* no history yet */ }
+      const results = [];
+      for (const f of files.filter((f) => f.endsWith('.json'))) {
+        try {
+          const raw = await fs.readFile(path.join(cvDir, f), 'utf8');
+          results.push(JSON.parse(raw));
+        } catch (_) { continue; }
+      }
+      results.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+      res.json({ ok: true, results });
+    } catch (error) { next(error); }
+  });
 
   router.post('/cross-validate', async (req, res, next) => {
     try {

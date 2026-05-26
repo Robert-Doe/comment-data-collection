@@ -9,9 +9,9 @@ const { trainDecisionTree, predictProbabilityDecisionTree, explainDecisionTree }
 const { trainRandomForest, predictProbabilityRandomForest, explainRandomForest } = require('./randomForest');
 const { trainGradientBoosting, predictProbabilityGradientBoosting, explainGradientBoosting } = require('./gradientBoosting');
 const { trainNeuralNetwork, predictProbabilityNeuralNetwork, explainNeuralNetwork } = require('./neuralNetwork');
-const { computeAllMetrics, computeBinaryMetrics } = require('./metrics');
+const { computeAllMetrics } = require('./metrics');
 const { buildArtifactId, saveModelArtifact, listModelArtifacts, loadModelArtifact, summarizeArtifact, deleteModelArtifact } = require('./artifacts');
-const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber, sigmoid } = require('./utils');
+const { hashString, normalizeHostname, parseCsvLikeLines, roundNumber } = require('./utils');
 const { listModelVariants, getModelVariant } = require('../variants');
 
 function emitProgress(progress, patch) {
@@ -62,7 +62,6 @@ async function buildOverview(items, artifactRoot, options = {}) {
       title: family.title,
       description: family.description,
       feature_count: family.features.length,
-      features: family.features.map((f) => ({ key: f.key, title: f.title, type: f.type, description: f.description || '', meaning: f.meaning || '' })),
     })),
     imbalance_strategies: listImbalanceStrategies(),
     models,
@@ -1270,11 +1269,7 @@ function buildRuntimeModelBundle(artifact, options = {}) {
     algorithm: artifact.algorithm,
     feature_count: artifact.feature_count,
     thresholds: {
-      // Prefer an explicit caller override, then the optimal threshold baked into
-      // the artifact during training, then fall back to the naive 0.5 default.
-      positive: Number.isFinite(positiveThreshold) ? positiveThreshold
-        : Number.isFinite(Number(artifact.optimal_threshold)) ? Number(artifact.optimal_threshold)
-          : 0.5,
+      positive: Number.isFinite(positiveThreshold) ? positiveThreshold : 0.5,
       manual_review_low: Number.isFinite(manualReviewLow) ? manualReviewLow : 0.2,
       manual_review_high: Number.isFinite(manualReviewHigh) ? manualReviewHigh : 0.8,
     },
@@ -1306,25 +1301,6 @@ function buildRuntimeModelBundle(artifact, options = {}) {
         : [],
     },
   };
-}
-
-// Find the decision threshold (0–1, step 0.01) that maximises F1 score on the
-// provided scored rows. Always derived from the TRAINING split so we never peek
-// at the test holdout. The returned value replaces the naive 0.5 default when
-// reporting final metrics and when bundling a runtime model.
-function findOptimalF1Threshold(scoredRows) {
-  if (!scoredRows || !scoredRows.length) return 0.5;
-  let bestF1 = -1;
-  let bestThreshold = 0.5;
-  for (let ti = 1; ti < 100; ti++) {
-    const t = ti / 100;
-    const m = computeBinaryMetrics(scoredRows, t);
-    if (m.f1 > bestF1) {
-      bestF1 = m.f1;
-      bestThreshold = t;
-    }
-  }
-  return bestThreshold;
 }
 
 function computeThresholdCurve(scoredRows) {
@@ -1407,13 +1383,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   }
   ensureTrainableRows(split.trainRows, 'Training split');
 
-  const excludeKeys = Array.isArray(trainingInput.excludeFeatures) ? new Set(trainingInput.excludeFeatures) : null;
-  const effectiveCatalog = excludeKeys && excludeKeys.size
-    ? dataset.featureCatalog.filter((f) => !excludeKeys.has(f.key))
-    : dataset.featureCatalog;
-  if (effectiveCatalog.length < 1) throw new Error('At least one feature must remain after exclusions');
-
-  const vectorizer = fitVectorizer(split.trainRows, effectiveCatalog);
+  const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
   const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm);
   if (!normalizedAlgorithm) {
     throw new Error('Select a valid training algorithm');
@@ -1425,7 +1395,7 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
   }
   const trainingPreparation = prepareImbalanceTrainingRows(
     split.trainRows,
-    effectiveCatalog,
+    dataset.featureCatalog,
     vectorizer,
     normalizedStrategy,
     {
@@ -1472,16 +1442,9 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
       stage: 'training',
     }) : null,
   });
-  // Derive optimal threshold from training rows only — never from the test holdout.
-  // Using the train F1-maximising threshold instead of the naive 0.5 default is the
-  // single most impactful change for recall on imbalanced datasets: the model's
-  // probability scores are well-ordered (ROC-AUC 0.93) but 0.5 is rarely the
-  // best cut-point when positives are a small fraction of the data.
-  const optimalThreshold = findOptimalF1Threshold(scoredTrainRows);
-
   const evaluation = {
-    train: computeAllMetrics(scoredTrainRows, { threshold: optimalThreshold }),
-    test: split.testRows.length ? computeAllMetrics(scoredTestRows, { threshold: optimalThreshold }) : null,
+    train: computeAllMetrics(scoredTrainRows, {}),
+    test: split.testRows.length ? computeAllMetrics(scoredTestRows, {}) : null,
   };
   const thresholdCurve = split.testRows.length >= 4 ? computeThresholdCurve(scoredTestRows) : [];
   emitProgress(progress, {
@@ -1510,8 +1473,8 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     algorithm: trainingArtifact.algorithm,
     imbalance_strategy: trainingPreparation.summary,
     created_at: new Date().toISOString(),
-    feature_count: effectiveCatalog.length,
-    feature_catalog: effectiveCatalog,
+    feature_count: dataset.featureCatalog.length,
+    feature_catalog: dataset.featureCatalog,
     vectorizer,
     model,
     split: summarizeSplit(split, labeledRows.length),
@@ -1526,7 +1489,6 @@ async function trainModel(items, artifactRoot, trainingInput = {}) {
     },
     dataset_summary: dataset.summary,
     evaluation,
-    optimal_threshold: optimalThreshold,
     threshold_curve: thresholdCurve,
     reliance,
   };
@@ -2101,599 +2063,6 @@ async function computeCommentArchetype(artifactRoot, artifactId, items) {
   };
 }
 
-// ─── CROSS-VALIDATION & DIAGNOSTICS ──────────────────────────────────────────
-
-// t-critical values for 95% CI (two-tailed, df = n-1, n=2..29)
-const T_CRIT_95_CV = [
-  12.706, 4.303, 3.182, 2.776, 2.571,
-  2.447, 2.365, 2.306, 2.262, 2.228,
-  2.201, 2.179, 2.160, 2.145, 2.131,
-  2.120, 2.110, 2.101, 2.093, 2.086,
-  2.080, 2.074, 2.069, 2.064, 2.060,
-  2.056, 2.052, 2.048,
-];
-
-function computeStatSummaryCv(values) {
-  const valid = (Array.isArray(values) ? values : []).filter((v) => typeof v === 'number' && isFinite(v));
-  if (!valid.length) return { mean: null, std: null, ci95_lo: null, ci95_hi: null, n: 0 };
-  const n = valid.length;
-  const mean = valid.reduce((sum, v) => sum + v, 0) / n;
-  const variance = n > 1 ? valid.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (n - 1) : 0;
-  const std = Math.sqrt(variance);
-  const tCritical = n >= 30 ? 1.96 : (T_CRIT_95_CV[n - 1] || 2.045);
-  const se = n > 1 ? std / Math.sqrt(n) : 0;
-  return {
-    mean: roundNumber(mean),
-    std: roundNumber(std),
-    ci95_lo: roundNumber(mean - tCritical * se),
-    ci95_hi: roundNumber(mean + tCritical * se),
-    n,
-  };
-}
-
-function computeCalibrationCurveCv(rows, nBins = 10) {
-  const bins = Math.max(2, Math.min(20, Number(nBins) || 10));
-  const labeled = (Array.isArray(rows) ? rows : []).filter(
-    (row) => (row.binary_label === 0 || row.binary_label === 1)
-      && typeof row.probability === 'number' && isFinite(row.probability),
-  );
-  const buckets = Array.from({ length: bins }, () => ({ count: 0, positives: 0, probSum: 0 }));
-  labeled.forEach((row) => {
-    const prob = Math.max(0, Math.min(1, row.probability));
-    const idx = Math.min(Math.floor(prob * bins), bins - 1);
-    buckets[idx].count += 1;
-    buckets[idx].positives += row.binary_label;
-    buckets[idx].probSum += prob;
-  });
-  return buckets.map((bucket, idx) => ({
-    bin: idx,
-    bin_start: roundNumber(idx / bins),
-    bin_end: roundNumber((idx + 1) / bins),
-    count: bucket.count,
-    mean_predicted: bucket.count > 0 ? roundNumber(bucket.probSum / bucket.count) : null,
-    fraction_positive: bucket.count > 0 ? roundNumber(bucket.positives / bucket.count) : null,
-  }));
-}
-
-/**
- * Run 5-fold cross-validation using domain holdout splitting.
- * Each fold rotates which domain bucket (0-4) is the held-out test set.
- * Returns per-fold metrics and aggregate mean ± std / 95% CI statistics.
- */
-async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  if (!variant) throw new Error('Select a valid model variant');
-
-  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
-  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
-  if (labeledRows.length < 10) {
-    throw new Error('Cross-validation needs at least 10 labeled rows');
-  }
-
-  const nFolds = 5;
-  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
-  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
-  const foldResults = [];
-
-  for (let fold = 0; fold < nFolds; fold++) {
-    const split = splitRowsByDomain(labeledRows, { modulo: nFolds, holdoutBucket: fold });
-    if (!canTrainRows(split.trainRows) || !canTrainRows(split.testRows)) {
-      foldResults.push({ fold, skipped: true, reason: 'Insufficient class diversity in this fold split' });
-      continue;
-    }
-
-    const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
-    const trainingPreparation = prepareImbalanceTrainingRows(
-      split.trainRows,
-      dataset.featureCatalog,
-      vectorizer,
-      normalizedStrategy,
-      { algorithm: normalizedAlgorithm, seed: `cv:fold${fold}:${labeledRows.length}` },
-    );
-    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : split.trainRows;
-    const trainVectors = transformRows(preparedTrainRows, vectorizer);
-    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
-    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
-      classWeighting: trainingPreparation.classWeighting,
-    });
-    const trainingArtifact = { algorithm: model.algorithm, model };
-    const scoredTestRows = scoreRows(split.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
-    const metrics = computeAllMetrics(scoredTestRows, {});
-    const calibration = computeCalibrationCurveCv(scoredTestRows, 10);
-
-    const foldCurve = computeThresholdCurve(scoredTestRows);
-    let bestThresholdMetrics = null;
-    if (foldCurve.length > 0) {
-      const bestPt = foldCurve.reduce((prev, curr) => (curr.f1 > prev.f1 ? curr : prev));
-      bestThresholdMetrics = {
-        threshold: bestPt.t,
-        precision: bestPt.precision,
-        recall: bestPt.recall,
-        f1: bestPt.f1,
-        confusion: { true_positive: bestPt.tp, true_negative: bestPt.tn, false_positive: bestPt.fp, false_negative: bestPt.fn },
-      };
-    }
-
-    foldResults.push({
-      fold,
-      skipped: false,
-      train_count: split.trainRows.length,
-      effective_train_count: preparedTrainRows.length,
-      test_count: split.testRows.length,
-      train_label_counts: countBinaryLabels(split.trainRows),
-      test_label_counts: countBinaryLabels(split.testRows),
-      metrics,
-      best_threshold_metrics: bestThresholdMetrics,
-      calibration,
-    });
-  }
-
-  const completedFolds = foldResults.filter((f) => !f.skipped);
-
-  function extractValues(accessor) {
-    return completedFolds.map(accessor).filter((v) => typeof v === 'number' && isFinite(v));
-  }
-
-  const aggregate = {
-    f1:                 computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.f1)),
-    precision:          computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.precision)),
-    recall:             computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.recall)),
-    roc_auc:            computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.roc_auc)),
-    pr_auc:             computeStatSummaryCv(extractValues((f) => f.metrics.candidate_metrics.pr_auc)),
-    top_1_accuracy:     computeStatSummaryCv(extractValues((f) => f.metrics.ranking_metrics.top_1_accuracy)),
-    mean_reciprocal_rank: computeStatSummaryCv(extractValues((f) => f.metrics.ranking_metrics.mean_reciprocal_rank)),
-    best_f1:            computeStatSummaryCv(extractValues((f) => f.best_threshold_metrics && f.best_threshold_metrics.f1)),
-  };
-
-  return {
-    n_folds: nFolds,
-    total_labeled: labeledRows.length,
-    algorithm: normalizedAlgorithm,
-    imbalance_strategy: normalizedStrategy,
-    folds: foldResults,
-    aggregate,
-  };
-}
-
-/**
- * Compute a learning curve by training on increasing fractions of the training split
- * while evaluating on a fixed held-out test set (domain bucket 0).
- * Fractions: [0.2, 0.4, 0.6, 0.8, 1.0]
- */
-async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  if (!variant) throw new Error('Select a valid model variant');
-
-  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
-  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
-  if (labeledRows.length < 10) {
-    throw new Error('Learning curve needs at least 10 labeled rows');
-  }
-
-  const normalizedAlgorithm = normalizeTrainingAlgorithm(trainingInput.algorithm) || 'logistic_regression';
-  const normalizedStrategy = normalizeImbalanceStrategy(trainingInput.imbalanceStrategy) || 'baseline';
-
-  let baseSplit = splitRowsByDomain(labeledRows, { modulo: 5, holdoutBucket: 0 });
-  if (!canTrainRows(baseSplit.trainRows)) {
-    baseSplit = splitRowsByCandidate(labeledRows, { modulo: 5, holdoutBucket: 0 });
-  }
-  if (!canTrainRows(baseSplit.trainRows) || !canTrainRows(baseSplit.testRows)) {
-    throw new Error('Dataset does not have enough class diversity for a learning curve');
-  }
-
-  const fractions = [0.2, 0.4, 0.6, 0.8, 1.0];
-  const points = [];
-
-  for (const fraction of fractions) {
-    const positiveTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 1);
-    const negativeTrainRows = baseSplit.trainRows.filter((r) => r.binary_label === 0);
-    const nPos = Math.max(1, Math.round(positiveTrainRows.length * fraction));
-    const nNeg = Math.max(1, Math.round(negativeTrainRows.length * fraction));
-    const sampledTrainRows = [
-      ...positiveTrainRows.slice(0, nPos),
-      ...negativeTrainRows.slice(0, nNeg),
-    ];
-
-    if (!canTrainRows(sampledTrainRows)) {
-      points.push({ fraction, skipped: true, reason: 'Insufficient class diversity at this fraction' });
-      continue;
-    }
-
-    const vectorizer = fitVectorizer(sampledTrainRows, dataset.featureCatalog);
-    const trainingPreparation = prepareImbalanceTrainingRows(
-      sampledTrainRows,
-      dataset.featureCatalog,
-      vectorizer,
-      normalizedStrategy,
-      { algorithm: normalizedAlgorithm, seed: `lc:${fraction}:${labeledRows.length}` },
-    );
-    const preparedTrainRows = Array.isArray(trainingPreparation.rows) ? trainingPreparation.rows : sampledTrainRows;
-    const trainVectors = transformRows(preparedTrainRows, vectorizer);
-    const trainLabels = preparedTrainRows.map((row) => row.binary_label);
-    const model = trainModelByAlgorithm(normalizedAlgorithm, trainVectors, trainLabels, {
-      classWeighting: trainingPreparation.classWeighting,
-    });
-    const trainingArtifact = { algorithm: model.algorithm, model };
-    const scoredTrainRows = scoreRows(sampledTrainRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
-    const scoredTestRows = scoreRows(baseSplit.testRows, { vectorizer, ...trainingArtifact }, { includeExplanations: false });
-    const trainMetrics = computeAllMetrics(scoredTrainRows, {});
-    const testMetrics = computeAllMetrics(scoredTestRows, {});
-
-    points.push({
-      fraction,
-      skipped: false,
-      train_count: sampledTrainRows.length,
-      test_count: baseSplit.testRows.length,
-      train_metrics: {
-        f1: trainMetrics.candidate_metrics.f1,
-        roc_auc: trainMetrics.candidate_metrics.roc_auc,
-        pr_auc: trainMetrics.candidate_metrics.pr_auc,
-      },
-      test_metrics: {
-        f1: testMetrics.candidate_metrics.f1,
-        roc_auc: testMetrics.candidate_metrics.roc_auc,
-        pr_auc: testMetrics.candidate_metrics.pr_auc,
-        precision: testMetrics.candidate_metrics.precision,
-        recall: testMetrics.candidate_metrics.recall,
-      },
-    });
-  }
-
-  return {
-    algorithm: normalizedAlgorithm,
-    imbalance_strategy: normalizedStrategy,
-    total_labeled: labeledRows.length,
-    test_count: baseSplit.testRows.length,
-    points,
-  };
-}
-
-/**
- * Inspect how labeled rows distribute across the 5 domain holdout buckets.
- * Useful for identifying imbalanced folds before running cross-validation.
- */
-async function getDomainBuckets(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  if (!variant) throw new Error('Select a valid model variant');
-
-  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
-  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
-
-  const nBuckets = 5;
-  const byBucket = Array.from({ length: nBuckets }, () => new Map());
-
-  for (const row of labeledRows) {
-    const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '';
-    if (!stableKey) continue;
-    const bucket = hashString(stableKey) % nBuckets;
-    const domainMap = byBucket[bucket];
-    if (!domainMap.has(stableKey)) {
-      domainMap.set(stableKey, { domain: stableKey, count: 0, positive_count: 0 });
-    }
-    const entry = domainMap.get(stableKey);
-    entry.count += 1;
-    if (row.binary_label === 1) entry.positive_count += 1;
-  }
-
-  return {
-    n_buckets: nBuckets,
-    total_labeled: labeledRows.length,
-    buckets: byBucket.map((domainMap, bucket) => {
-      const domains = Array.from(domainMap.values())
-        .map((d) => ({ ...d, positive_rate: d.count > 0 ? roundNumber(d.positive_count / d.count, 3) : 0 }))
-        .sort((a, b) => b.count - a.count);
-      return {
-        bucket,
-        domain_count: domains.length,
-        row_count: domains.reduce((s, d) => s + d.count, 0),
-        positive_count: domains.reduce((s, d) => s + d.positive_count, 0),
-        domains,
-      };
-    }),
-  };
-}
-
-/**
- * Return the individual labeled rows that belong to a given domain key
- * (hostname / frame_host / item_id fallback chain — same key used by getDomainBuckets).
- * Used by the bucket inspector drill-down so users can verify which candidates
- * contributed to the row/comment counts shown per domain.
- */
-async function getDomainCandidates(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  if (!variant) throw new Error('Select a valid model variant');
-
-  const domain = String(trainingInput.domain || '').trim();
-  if (!domain) throw new Error('domain is required');
-
-  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
-  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
-
-  const nBuckets = 5;
-  const candidates = [];
-  for (const row of labeledRows) {
-    const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '';
-    if (stableKey !== domain) continue;
-    candidates.push({
-      candidate_id: row.dataset_row_id || row.item_id || row.candidate_key || String(row.row_number) || '',
-      item_id:      row.item_id || '',
-      job_id:       row.job_id  || '',
-      label:        row.binary_label, // 1 = positive (has spam comments), 0 = negative (clean)
-      bucket:       hashString(stableKey) % nBuckets,
-    });
-  }
-
-  return { domain, total: candidates.length, positives: candidates.filter((c) => c.label === 1).length, candidates };
-}
-
-/**
- * Data-driven feature analysis: four independent filters applied to the
- * labeled dataset.  No training configuration needed — the function fits
- * its own L1-regularised LR (proximal gradient, λ chosen by 3-fold CV)
- * and a 100-tree Random Forest internally.
- *
- * Verdict per feature:
- *   "drop"   — 3 or more independent signals agree the feature contributes nothing
- *   "review" — exactly 2 signals flag it; notable but not conclusive
- *   "keep"   — 0–1 signals raised; safe to retain
- */
-async function analyzeFeatures(items, artifactRoot, trainingInput = {}) {
-  const variant = getModelVariant(trainingInput.variantId);
-  if (!variant) throw new Error('Select a valid model variant');
-
-  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
-  const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
-  if (labeledRows.length < 20) throw new Error('Feature analysis needs at least 20 labeled rows');
-
-  const featureCatalog = dataset.featureCatalog;
-  const labels = labeledRows.map((row) => row.binary_label);
-  const n = labeledRows.length;
-
-  // ── Raw value arrays (one per feature, length n) ──────────────────────────────
-  const rawValues = {};
-  for (const entry of featureCatalog) {
-    rawValues[entry.key] = labeledRows.map((row) => {
-      const v = row.feature_values ? row.feature_values[entry.key] : undefined;
-      if (entry.type === 'boolean') return v ? 1 : 0;
-      if (entry.type === 'number') return Number(v) || 0;
-      return String(v == null ? '' : v);
-    });
-  }
-
-  // ── 1. Near-zero variance ─────────────────────────────────────────────────────
-  function varianceInfo(entry) {
-    const vals = rawValues[entry.key];
-    if (entry.type === 'boolean') {
-      const trueRate = vals.reduce((s, v) => s + v, 0) / n;
-      const dominant = Math.max(trueRate, 1 - trueRate);
-      return { dominant_rate: roundNumber(dominant, 3), near_zero: dominant >= 0.95 };
-    }
-    if (entry.type === 'number') {
-      const mean = vals.reduce((s, v) => s + v, 0) / n;
-      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
-      const std = Math.sqrt(variance);
-      const distinct = new Set(vals.map((v) => roundNumber(v, 2))).size;
-      return { std: roundNumber(std, 4), distinct_values: distinct, near_zero: std < 0.01 || distinct <= 2 };
-    }
-    // categorical
-    const freq = {};
-    for (const v of vals) freq[v] = (freq[v] || 0) + 1;
-    const maxFreq = Math.max(...Object.values(freq));
-    return { dominant_rate: roundNumber(maxFreq / n, 3), near_zero: maxFreq / n >= 0.95 };
-  }
-
-  // ── 2. Mutual Information (joint frequency table, numeric features binned) ─────
-  function computeMI(entry) {
-    const vals = rawValues[entry.key];
-    let binned;
-    if (entry.type === 'number') {
-      const sorted = [...vals].sort((a, b) => a - b);
-      const nBins = Math.max(2, Math.min(10, Math.floor(Math.sqrt(n))));
-      const edges = [];
-      for (let b = 1; b < nBins; b++) edges.push(sorted[Math.floor(b * n / nBins)]);
-      binned = vals.map((v) => { for (let b = 0; b < edges.length; b++) if (v <= edges[b]) return b; return edges.length; });
-    } else {
-      binned = vals;
-    }
-
-    const joint = new Map();
-    for (let i = 0; i < n; i++) {
-      const xk = binned[i]; const yk = labels[i];
-      if (!joint.has(xk)) joint.set(xk, new Map());
-      const inner = joint.get(xk);
-      inner.set(yk, (inner.get(yk) || 0) + 1);
-    }
-
-    const mX = new Map(); const mY = new Map();
-    for (const [xk, inner] of joint) {
-      for (const [yk, cnt] of inner) {
-        mX.set(xk, (mX.get(xk) || 0) + cnt);
-        mY.set(yk, (mY.get(yk) || 0) + cnt);
-      }
-    }
-
-    let mi = 0;
-    for (const [xk, inner] of joint) {
-      for (const [yk, cnt] of inner) {
-        if (!cnt) continue;
-        const pxy = cnt / n; const px = mX.get(xk) / n; const py = mY.get(yk) / n;
-        if (px > 0 && py > 0) mi += pxy * Math.log(pxy / (px * py));
-      }
-    }
-    return Math.max(0, mi);
-  }
-
-  // ── 3. Pairwise Pearson correlation (numeric + boolean) ───────────────────────
-  const numericKeys = featureCatalog.filter((e) => e.type === 'number' || e.type === 'boolean').map((e) => e.key);
-  const fMeans = {}; const fStds = {};
-  for (const key of numericKeys) {
-    const vals = rawValues[key];
-    const mean = vals.reduce((s, v) => s + v, 0) / n;
-    const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
-    fMeans[key] = mean; fStds[key] = Math.sqrt(variance) || 1e-10;
-  }
-  const corrPairs = {};
-  for (let i = 0; i < numericKeys.length; i++) {
-    const ki = numericKeys[i]; const vi = rawValues[ki];
-    for (let j = i + 1; j < numericKeys.length; j++) {
-      const kj = numericKeys[j]; const vj = rawValues[kj];
-      let cov = 0;
-      for (let row = 0; row < n; row++) cov += (vi[row] - fMeans[ki]) * (vj[row] - fMeans[kj]);
-      const r = (cov / n) / (fStds[ki] * fStds[kj]);
-      if (Math.abs(r) >= 0.85) {
-        if (!corrPairs[ki]) corrPairs[ki] = [];
-        if (!corrPairs[kj]) corrPairs[kj] = [];
-        corrPairs[ki].push({ key: kj, r: roundNumber(r, 3) });
-        corrPairs[kj].push({ key: ki, r: roundNumber(r, 3) });
-      }
-    }
-  }
-
-  // ── 4. L1 Logistic Regression via proximal gradient (soft-thresholding) ───────
-  const vectorizer = fitVectorizer(labeledRows, featureCatalog);
-  const trainVectors = transformRows(labeledRows, vectorizer);
-  const dim = vectorizer.dimension;
-
-  function fitL1(vecs, lbls, lambda, iters) {
-    const w = new Array(dim).fill(0); let b = 0;
-    const lr = 0.05; const m = vecs.length;
-    for (let it = 0; it < iters; it++) {
-      const grads = new Array(dim).fill(0); let bg = 0;
-      for (let r = 0; r < m; r++) {
-        const vec = vecs[r]; let logit = b;
-        for (let f = 0; f < dim; f++) logit += w[f] * vec[f];
-        const err = sigmoid(logit) - lbls[r];
-        bg += err;
-        for (let f = 0; f < dim; f++) grads[f] += err * vec[f];
-      }
-      b -= (lr / m) * bg;
-      const thr = lambda * lr;
-      for (let f = 0; f < dim; f++) {
-        w[f] -= (lr / m) * grads[f];
-        if (w[f] > thr) w[f] -= thr;
-        else if (w[f] < -thr) w[f] += thr;
-        else w[f] = 0;
-      }
-    }
-    return { w, b };
-  }
-
-  function logLoss(vecs, lbls, w, b) {
-    let loss = 0;
-    for (let r = 0; r < vecs.length; r++) {
-      let logit = b;
-      for (let f = 0; f < vecs[r].length; f++) logit += w[f] * vecs[r][f];
-      const p = Math.max(1e-7, Math.min(1 - 1e-7, sigmoid(logit)));
-      loss -= lbls[r] === 1 ? Math.log(p) : Math.log(1 - p);
-    }
-    return loss / vecs.length;
-  }
-
-  // Pick λ via 3-fold log-loss CV
-  const foldSize = Math.floor(n / 3);
-  let bestLambda = 0.01; let bestCvLoss = Infinity;
-  for (const lambda of [0.001, 0.005, 0.01, 0.05]) {
-    let totalLoss = 0;
-    for (let fold = 0; fold < 3; fold++) {
-      const ts = fold * foldSize; const te = fold === 2 ? n : ts + foldSize;
-      const tV = [...trainVectors.slice(0, ts), ...trainVectors.slice(te)];
-      const tL = [...labels.slice(0, ts), ...labels.slice(te)];
-      const { w, b } = fitL1(tV, tL, lambda, 150);
-      totalLoss += logLoss(trainVectors.slice(ts, te), labels.slice(ts, te), w, b);
-    }
-    const avg = totalLoss / 3;
-    if (avg < bestCvLoss) { bestCvLoss = avg; bestLambda = lambda; }
-  }
-  const { w: l1Weights } = fitL1(trainVectors, labels, bestLambda, 300);
-
-  // Aggregate one-hot encoded categoricals back to the original feature key
-  const l1ByKey = {};
-  for (const desc of vectorizer.descriptors) {
-    const abs = Math.abs(l1Weights[desc.index]);
-    if (l1ByKey[desc.feature_key] === undefined || abs > Math.abs(l1ByKey[desc.feature_key])) {
-      l1ByKey[desc.feature_key] = l1Weights[desc.index];
-    }
-  }
-
-  // ── 5. Random Forest importances ─────────────────────────────────────────────
-  const rf = trainRandomForest(trainVectors, labels, { trees: 100, maxDepth: 7 });
-  const rfImps = rf.feature_importances || [];
-  const rfByKey = {};
-  for (const desc of vectorizer.descriptors) {
-    rfByKey[desc.feature_key] = (rfByKey[desc.feature_key] || 0) + (rfImps[desc.index] || 0);
-  }
-
-  // ── 6. MI scores + ranks ──────────────────────────────────────────────────────
-  const miScores = {};
-  for (const entry of featureCatalog) miScores[entry.key] = roundNumber(computeMI(entry), 4);
-  const sortedByMI = [...featureCatalog].sort((a, b) => (miScores[b.key] || 0) - (miScores[a.key] || 0));
-  const miRank = {}; sortedByMI.forEach((e, i) => { miRank[e.key] = i + 1; });
-
-  // ── 7. Per-feature verdict ────────────────────────────────────────────────────
-  // For correlated pairs, flag only the member with lower MI (the weaker signal).
-  const corrLowerMI = new Set();
-  for (const [ki, pairs] of Object.entries(corrPairs)) {
-    for (const { key: kj } of pairs) {
-      if (ki < kj) corrLowerMI.add((miScores[ki] || 0) <= (miScores[kj] || 0) ? ki : kj);
-    }
-  }
-
-  const features = featureCatalog.map((entry) => {
-    const vi = varianceInfo(entry);
-    const mi = miScores[entry.key] || 0;
-    const l1Coef = l1ByKey[entry.key] !== undefined ? roundNumber(l1ByKey[entry.key], 4) : null;
-    const rfImp = rfByKey[entry.key] !== undefined ? roundNumber(rfByKey[entry.key], 4) : null;
-
-    const flags = {
-      near_zero_variance:  vi.near_zero,
-      low_mi:              mi < 0.005,
-      lasso_zeroed:        l1Coef !== null && l1Coef === 0,
-      low_rf_importance:   rfImp !== null && rfImp < 0.003,
-      high_correlation:    corrLowerMI.has(entry.key),
-    };
-
-    const flagCount = Object.values(flags).filter(Boolean).length;
-    const verdict = flagCount >= 3 ? 'drop' : flagCount >= 2 ? 'review' : 'keep';
-
-    return {
-      key: entry.key, title: entry.title, family: entry.family, type: entry.type,
-      variance: vi, mi, mi_rank: miRank[entry.key],
-      lasso_coef: l1Coef, rf_importance: rfImp,
-      corr_pairs: corrPairs[entry.key] || [],
-      flags, verdict,
-    };
-  });
-
-  // ── 8. Known threshold series (structural, data-independent) ─────────────────
-  const THRESHOLD_SERIES = [
-    {
-      group: 'Repeat Count Thresholds',
-      features: ['min_k_threshold_pass_3', 'min_k_threshold_pass_5', 'min_k_threshold_pass_8', 'min_k_threshold_pass_15'],
-      note: 'Perfectly nested booleans: pass_15 ⊆ pass_8 ⊆ pass_5 ⊆ pass_3. At most one is needed — the MI scores above show which threshold is most discriminative.',
-    },
-    {
-      group: 'Signature Repetition Strength',
-      features: ['sig_id_count_weak', 'sig_id_count_medium', 'sig_id_count_strong'],
-      note: 'Nested severity tiers: strong ⊆ medium ⊆ weak. Consider replacing all three with the continuous repeating_group_count, which already carries this information.',
-    },
-  ].filter((group) => group.features.some((k) => featureCatalog.some((e) => e.key === k)));
-
-  // ── 9. Summary counts ─────────────────────────────────────────────────────────
-  const summary = {
-    drop_count:              features.filter((f) => f.verdict === 'drop').length,
-    review_count:            features.filter((f) => f.verdict === 'review').length,
-    keep_count:              features.filter((f) => f.verdict === 'keep').length,
-    near_zero_variance_count: features.filter((f) => f.flags.near_zero_variance).length,
-    low_mi_count:            features.filter((f) => f.flags.low_mi).length,
-    lasso_zeroed_count:      features.filter((f) => f.flags.lasso_zeroed).length,
-    low_rf_count:            features.filter((f) => f.flags.low_rf_importance).length,
-    high_corr_count:         features.filter((f) => f.flags.high_correlation).length,
-    chosen_l1_lambda:        bestLambda,
-  };
-
-  return { total_labeled: n, feature_count: featureCatalog.length, threshold_series: THRESHOLD_SERIES, features, summary };
-}
-
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2702,11 +2071,6 @@ module.exports = {
   normalizeImbalanceStrategy,
   trainModel,
   compareImbalanceStrategies,
-  runCrossValidation,
-  computeLearningCurve,
-  getDomainBuckets,
-  getDomainCandidates,
-  analyzeFeatures,
   getModelDetails,
   buildRuntimeModelBundle,
   scoreJobItems,

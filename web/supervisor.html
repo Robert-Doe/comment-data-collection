@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Model Progress Report</title>
+    <script src="./config.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+        <a class="site-nav-link" href="./demo.html">Demo Tour</a>
+        <a class="site-nav-link" href="./ml-guide.html">ML Guide</a>
+        <a class="site-nav-link" href="./public-job.html">Public Intake</a>
+        <a class="site-nav-link" href="./domain-metrics.html">Domain Metrics</a>
+        <a class="site-nav-link" href="./crawler.html">Crawler</a>
+        <a class="site-nav-link active" href="./supervisor.html">Supervisor</a>
+      </nav>
+
+      <section class="hero">
+        <p class="eyebrow">Research Progress</p>
+        <h1>Model Progress Report</h1>
+        <p class="lede">Complete history of trained models, their configurations, feature weight interpretations, and cross-validation results — for review and guidance.</p>
+      </section>
+
+      <!-- ── Model History ────────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Model History</h2>
+          <button id="sup-refresh" class="secondary" type="button">Refresh</button>
+        </div>
+        <p class="lede manual-lede">All trained models in chronological order. F1 is colour-coded: <span style="color:#16a34a;font-weight:600">green ≥ 80%</span>, <span style="color:#d97706;font-weight:600">amber ≥ 60%</span>, <span style="color:#dc2626;font-weight:600">red below 60%</span>. Test-set metrics shown where available; train-set otherwise.</p>
+        <p id="sup-overview-msg" class="message"></p>
+        <div id="sup-model-history" class="table-shell empty">Loading model history…</div>
+      </section>
+
+      <!-- ── Feature Weight Interpreter ───────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-header"><h2>Feature Weight Interpreter</h2></div>
+        <p class="lede manual-lede">Select a model to see every active feature ranked by influence — with a plain-language explanation of what each feature measures and why the model may be relying on it. Positive weights push toward <em>UGC comment present</em>; negative weights push toward <em>no comment region</em>.</p>
+        <div class="config-grid" style="margin-bottom:14px">
+          <label class="field">
+            <span>Select Model</span>
+            <select id="sup-model-select"><option value="">— load models first —</option></select>
+          </label>
+        </div>
+        <p id="sup-weights-msg" class="message"></p>
+        <div id="sup-weights-shell" class="table-shell empty">Select a model above to view its feature weights.</div>
+      </section>
+
+      <!-- ── Cross-Validation History ─────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-header"><h2>Cross-Validation History</h2></div>
+        <p class="lede manual-lede">Every time cross-validation is run in the Diagnostics section, the results are automatically saved here. This lets you compare stability across runs without re-training. Each fold's metrics are shown individually so you can identify weak folds or dataset shift.</p>
+        <p id="sup-cv-msg" class="message"></p>
+        <div id="sup-cv-history" class="table-shell empty">Loading CV history…</div>
+      </section>
+
+    </main>
+    <script src="./supervisor.js"></script>
+  </body>
+</html>

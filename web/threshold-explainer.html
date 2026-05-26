@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Threshold Tuning Explainer — UGC Detection</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0f1117;
+        --surface: #181c27;
+        --border:  #2a2f3f;
+        --text:    #e2e8f0;
+        --muted:   #8892a4;
+        --accent:  #4f8ef7;
+        --green:   #34c77b;
+        --amber:   #f6a623;
+        --red:     #e05555;
+        --purple:  #9d7ef7;
+        --radius:  10px;
+        --max-w:   860px;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        padding: 28px 32px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+      }
+      header .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin-bottom: 6px; }
+      header h1 { font-size: 26px; font-weight: 700; }
+      header p  { color: var(--muted); margin-top: 8px; font-size: 14px; }
+
+      main { max-width: var(--max-w); margin: 0 auto; padding: 40px 32px 80px; }
+
+      nav.toc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 48px;
+      }
+      nav.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
+      nav.toc ol { padding-left: 18px; }
+      nav.toc li { margin-bottom: 5px; }
+      nav.toc a  { color: var(--accent); text-decoration: none; }
+      nav.toc a:hover { text-decoration: underline; }
+
+      section { margin-bottom: 56px; }
+      section h2 {
+        font-size: 20px; font-weight: 700; margin-bottom: 16px;
+        padding-bottom: 10px; border-bottom: 1px solid var(--border);
+        scroll-margin-top: 24px;
+      }
+      section h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; }
+      p { margin-bottom: 14px; }
+      ul, ol { padding-left: 22px; margin-bottom: 14px; }
+      li { margin-bottom: 6px; }
+
+      .kpi-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 20px 0; }
+      .kpi {
+        flex: 1; min-width: 120px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 16px 18px;
+      }
+      .kpi .val { font-size: 26px; font-weight: 700; }
+      .kpi .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+      .kpi.good  .val { color: var(--green); }
+      .kpi.warn  .val { color: var(--amber); }
+      .kpi.bad   .val { color: var(--red); }
+      .kpi.info  .val { color: var(--accent); }
+      .kpi.purple .val { color: var(--purple); }
+
+      .compare { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+      .compare th {
+        background: var(--surface); border: 1px solid var(--border);
+        padding: 10px 14px; text-align: left; font-weight: 600;
+        color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+      }
+      .compare td { border: 1px solid var(--border); padding: 10px 14px; vertical-align: top; }
+      .compare tr:nth-child(even) td { background: var(--surface); }
+      .good { color: var(--green); font-weight: 600; }
+      .bad  { color: var(--red);   font-weight: 600; }
+      .warn { color: var(--amber); font-weight: 600; }
+      .info { color: var(--accent); font-weight: 600; }
+
+      .callout {
+        border-left: 3px solid var(--accent);
+        background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0;
+        padding: 14px 18px; margin: 20px 0; font-size: 14px;
+      }
+      .callout.green  { border-color: var(--green); }
+      .callout.amber  { border-color: var(--amber); }
+      .callout.red    { border-color: var(--red); }
+      .callout.purple { border-color: var(--purple); }
+      .callout strong { display: block; margin-bottom: 4px; }
+
+      pre, code {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        font-size: 13px;
+      }
+      pre {
+        background: #11141e; border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 16px 18px;
+        overflow-x: auto; margin: 16px 0; line-height: 1.6;
+      }
+      code { background: #11141e; padding: 2px 5px; border-radius: 4px; color: var(--amber); }
+
+      .diagram {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 20px; margin: 20px 0;
+        text-align: center; font-size: 13px; color: var(--muted); overflow-x: auto;
+      }
+      .diagram .flow {
+        display: flex; align-items: center; justify-content: center;
+        gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+      }
+      .box {
+        background: #1e2436; border: 1px solid var(--border);
+        border-radius: 6px; padding: 8px 14px; font-size: 13px;
+        color: var(--text); white-space: nowrap;
+      }
+      .box.accent { border-color: var(--accent); color: var(--accent); }
+      .box.green  { border-color: var(--green);  color: var(--green);  }
+      .box.amber  { border-color: var(--amber);  color: var(--amber);  }
+      .box.purple { border-color: var(--purple); color: var(--purple); }
+      .arrow { color: var(--muted); font-size: 18px; }
+
+      /* Threshold bar */
+      .t-bar-wrap { margin: 24px 0; }
+      .t-bar {
+        height: 28px; border-radius: 6px; position: relative;
+        background: linear-gradient(to right,
+          var(--green) 0%,
+          var(--green) var(--neg-end, 30%),
+          var(--amber) var(--neg-end, 30%),
+          var(--amber) var(--t-pos, 50%),
+          var(--red)   var(--t-pos, 50%));
+        margin-bottom: 6px;
+      }
+      .t-tick {
+        position: absolute; top: -20px; font-size: 11px;
+        color: var(--text); transform: translateX(-50%); font-weight: 600;
+        background: var(--bg); padding: 0 3px;
+      }
+      .t-tick::after { content: ''; position: absolute; top: 18px; left: 50%; width: 1px; height: 28px; background: rgba(255,255,255,.3); }
+      .t-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+      /* Step list */
+      .steps { counter-reset: step; list-style: none; padding: 0; margin: 20px 0; }
+      .steps li {
+        counter-increment: step;
+        display: flex; gap: 14px; margin-bottom: 18px;
+      }
+      .steps li::before {
+        content: counter(step);
+        flex-shrink: 0; width: 28px; height: 28px;
+        background: var(--accent); color: #fff;
+        border-radius: 50%; font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        margin-top: 2px;
+      }
+      .steps li .step-body { flex: 1; }
+      .steps li .step-body strong { display: block; margin-bottom: 4px; }
+
+      /* UI mockup */
+      .ui-mock {
+        background: #11141e; border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 20px; margin: 20px 0;
+        font-size: 13px;
+      }
+      .ui-mock .row-header {
+        font-size: 11px; color: var(--muted); text-transform: uppercase;
+        letter-spacing: .07em; border-bottom: 1px solid var(--border);
+        padding-bottom: 8px; margin-bottom: 10px;
+        display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+        gap: 8px;
+      }
+      .ui-mock .row {
+        display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+        gap: 8px; padding: 6px 0;
+      }
+      .ui-mock .row .actions { display: flex; gap: 5px; flex-wrap: wrap; }
+      .ui-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; font-size: 11px; color: var(--text); }
+      .ui-btn.accent { border-color: var(--accent); color: var(--accent); }
+      .ui-btn.danger { border-color: var(--red); color: var(--red); }
+
+      .ui-tuner {
+        background: var(--surface); border: 1px solid var(--green);
+        border-radius: var(--radius); padding: 16px; margin-top: 10px;
+        font-size: 13px;
+      }
+      .ui-tuner .tuner-header { font-size: 11px; color: var(--green); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+      .ui-tuner .stat-row { display: flex; gap: 20px; margin: 10px 0; }
+      .ui-tuner .stat { text-align: center; }
+      .ui-tuner .stat .sv { font-size: 20px; font-weight: 700; }
+      .ui-tuner .stat .sl { font-size: 11px; color: var(--muted); }
+      .slider-mock { height: 6px; background: var(--border); border-radius: 3px; position: relative; margin: 12px 0; }
+      .slider-thumb { position: absolute; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; top: -5px; left: 28%; border: 2px solid #fff; }
+      .apply-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+
+    <header>
+      <p class="eyebrow">Internal Reference</p>
+      <h1>Threshold Tuning: No Retraining Required</h1>
+      <p>How the threshold curve, the tuner slider, and the Apply button work together — and why you can change the decision threshold on any existing model without touching its weights.</p>
+    </header>
+
+    <main>
+
+      <nav class="toc">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#separation">The Fundamental Separation: Weights vs Threshold</a></li>
+          <li><a href="#curve">What the Threshold Curve Already Stores</a></li>
+          <li><a href="#problem">Why 0.5 Was Costing You 30+ Points of Recall</a></li>
+          <li><a href="#modes">The Four Optimization Modes</a></li>
+          <li><a href="#howto">How to Use It: Step by Step</a></li>
+          <li><a href="#apply">What "Apply This Threshold" Actually Does</a></li>
+          <li><a href="#caveat">The Honest Caveat: Test Curve vs Train Curve</a></li>
+          <li><a href="#summary">What Changed in the Code</a></li>
+        </ol>
+      </nav>
+
+
+      <!-- ── 1. Separation ── -->
+      <section id="separation">
+        <h2>1. The Fundamental Separation: Weights vs Threshold</h2>
+
+        <p>
+          A trained neural network (or logistic regression, or any classifier) does two
+          completely separate things that people often treat as one:
+        </p>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box">73 input features<br><span style="color:var(--muted);font-size:11px">from the candidate region</span></div>
+            <div class="arrow">→</div>
+            <div class="box accent">Model weights<br><span style="font-size:11px">learned during training</span></div>
+            <div class="arrow">→</div>
+            <div class="box amber">Probability score<br><span style="font-size:11px">e.g. 0.34</span></div>
+            <div class="arrow">→</div>
+            <div class="box green">Threshold<br><span style="font-size:11px">is 0.34 ≥ 0.28?</span></div>
+            <div class="arrow">→</div>
+            <div class="box green">YES / NO</div>
+          </div>
+        </div>
+
+        <p>
+          <strong>The weights</strong> are fixed after training. Changing them requires
+          running gradient descent again — a full retrain.
+        </p>
+        <p>
+          <strong>The threshold</strong> is just a number you compare the probability against.
+          You can change it at any time, on any saved model, in milliseconds.
+          The model doesn't need to know you changed it. You're not touching any of
+          the learned weights — you're just moving the line that says "this probability
+          is high enough to count as positive."
+        </p>
+
+        <div class="callout green">
+          <strong>Key point</strong>
+          Changing the threshold is not cheating, not retraining, and not modifying the model.
+          It's choosing where on the precision–recall tradeoff curve you want to operate.
+          Different use cases need different operating points — this is normal and expected.
+        </div>
+      </section>
+
+
+      <!-- ── 2. Curve ── -->
+      <section id="curve">
+        <h2>2. What the Threshold Curve Already Stores</h2>
+
+        <p>
+          Every model artifact that gets saved to disk already contains a
+          <code>threshold_curve</code> field. This was computed at the end of training
+          by scoring every row in the test set, then sweeping all 101 thresholds
+          from 0.00 to 1.00 in steps of 0.01 and recording what happens.
+        </p>
+
+        <p>Each of the 101 entries looks like this:</p>
+
+        <pre>{
+  "t":         0.28,       ← the threshold being evaluated
+  "precision": 0.741,      ← TP / (TP + FP) at this threshold
+  "recall":    0.734,      ← TP / (TP + FN) at this threshold
+  "f1":        0.737,      ← harmonic mean of precision + recall
+  "accuracy":  0.889,      ← (TP + TN) / total
+  "tp":        94,         ← true positives
+  "fp":        33,         ← false positives
+  "fn":        34,         ← false negatives
+  "tn":        601         ← true negatives
+}</pre>
+
+        <p>
+          This means every model on disk already has the full answer to "what would my
+          metrics be if I used threshold X?" stored in the artifact JSON.
+          <strong>No recomputation needed. No rescoring needed. No retraining needed.</strong>
+          You just read the curve, pick the entry you want, and apply it.
+        </p>
+
+        <p>
+          The PR curve shown in the threshold tuner UI is drawn directly from this stored data.
+          Every time you drag the slider, you're reading from the
+          <code>threshold_curve</code> array that was saved when the model was trained.
+        </p>
+      </section>
+
+
+      <!-- ── 3. Problem ── -->
+      <section id="problem">
+        <h2>3. Why 0.5 Was Costing You 30+ Points of Recall</h2>
+
+        <p>
+          The previous reported metrics were computed at threshold 0.5 — the default
+          that every classifier uses unless told otherwise. For a balanced dataset where
+          half the examples are positive, 0.5 is often reasonable. This dataset is
+          not balanced.
+        </p>
+
+        <p>
+          Comment regions are the minority class. When the model sees a candidate,
+          the prior probability that it's a comment region might be 15–25%. The model's
+          raw output reflects this: even for a genuine comment region, the model might
+          output 0.31 or 0.38 — a probability well above chance, clearly ranking this
+          candidate above most negatives, but still below 0.5. With a 0.5 threshold, that
+          confident positive prediction is silently discarded as negative.
+        </p>
+
+        <div class="t-bar-wrap" style="padding: 30px 0 10px">
+          <div class="t-bar" style="--neg-end: 100%; --t-pos: 100%;">
+            <div class="t-tick" style="left: 30%">0.30 ← actual score</div>
+            <div class="t-tick" style="left: 50%">0.50 ← old threshold</div>
+          </div>
+          <div class="t-legend"><span>0.00</span><span>1.00</span></div>
+          <p style="font-size:13px;color:var(--muted);margin-top:10px;text-align:center">
+            A score of 0.30 is well above chance for an imbalanced dataset — but 0.5 calls it negative.
+          </p>
+        </div>
+
+        <p>
+          The result: the model's ROC-AUC was 0.9272 — it was ranking positives above negatives
+          very well. But because the threshold was too high, most of those well-ranked
+          positives were still called negative. Recall sat at 48%.
+        </p>
+
+        <p>
+          The threshold curve for this model already shows that at threshold ≈ 0.28–0.32,
+          F1 is substantially higher than at 0.50. The model hadn't changed. The data hadn't
+          changed. Just the decision line needed to move.
+        </p>
+
+        <div class="kpi-row">
+          <div class="kpi bad">
+            <div class="val">48%</div>
+            <div class="label">Recall at threshold 0.50</div>
+          </div>
+          <div class="kpi warn">
+            <div class="val">60.7%</div>
+            <div class="label">F1 at threshold 0.50</div>
+          </div>
+          <div class="kpi good">
+            <div class="val">Expected ↑</div>
+            <div class="label">Recall after threshold tuning</div>
+          </div>
+          <div class="kpi good">
+            <div class="val">Expected ↑</div>
+            <div class="label">F1 after threshold tuning</div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── 4. Modes ── -->
+      <section id="modes">
+        <h2>4. The Four Optimization Modes</h2>
+
+        <p>
+          "Optimal" depends on what you're optimizing for. The tuner exposes four
+          strategies, each picking a different point on the threshold curve.
+        </p>
+
+        <table class="compare">
+          <thead>
+            <tr>
+              <th>Mode</th>
+              <th>What it maximises</th>
+              <th>Formula</th>
+              <th>Use when</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>F1</strong> (default)</td>
+              <td>Harmonic mean of precision and recall</td>
+              <td><code>2·P·R / (P+R)</code></td>
+              <td>You want a balanced operating point. Good general default.</td>
+            </tr>
+            <tr>
+              <td><strong>Recall</strong></td>
+              <td>Fraction of real positives found</td>
+              <td><code>TP / (TP+FN)</code></td>
+              <td>Missing a comment section is worse than a false alarm. You're willing to review more FPs to find everything.</td>
+            </tr>
+            <tr>
+              <td><strong>Precision</strong></td>
+              <td>Fraction of flagged items that are correct</td>
+              <td><code>TP / (TP+FP)</code></td>
+              <td>Every flag triggers a manual action and false alarms are expensive. You'd rather miss some real positives than have FPs.</td>
+            </tr>
+            <tr>
+              <td><strong>Youden's J</strong></td>
+              <td>Sensitivity + Specificity − 1</td>
+              <td><code>Recall + TN/(TN+FP) − 1</code></td>
+              <td>You want to treat both positive and negative detection symmetrically. Standard in medical/diagnostic statistics.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout amber">
+          <strong>None of these are objectively "correct"</strong>
+          They reflect different priorities. The right mode depends on what happens downstream
+          when the model makes a mistake. For a comment detection system where missing a comment
+          section means a failed scrape, recall is usually the most important metric.
+          For a moderation system where a false positive removes valid content, precision matters more.
+        </div>
+
+        <h3>Youden's J in plain English</h3>
+        <p>
+          Youden's J statistic is the threshold where the model is equally good at
+          detecting positives (high sensitivity/recall) and rejecting negatives
+          (high specificity = low false positive rate). It's the point on the ROC curve
+          furthest from the diagonal random-guess line. If you don't have a strong
+          opinion about recall vs precision, Youden's J is a principled default.
+        </p>
+      </section>
+
+
+      <!-- ── 5. How to use ── -->
+      <section id="howto">
+        <h2>5. How to Use It: Step by Step</h2>
+
+        <ul class="steps">
+          <li>
+            <div class="step-body">
+              <strong>Open Model Lab → Trained Models</strong>
+              All your saved models are listed here with their current precision, recall,
+              F1, and Top-1 accuracy. These numbers reflect whatever threshold was active
+              when the model was trained (previously always 0.5, now the train-optimal threshold
+              from newer runs).
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Click "Tune Threshold" on any model</strong>
+              The UI fetches the full artifact from <code>GET /api/modeling/models/:id</code>
+              and reads the stored <code>threshold_curve</code>. A threshold tuner panel
+              appears below the table. No retraining, no scoring — just reading from disk.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Explore the PR curve and slider</strong>
+              The left side shows the precision–recall curve drawn from the stored test data.
+              The green dot marks the stored best-F1 point. The blue dot tracks where you are.
+              The right side shows live precision / recall / F1 / accuracy and the confusion
+              matrix as you drag.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Click "Jump there" to land on best F1</strong>
+              This snaps the slider to whichever threshold index had the highest F1 in the
+              stored curve. You can also drag manually to any point you want.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Click "Apply This Threshold"</strong>
+              This writes the new threshold to the artifact file on disk, updates the
+              reported test candidate metrics to match, and refreshes the model list.
+              The Precision / Recall / F1 columns in the table will update immediately.
+            </div>
+          </li>
+        </ul>
+
+        <div class="ui-mock">
+          <div class="row-header">
+            <span>Artifact</span>
+            <span>Variant</span>
+            <span>Algorithm</span>
+            <span>Created</span>
+            <span>Precision</span>
+            <span>Recall</span>
+            <span>F1</span>
+            <span></span>
+          </div>
+          <div class="row">
+            <span style="font-family:monospace;font-size:11px">keyword-aware-2026…</span>
+            <span>Keyword-Aware</span>
+            <span>Neural Network</span>
+            <span>2026-05-20</span>
+            <span class="warn">82.6%</span>
+            <span class="bad">48.0%</span>
+            <span class="bad">60.7%</span>
+            <div class="actions">
+              <span class="ui-btn">Use</span>
+              <span class="ui-btn accent">Tune Threshold</span>
+              <span class="ui-btn">Runtime JSON</span>
+              <span class="ui-btn danger">Delete</span>
+            </div>
+          </div>
+
+          <div class="ui-tuner">
+            <div class="tuner-header">Threshold Tuner — keyword-aware-2026…</div>
+            <div class="stat-row">
+              <div class="stat"><div class="sv" style="color:var(--accent)">74.1%</div><div class="sl">Precision</div></div>
+              <div class="stat"><div class="sv" style="color:var(--green)">73.4%</div><div class="sl">Recall</div></div>
+              <div class="stat"><div class="sv" style="color:var(--green)">73.7%</div><div class="sl">F1</div></div>
+              <div class="stat"><div class="sv" style="color:var(--muted)">88.9%</div><div class="sl">Accuracy</div></div>
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin:6px 0">Threshold</div>
+            <div class="slider-mock"><div class="slider-thumb"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:10px">
+              <span>0.00</span><span>0.25</span><span>0.50</span><span>0.75</span><span>1.00</span>
+            </div>
+            <button class="apply-btn">Apply This Threshold</button>
+            <span style="margin-left:10px;font-size:12px;color:var(--green)">Threshold 0.28 saved — model list updated.</span>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:-8px">Illustrative mockup — your actual curve values will differ</p>
+      </section>
+
+
+      <!-- ── 6. Apply ── -->
+      <section id="apply">
+        <h2>6. What "Apply This Threshold" Actually Does</h2>
+
+        <p>
+          When you click Apply, the browser sends a single HTTP request:
+        </p>
+
+        <pre>PATCH /api/modeling/models/{artifactId}/threshold
+Content-Type: application/json
+
+{ "threshold": 0.28 }</pre>
+
+        <p>The server then does exactly four things:</p>
+
+        <ol class="steps">
+          <li>
+            <div class="step-body">
+              <strong>Load the artifact from disk</strong>
+              Reads the full <code>.json</code> file for this model from the artifacts directory.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Find the nearest curve point</strong>
+              The threshold curve is stored at 0.01 intervals. If you asked for 0.283,
+              it snaps to the nearest stored point (0.28). Reads the precision, recall, F1,
+              TP, FP, FN, TN directly from that curve entry — no rescoring needed.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Write two fields back to the artifact</strong>
+              Updates <code>optimal_threshold</code> and replaces
+              <code>evaluation.test.candidate_metrics</code> with the values from the curve point.
+              Everything else in the artifact (the model weights, the full threshold curve,
+              the feature reliance, the training options) is left completely unchanged.
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <strong>Save and respond</strong>
+              Writes the updated artifact back to the same <code>.json</code> file in place.
+              Returns the new threshold and metrics as JSON. The browser refreshes the
+              model list to show the updated numbers.
+            </div>
+          </li>
+        </ol>
+
+        <p>
+          The effect is immediate and permanent (on disk). If you retrain the model,
+          the new training run will compute a fresh <code>optimal_threshold</code> from
+          the train rows and overwrite this value. But the patch persists across server
+          restarts, page reloads, and any other request that reads the artifact.
+        </p>
+
+        <div class="callout purple">
+          <strong>The runtime bundle picks this up automatically</strong>
+          When you download a Runtime JSON from the model, the
+          <code>thresholds.positive</code> field now defaults to
+          <code>optimal_threshold</code> from the artifact instead of the hardcoded 0.5.
+          If you've applied a tuned threshold, the runtime bundle will use it without
+          any extra steps.
+        </div>
+
+        <h3>What if you want to auto-pick without dragging the slider?</h3>
+        <p>
+          The PATCH endpoint also accepts an <code>optimize</code> field instead of
+          an explicit threshold. The server reads the stored curve and finds the best
+          point for the chosen metric automatically:
+        </p>
+
+        <pre>PATCH /api/modeling/models/{artifactId}/threshold
+{ "optimize": "f1" }       ← max F1
+{ "optimize": "recall" }   ← max recall
+{ "optimize": "precision" }← max precision
+{ "optimize": "youden" }   ← max Youden's J</pre>
+      </section>
+
+
+      <!-- ── 7. Caveat ── -->
+      <section id="caveat">
+        <h2>7. The Honest Caveat: Test Curve vs Train Curve</h2>
+
+        <p>
+          The <code>threshold_curve</code> stored in every artifact was computed from
+          the <strong>test rows</strong> — the held-out domains that the model never
+          saw during training. This means:
+        </p>
+
+        <ul>
+          <li>
+            If you pick the threshold that maximises F1 on this curve and then report
+            "my test F1 is X%", you've used the test set to choose a hyperparameter
+            (the threshold). The reported number is slightly optimistic — the true F1
+            on genuinely new data will be a little lower.
+          </li>
+          <li>
+            This is sometimes called <em>threshold leakage</em>. It doesn't corrupt the
+            model weights. It only affects whether the reported metrics are a fully
+            honest estimate of future performance.
+          </li>
+        </ul>
+
+        <div class="diagram">
+          <div class="flow">
+            <div class="box green">Train rows (80%)<br><span style="font-size:11px;color:var(--muted)">weights learned here</span></div>
+            <div class="arrow">→</div>
+            <div class="box amber">Test rows (20%)<br><span style="font-size:11px;color:var(--muted)">threshold_curve built here</span></div>
+            <div class="arrow">→</div>
+            <div class="box">Pick threshold<br>from test curve</div>
+            <div class="arrow">→</div>
+            <div class="box amber" style="font-size:11px">Test F1 at that threshold<br>= slightly optimistic</div>
+          </div>
+        </div>
+
+        <h3>What the code does to avoid this</h3>
+        <p>
+          The training pipeline (since the recent update) computes the optimal threshold
+          from the <strong>train rows</strong> — not the test rows — and stores it as
+          <code>optimal_threshold</code> in the artifact. The test metrics in the artifact
+          are then reported at this train-derived threshold. This gives you an honest
+          estimate of test performance because the threshold was selected without looking
+          at the test set.
+        </p>
+
+        <table class="compare">
+          <thead>
+            <tr><th>Source</th><th>Stored in</th><th>Honest for reporting?</th><th>Valid for deployment?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Train-optimal threshold<br><em>(new training runs)</em></td>
+              <td><code>artifact.optimal_threshold</code></td>
+              <td><span class="good">Yes</span></td>
+              <td><span class="good">Yes</span></td>
+            </tr>
+            <tr>
+              <td>Test-curve-optimal threshold<br><em>(Tune Threshold slider)</em></td>
+              <td>Applied via PATCH</td>
+              <td><span class="warn">Slightly optimistic</span></td>
+              <td><span class="good">Yes</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout amber">
+          <strong>Bottom line</strong>
+          For the existing model with 48% recall: use the slider, pick max F1 or max recall,
+          apply it. The reported metrics will be slightly optimistic but the deployed model
+          will genuinely perform better on new data than it did at threshold 0.5.
+          For future models, the threshold is now derived from train rows automatically —
+          no manual tuning needed and no reporting bias.
+        </div>
+      </section>
+
+
+      <!-- ── 8. Code summary ── -->
+      <section id="summary">
+        <h2>8. What Changed in the Code</h2>
+
+        <table class="compare">
+          <thead>
+            <tr><th>File</th><th>Change</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>artifacts.js</code></td>
+              <td>Added <code>patchModelArtifact()</code></td>
+              <td>Needed a way to load an artifact, apply a partial patch, and write it back in place without rewriting the whole save/load pipeline.</td>
+            </tr>
+            <tr>
+              <td><code>routes.js</code></td>
+              <td>Added <code>PATCH /models/:id/threshold</code></td>
+              <td>The browser needed an endpoint to persist the chosen threshold. Supports explicit threshold values and four auto-optimize modes (f1, recall, precision, youden).</td>
+            </tr>
+            <tr>
+              <td><code>modeling.html</code></td>
+              <td>Added <code>#model-threshold-tuner-panel</code> div</td>
+              <td>A container below the model list table where the tuner card is injected when "Tune Threshold" is clicked.</td>
+            </tr>
+            <tr>
+              <td><code>modeling.js</code></td>
+              <td>Added "Tune Threshold" button to each model row</td>
+              <td>Previous UI had no way to open the tuner for an already-saved model. Only appeared after a fresh training run.</td>
+            </tr>
+            <tr>
+              <td><code>modeling.js</code></td>
+              <td>Added click handler for <code>data-tune-model</code></td>
+              <td>Fetches the full artifact (to get <code>threshold_curve</code>), builds the tuner card, injects it into the panel.</td>
+            </tr>
+            <tr>
+              <td><code>modeling.js</code></td>
+              <td>Added "Apply This Threshold" button to <code>buildThresholdTuner</code></td>
+              <td>The slider was already fully functional for exploring. The Apply button was the missing piece — without it you could see the better threshold but not save it.</td>
+            </tr>
+            <tr>
+              <td><code>service.js</code></td>
+              <td><code>buildRuntimeModelBundle</code> defaults to <code>artifact.optimal_threshold</code></td>
+              <td>Runtime JSON now uses the trained-optimal or manually applied threshold automatically instead of always emitting 0.5.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout green" style="margin-top:28px">
+          <strong>Nothing was retrained</strong>
+          Every change described in this document operates on the probability outputs of
+          an already-trained model. The weights inside the model are read-only throughout.
+          Threshold tuning is fast (milliseconds), reversible (just PATCH again with a new value),
+          and can be done on any model that has a stored <code>threshold_curve</code> —
+          which is every model trained by this system.
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>
