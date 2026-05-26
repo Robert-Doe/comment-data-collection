@@ -47,8 +47,18 @@
     el.style.display = text ? '' : 'none';
   }
 
+  function authHeaders() {
+    try {
+      const token = localStorage.getItem('ugc_auth_token');
+      return token ? { Authorization: 'Bearer ' + token } : {};
+    } catch (_) { return {}; }
+  }
+
   function fetchJson(url, opts) {
-    return fetch(apiBase + url, opts).then((r) => {
+    const merged = Object.assign({}, opts, {
+      headers: Object.assign({}, authHeaders(), opts && opts.headers),
+    });
+    return fetch(apiBase + url, merged).then((r) => {
       if (!r.ok) return r.json().then((e) => Promise.reject(new Error(e.error || r.statusText)));
       return r.json();
     });
@@ -343,39 +353,47 @@
   }
 
   // ── Load everything ────────────────────────────────────────────────────────
+  // NOTE: We deliberately avoid /api/modeling/overview here — that endpoint
+  // loads the entire candidate dataset from the DB (can take 20-30 seconds).
+  // Instead we use three fast disk-only endpoints:
+  //   GET /api/modeling/models   (~70ms)  — artifact list with metrics
+  //   GET /api/modeling/features (~3ms)   — full feature catalog with meanings
+  //   GET /api/modeling/cv-results (~4ms) — saved CV history
   async function loadAll() {
     setMsg(supOverviewMsg, 'Loading…', false);
     setMsg(supCvMsg, 'Loading…', false);
 
-    const [overviewResult, cvResult] = await Promise.allSettled([
-      fetchJson('/api/modeling/overview'),
+    const [modelsResult, featuresResult, cvResult] = await Promise.allSettled([
+      fetchJson('/api/modeling/models'),
+      fetchJson('/api/modeling/features'),
       fetchJson('/api/modeling/cv-results'),
     ]);
 
-    // Models + feature meanings
-    if (overviewResult.status === 'fulfilled') {
-      const overview = overviewResult.value;
-      const models   = Array.isArray(overview.models) ? overview.models : [];
-
-      // Build featureMeanings lookup from feature_families
-      const families = Array.isArray(overview.feature_families) ? overview.feature_families : [];
-      families.forEach((fam) => {
+    // ── Feature meanings (build lookup before rendering models) ──────────────
+    if (featuresResult.status === 'fulfilled') {
+      // /features returns { grouped: [ { key, title, description, features: [...] } ] }
+      const grouped = Array.isArray(featuresResult.value.grouped) ? featuresResult.value.grouped : [];
+      grouped.forEach((fam) => {
         if (Array.isArray(fam.features)) {
           fam.features.forEach((f) => {
             featureMeanings[f.key] = { title: f.title, description: f.description || '', meaning: f.meaning || '' };
           });
         }
       });
+    }
 
+    // ── Model history ────────────────────────────────────────────────────────
+    if (modelsResult.status === 'fulfilled') {
+      const models = Array.isArray(modelsResult.value.models) ? modelsResult.value.models : [];
       renderModelHistory(models);
       setMsg(supOverviewMsg, '', false);
     } else {
-      setMsg(supOverviewMsg, 'Failed to load models: ' + (overviewResult.reason && overviewResult.reason.message || 'Unknown error'), true);
+      setMsg(supOverviewMsg, 'Failed to load models: ' + (modelsResult.reason && modelsResult.reason.message || 'Unknown error'), true);
       supModelHistory.className = 'table-shell empty';
       supModelHistory.textContent = 'Could not load model history.';
     }
 
-    // CV history
+    // ── CV history ───────────────────────────────────────────────────────────
     if (cvResult.status === 'fulfilled') {
       renderCvHistory(cvResult.value.results || []);
       setMsg(supCvMsg, '', false);
