@@ -4577,8 +4577,8 @@
   function buildReprocessTable(items) {
     const rows = items.map((item) => {
       const state = reprocessItemStatuses.get(item.id) || 'idle';
-      const labelMap = { idle: 'Drop .html here', uploading: 'Processing…', done: 'Done ✓', error: 'Error — try again' };
-      const classMap = { idle: '', uploading: 'reprocess-uploading', done: 'reprocess-done', error: 'reprocess-error' };
+      const labelMap = { idle: 'Drop .html here', uploading: 'Processing…', waiting: 'Still processing…', done: 'Done ✓', error: 'Error — try again' };
+      const classMap = { idle: '', uploading: 'reprocess-uploading', waiting: 'reprocess-waiting', done: 'reprocess-done', error: 'reprocess-error' };
       return `<tr data-reprocess-row="${escapeHtml(item.id)}">
         <td>${escapeHtml(String(item.row_number))}</td>
         <td class="mono"><a href="${escapeHtml(item.normalized_url || '')}" target="_blank" rel="noreferrer">${escapeHtml(item.normalized_url || '')}</a></td>
@@ -4678,36 +4678,47 @@
   }
 
   async function pollReprocessItem(itemId, zone, previousUpdatedAt) {
+    const checkItem = async () => {
+      const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
+      const item = data.item || data;
+      const hasChanged = item.updated_at && item.updated_at !== previousUpdatedAt;
+      if (!hasChanged) return false;
+      if (item.status === 'completed' || item.status === 'completed_with_errors') {
+        reprocessItemStatuses.set(itemId, 'done');
+        zone.className = 'reprocess-drop-zone reprocess-done';
+        zone.textContent = 'Done ✓';
+        showToast(`Row ${item.row_number} reprocessed successfully.`, { tone: 'success' });
+        return true;
+      }
+      if (item.status === 'failed') {
+        reprocessItemStatuses.set(itemId, 'error');
+        zone.className = 'reprocess-drop-zone reprocess-error';
+        zone.textContent = 'Error — try again';
+        showToast(`Row ${item.row_number} failed to process.`, { tone: 'error' });
+        return true;
+      }
+      return false;
+    };
+
+    // Phase 1: poll for 3 minutes (60 × 3s)
     for (let i = 0; i < 60; i++) {
       await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const data = await fetchJson(`/api/jobs/${currentJobId}/items/${itemId}`);
-        const item = data.item || data;
-        // Wait until updated_at actually changes — this is clock-skew-proof
-        const hasChanged = item.updated_at && item.updated_at !== previousUpdatedAt;
-        if (!hasChanged) continue;
-        if (item.status === 'completed' || item.status === 'completed_with_errors') {
-          reprocessItemStatuses.set(itemId, 'done');
-          zone.className = 'reprocess-drop-zone reprocess-done';
-          zone.textContent = 'Done ✓';
-          showToast(`Row ${item.row_number} reprocessed successfully.`, { tone: 'success' });
-          return;
-        }
-        if (item.status === 'failed') {
-          reprocessItemStatuses.set(itemId, 'error');
-          zone.className = 'reprocess-drop-zone reprocess-error';
-          zone.textContent = 'Error — try again';
-          showToast(`Row ${item.row_number} failed to process.`, { tone: 'error' });
-          return;
-        }
-      } catch (_) {
-        // continue polling
-      }
+      try { if (await checkItem()) return; } catch (_) {}
     }
+
+    // Phase 2: switch to amber "still processing" state and keep polling for 10 more minutes
+    reprocessItemStatuses.set(itemId, 'waiting');
+    zone.className = 'reprocess-drop-zone reprocess-waiting';
+    zone.textContent = 'Still processing…';
+    for (let i = 0; i < 200; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try { if (await checkItem()) return; } catch (_) {}
+    }
+
     reprocessItemStatuses.set(itemId, 'error');
     zone.className = 'reprocess-drop-zone reprocess-error';
     zone.textContent = 'Timed out — try again';
-    showToast('Reprocess timed out. Check the Rows tab for status.', { tone: 'error' });
+    showToast('Reprocess timed out after 13 minutes. Check the Rows tab for status.', { tone: 'error' });
   }
 
   reprocessReloadButton.addEventListener('click', () => {

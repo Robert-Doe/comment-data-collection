@@ -748,12 +748,10 @@ function buildFeatureReliance(vectorizer, artifact, rows, options = {}) {
 
   const positive_weights = features
     .filter((entry) => entry.weight > 0)
-    .sort((left, right) => right.weight - left.weight)
-    .slice(0, 15);
+    .sort((left, right) => right.weight - left.weight);
   const negative_weights = features
     .filter((entry) => entry.weight < 0)
-    .sort((left, right) => left.weight - right.weight)
-    .slice(0, 15);
+    .sort((left, right) => left.weight - right.weight);
   const feature_importances = features
     .filter((entry) => entry.absolute_weight > 0)
     .sort((left, right) => right.absolute_weight - left.absolute_weight)

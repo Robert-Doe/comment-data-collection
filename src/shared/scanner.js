@@ -2162,6 +2162,8 @@ async function analyzeHtmlSnapshot(snapshot, options = {}) {
 
   const context = await createContext();
   const page = await context.newPage();
+  // HTML is already fully rendered — no external resources are needed.
+  await page.route('**/*', (route) => route.abort('blockedbyclient').catch(() => {}));
   const timeoutMs = Number(options.timeoutMs ?? 20000);
   const postLoadDelayMs = Number(options.postLoadDelayMs ?? 0);
   const candidateSelectionLimit = resolveCandidateLimit(options);

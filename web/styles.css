@@ -2742,6 +2742,14 @@ img {
   cursor: default;
 }
 
+.reprocess-drop-zone.reprocess-waiting {
+  border-style: solid;
+  border-color: #d97706;
+  background: #fef3c7;
+  color: #92400e;
+  cursor: default;
+}
+
 .reprocess-drop-zone.reprocess-error {
   border-style: solid;
   border-color: #dc2626;
