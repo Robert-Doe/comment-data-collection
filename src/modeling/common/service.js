@@ -754,8 +754,7 @@ function buildFeatureReliance(vectorizer, artifact, rows, options = {}) {
     .sort((left, right) => left.weight - right.weight);
   const feature_importances = features
     .filter((entry) => entry.absolute_weight > 0)
-    .sort((left, right) => right.absolute_weight - left.absolute_weight)
-    .slice(0, 20);
+    .sort((left, right) => right.absolute_weight - left.absolute_weight);
 
   const families = Array.from(familyMap.values())
     .map((entry) => ({

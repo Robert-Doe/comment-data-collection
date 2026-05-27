@@ -254,25 +254,98 @@
 
   function renderWeights(artifact) {
     if (!artifact) return;
-    const reliance   = artifact.reliance || {};
-    const pos        = Array.isArray(reliance.positive_weights) ? reliance.positive_weights : [];
-    const neg        = Array.isArray(reliance.negative_weights) ? reliance.negative_weights : [];
-    const all        = [...pos.map((e) => ({ ...e, dir: 'pos' })), ...neg.map((e) => ({ ...e, dir: 'neg' }))];
-    all.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
-    const catalog    = Array.isArray(artifact.feature_catalog) ? artifact.feature_catalog : [];
-
-    // Build lookup from feature_key → catalog entry
+    const algo    = artifact.algorithm || '';
+    const reliance = artifact.reliance || {};
+    const catalog  = Array.isArray(artifact.feature_catalog) ? artifact.feature_catalog : [];
     const catalogLookup = {};
     catalog.forEach((f) => { catalogLookup[f.key] = f; });
 
+    const isTreeBased = algo === 'random_forest' || algo === 'decision_tree' || algo === 'gradient_boosting';
+    const isNeuralNet = algo === 'neural_network';
+
+    // ── Neural network: no reliable per-feature weights ──────────────────────
+    if (isNeuralNet) {
+      supWeightsShell.className = 'table-shell empty';
+      supWeightsShell.textContent = 'Neural network models do not expose per-feature weights in the same way. Use the Model Detail modal to review training metrics.';
+      return;
+    }
+
+    // ── Tree-based: use Gini feature importances ──────────────────────────────
+    if (isTreeBased) {
+      const fi = Array.isArray(reliance.feature_importances) ? reliance.feature_importances : [];
+      if (!fi.length) {
+        supWeightsShell.className = 'table-shell empty';
+        supWeightsShell.textContent = 'No feature importance data available for this model.';
+        return;
+      }
+      const maxImp = Math.max(...fi.map((e) => e.absolute_weight || 0), 0.001);
+      const rows = fi.map((entry, i) => {
+        const imp    = entry.absolute_weight || 0;
+        const barPct = Math.round((imp / maxImp) * 100);
+        const fKey   = entry.feature_key || '';
+        const catEntry = catalogLookup[fKey] || featureMeanings[fKey] || null;
+        const meaning  = catEntry ? (catEntry.meaning || catEntry.description || '') : '';
+        const title    = entry.title || (catEntry ? catEntry.title : '') || fKey;
+        const isEncoded = entry.output_key && entry.output_key.includes('=');
+        const categoryNote = isEncoded
+          ? `<span style="font-size:0.7rem;color:#3b82f6;margin-left:4px">value: <code>${escapeHtml(entry.output_key.split('=').slice(1).join('='))}</code></span>`
+          : '';
+        return `
+          <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
+            <td style="padding:8px 10px;width:24px;text-align:right;color:#9ca3af;font-size:0.74rem;white-space:nowrap">${i + 1}</td>
+            <td style="padding:8px 10px;min-width:150px">
+              <div style="font-size:0.8rem;font-weight:600;color:#111827">${escapeHtml(title)}${categoryNote}</div>
+              <div style="font-family:ui-monospace,Consolas,monospace;font-size:0.68rem;color:#9ca3af;margin-top:1px">${escapeHtml(entry.output_key || fKey)}</div>
+            </td>
+            <td style="padding:8px 10px;min-width:160px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;background:#f3f4f6;border-radius:3px;height:10px;overflow:hidden;min-width:80px">
+                  <div style="height:100%;background:#2563eb;width:${barPct}%;border-radius:3px"></div>
+                </div>
+                <span style="font-family:ui-monospace,monospace;font-size:0.73rem;color:#374151;white-space:nowrap">${fmtRaw(imp)}</span>
+              </div>
+            </td>
+            <td style="padding:8px 10px;white-space:nowrap"><span style="color:#6b7280;font-size:0.74rem">Gini importance</span></td>
+            <td style="padding:8px 12px;font-size:0.77rem;color:#4b5563;max-width:340px">${escapeHtml(meaning)}</td>
+          </tr>`;
+      }).join('');
+
+      supWeightsShell.className = 'table-shell';
+      supWeightsShell.innerHTML = `
+        <div style="padding:10px 14px 6px;background:#f8faff;border-bottom:1px solid rgba(17,24,39,0.08)">
+          <p style="margin:0;font-size:0.8rem;color:#374151">
+            Showing <strong>${fi.length}</strong> features for <code style="font-size:0.78rem">${escapeHtml(artifact.id)}</code>
+            &nbsp;·&nbsp; Gini importance — higher = more influential (no direction for tree models)
+          </p>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="margin:0;width:100%">
+            <thead><tr style="background:#f3f4f6;position:sticky;top:0">
+              <th style="padding:6px 10px;font-size:0.72rem;text-align:right">#</th>
+              <th style="padding:6px 10px;font-size:0.72rem">Feature</th>
+              <th style="padding:6px 10px;font-size:0.72rem">Importance</th>
+              <th style="padding:6px 10px;font-size:0.72rem">Metric</th>
+              <th style="padding:6px 12px;font-size:0.72rem">What it measures</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      return;
+    }
+
+    // ── Logistic regression: signed weights with direction ────────────────────
+    const pos = Array.isArray(reliance.positive_weights) ? reliance.positive_weights : [];
+    const neg = Array.isArray(reliance.negative_weights) ? reliance.negative_weights : [];
+    const all = [...pos.map((e) => ({ ...e, dir: 'pos' })), ...neg.map((e) => ({ ...e, dir: 'neg' }))];
+    all.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
+
     if (!all.length) {
       supWeightsShell.className = 'table-shell empty';
-      supWeightsShell.textContent = 'No feature weight data available for this model (not computed for tree-based models in the same way — use feature importances in the Model Detail modal instead).';
+      supWeightsShell.textContent = 'No feature weight data available for this model.';
       return;
     }
 
     const maxAbs = Math.max(...all.map((e) => Math.abs(e.weight || 0)), 0.001);
-
     supWeightsShell.className = 'table-shell';
 
     const rows = all.map((entry, i) => {
@@ -284,19 +357,14 @@
       const dirLabel = isPos
         ? '<span style="color:#16a34a;font-weight:700;font-size:0.74rem">↑ UGC present</span>'
         : '<span style="color:#dc2626;font-weight:700;font-size:0.74rem">↓ No comment</span>';
-
-      // Look up plain-language meaning
-      const fKey    = entry.feature_key || '';
+      const fKey     = entry.feature_key || '';
       const catEntry = catalogLookup[fKey] || featureMeanings[fKey] || null;
       const meaning  = catEntry ? (catEntry.meaning || catEntry.description || '') : '';
       const title    = entry.title || (catEntry ? catEntry.title : '') || fKey;
-
-      // For tag_name= style keys, extract the category
       const isEncoded = entry.output_key && entry.output_key.includes('=');
       const categoryNote = isEncoded
         ? `<span style="font-size:0.7rem;color:#3b82f6;margin-left:4px">value: <code>${escapeHtml(entry.output_key.split('=').slice(1).join('='))}</code></span>`
         : '';
-
       return `
         <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
           <td style="padding:8px 10px;width:24px;text-align:right;color:#9ca3af;font-size:0.74rem;white-space:nowrap">${i + 1}</td>
