@@ -70,6 +70,12 @@ async function buildOverview(items, artifactRoot, options = {}) {
   };
 }
 
+// Domains that must never appear in the test set — always forced into training.
+// Use this for synthetic or controlled domains whose structure would skew evaluation.
+const TRAIN_ONLY_DOMAINS = new Set([
+  'xsscommentdetection.me',
+]);
+
 function splitRowsByDomain(rows, options = {}) {
   const modulo = Math.max(2, Number(options.modulo) || 5);
   const holdoutBucket = Math.max(0, Number(options.holdoutBucket) || 0) % modulo;
@@ -78,6 +84,13 @@ function splitRowsByDomain(rows, options = {}) {
 
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id;
+
+    // Force synthetic / controlled domains into training regardless of their hash bucket.
+    if (TRAIN_ONLY_DOMAINS.has(stableKey)) {
+      trainRows.push(row);
+      return;
+    }
+
     const bucket = hashString(stableKey) % modulo;
     if (bucket === holdoutBucket) {
       testRows.push(row);
@@ -93,6 +106,7 @@ function splitRowsByDomain(rows, options = {}) {
       mode: 'domain_holdout',
       modulo,
       holdout_bucket: holdoutBucket,
+      train_only_domains: [...TRAIN_ONLY_DOMAINS],
     },
   };
 }
