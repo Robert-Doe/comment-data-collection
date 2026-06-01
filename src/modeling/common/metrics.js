@@ -212,9 +212,35 @@ function computePageMetrics(rows, options = {}) {
   };
 }
 
+// XSS signal features we want to track across the false-positive population.
+const XSS_SIGNAL_FEATURES = [
+  { key: 'candidate_has_script_tag',          label: 'Script tag' },
+  { key: 'candidate_has_mxss_sink',           label: 'mXSS sink (svg/math/template/…)' },
+  { key: 'candidate_has_inline_event_handler', label: 'Inline event handler (on*)' },
+  { key: 'candidate_has_javascript_protocol', label: 'javascript: URL' },
+  { key: 'candidate_has_embed_sink',          label: 'Embed sink (iframe/object/embed)' },
+];
+
+function computeXssSignalRates(rows, threshold = 0.5) {
+  const fps = (Array.isArray(rows) ? rows : []).filter(
+    (row) => row.binary_label === 0 && row.probability >= threshold,
+  );
+  const fpCount = fps.length;
+  return {
+    false_positive_count: fpCount,
+    signals: XSS_SIGNAL_FEATURES.map(({ key, label }) => ({
+      key,
+      label,
+      count: fps.filter((row) => !!row[key]).length,
+      rate: roundNumber(safeDivide(fps.filter((row) => !!row[key]).length, fpCount)),
+    })),
+  };
+}
+
 function computeAllMetrics(rows, options = {}) {
   const labeledRows = (Array.isArray(rows) ? rows : []).filter((row) => row.binary_label === 0 || row.binary_label === 1);
-  const binary = computeBinaryMetrics(labeledRows, options.threshold);
+  const threshold = options.threshold || 0.5;
+  const binary = computeBinaryMetrics(labeledRows, threshold);
   return {
     candidate_metrics: {
       ...binary,
@@ -223,6 +249,7 @@ function computeAllMetrics(rows, options = {}) {
     },
     ranking_metrics: computeRankingMetrics(labeledRows),
     page_metrics: computePageMetrics(labeledRows, options),
+    xss_signal_rates: computeXssSignalRates(labeledRows, threshold),
   };
 }
 
@@ -286,6 +313,8 @@ function computeCalibrationCurve(rows, nBins = 10) {
 module.exports = {
   computeAllMetrics,
   computeBinaryMetrics,
+  computeXssSignalRates,
   computeStatSummary,
   computeCalibrationCurve,
+  XSS_SIGNAL_FEATURES,
 };

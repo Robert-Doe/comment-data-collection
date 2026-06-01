@@ -341,6 +341,38 @@ export function extractFeatures(el, pseudoNode, candidateMeta, pageSignals) {
   fv.response_csp_allows_unsafe_inline = ps.csp_allows_unsafe_inline || false;
   fv.response_csp_allows_unsafe_eval   = ps.csp_allows_unsafe_eval || false;
 
+  // ── K. XSS / mXSS signals (candidate-level) ───────────────────────────────
+  const scriptEls = el.querySelectorAll('script');
+  fv.candidate_has_script_tag   = scriptEls.length > 0;
+  fv.candidate_script_tag_count = scriptEls.length;
+  const mxssEls = el.querySelectorAll('svg, math, template, noscript, xmp, listing, plaintext');
+  fv.candidate_has_mxss_sink   = mxssEls.length > 0;
+  fv.candidate_mxss_sink_count = mxssEls.length;
+  const eventHandlerRe = /^on[a-z]+$/i;
+  let hasInlineEventHandler = false;
+  let hasJavascriptProtocol = false;
+  for (const child of el.querySelectorAll('*')) {
+    if (!hasInlineEventHandler) {
+      for (const attr of child.attributes) {
+        if (eventHandlerRe.test(attr.name)) { hasInlineEventHandler = true; break; }
+      }
+    }
+    if (!hasJavascriptProtocol) {
+      const href = child.getAttribute('href') || '';
+      const src  = child.getAttribute('src')  || '';
+      const act  = child.getAttribute('action') || '';
+      if (/^\s*javascript:/i.test(href) || /^\s*javascript:/i.test(src) || /^\s*javascript:/i.test(act)) {
+        hasJavascriptProtocol = true;
+      }
+    }
+    if (hasInlineEventHandler && hasJavascriptProtocol) break;
+  }
+  fv.candidate_has_inline_event_handler = hasInlineEventHandler;
+  fv.candidate_has_javascript_protocol  = hasJavascriptProtocol;
+  const embedEls = el.querySelectorAll('iframe, object, embed');
+  fv.candidate_has_embed_sink   = embedEls.length > 0;
+  fv.candidate_embed_sink_count = embedEls.length;
+
   return fv;
 }
 

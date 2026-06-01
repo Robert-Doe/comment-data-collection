@@ -2062,6 +2062,7 @@
     const testCm   = testEv  && testEv.candidate_metrics  ? testEv.candidate_metrics  : null;
     const trainRm  = trainEv && trainEv.ranking_metrics   ? trainEv.ranking_metrics   : null;
     const testRm   = testEv  && testEv.ranking_metrics    ? testEv.ranking_metrics    : null;
+    const xssRates = (testEv && testEv.xss_signal_rates) || (trainEv && trainEv.xss_signal_rates) || null;
     const tc       = artifact.training_counts || {};
     const ds       = artifact.dataset_summary || {};
     const reliance = artifact.reliance || {};
@@ -2230,7 +2231,47 @@
         </table>
       </div>
 
-      <!-- ⑤ Feature importance -->
+      <!-- ⑤ XSS / precision-drain analysis -->
+      ${xssRates ? (() => {
+        const fpCount = xssRates.false_positive_count || 0;
+        const signals = Array.isArray(xssRates.signals) ? xssRates.signals : [];
+        const anySignal = signals.some((s) => s.count > 0);
+        return `
+      <div style="background:#fff;border:1px solid rgba(17,24,39,0.1);border-radius:8px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <p style="margin:0;font-size:0.75rem;font-weight:700;color:#1f2937;text-transform:uppercase;letter-spacing:0.04em">XSS signal presence in false positives</p>
+          <span style="font-size:0.82rem;color:#6b7280">${fpCount} false positive candidate${fpCount !== 1 ? 's' : ''} (${testEv && testEv.xss_signal_rates ? 'test set' : 'train set'})</span>
+        </div>
+        ${fpCount === 0
+          ? `<p style="margin:0;font-size:0.82rem;color:#9ca3af">No false positives at current threshold — nothing to analyse.</p>`
+          : !anySignal
+            ? `<p style="margin:0;font-size:0.82rem;color:#16a34a">None of the ${fpCount} false positive(s) carry any XSS signal — precision loss is not attributable to XSS patterns.</p>`
+            : `<table style="margin:0;width:100%">
+                <thead><tr style="background:#fafafa">
+                  <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280">Signal</th>
+                  <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">FPs with signal</th>
+                  <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">% of all FPs</th>
+                  <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280"></th>
+                </tr></thead>
+                <tbody>${signals.map((s) => {
+                  const rate = s.rate || 0;
+                  const barColor = rate >= 0.5 ? '#dc2626' : rate >= 0.2 ? '#d97706' : '#6b7280';
+                  const barW = Math.max(2, Math.round(rate * 120));
+                  return `<tr>
+                    <td style="padding:4px 10px;font-size:0.78rem;color:#374151">${escapeHtml(s.label)}</td>
+                    <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:#111827;text-align:center">${s.count}</td>
+                    <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:${barColor};text-align:center">${s.count > 0 ? (rate * 100).toFixed(1) + '%' : '—'}</td>
+                    <td style="padding:4px 10px">
+                      <div style="height:7px;width:${barW}px;background:${barColor};border-radius:2px;opacity:0.7"></div>
+                    </td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>`}
+        <p style="margin:10px 0 0;font-size:0.72rem;color:#9ca3af">A high rate here means those false positives are structurally XSS-like — they inflate your false positive count for reasons the model can't easily distinguish from real comment regions. Concentrate on recall improvements rather than precision tuning in that scenario.</p>
+      </div>`;
+      })() : ''}
+
+      <!-- ⑥ Feature importance -->
       ${(Array.isArray(reliance.positive_weights) && reliance.positive_weights.length) || (Array.isArray(reliance.negative_weights) && reliance.negative_weights.length) ? `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:#fff;border:1px solid rgba(17,24,39,0.1);border-radius:8px;padding:14px;overflow:hidden">

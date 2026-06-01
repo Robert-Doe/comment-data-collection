@@ -1009,6 +1009,47 @@ function feat_comment_route_in_scripts(rawHTML = '') {
   };
 }
 
+function feat_xss_signals(root) {
+  const scripts = deepQuerySelectorAll(root, 'script').length;
+  // mXSS mutation sinks: elements that trigger alternate HTML parser contexts and
+  // are used in mutation-XSS bypass payloads (svg/math namespace switches,
+  // template/noscript fragment parsing, xmp/listing raw-text quirks).
+  const mxssSinks = deepQuerySelectorAll(root, 'svg, math, template, noscript, xmp, listing, plaintext').length;
+  // Attribute-level payloads: inline event handlers and javascript: protocol URLs.
+  const allEls = deepQuerySelectorAll(root, '*');
+  const eventHandlerPattern = /^on[a-z]+$/i;
+  let hasInlineEventHandler = false;
+  let hasJavascriptProtocol = false;
+  for (const el of allEls) {
+    if (!hasInlineEventHandler) {
+      for (const attr of (el.attributes || [])) {
+        if (eventHandlerPattern.test(attr.name)) { hasInlineEventHandler = true; break; }
+      }
+    }
+    if (!hasJavascriptProtocol) {
+      const href = el.getAttribute('href') || '';
+      const src = el.getAttribute('src') || '';
+      const action = el.getAttribute('action') || '';
+      if (/^\s*javascript:/i.test(href) || /^\s*javascript:/i.test(src) || /^\s*javascript:/i.test(action)) {
+        hasJavascriptProtocol = true;
+      }
+    }
+    if (hasInlineEventHandler && hasJavascriptProtocol) break;
+  }
+  // Embedded execution sinks: iframe, object, embed inside the candidate.
+  const embeds = deepQuerySelectorAll(root, 'iframe, object, embed').length;
+  return {
+    candidate_has_script_tag: scripts > 0,
+    candidate_script_tag_count: scripts,
+    candidate_has_mxss_sink: mxssSinks > 0,
+    candidate_mxss_sink_count: mxssSinks,
+    candidate_has_inline_event_handler: hasInlineEventHandler,
+    candidate_has_javascript_protocol: hasJavascriptProtocol,
+    candidate_has_embed_sink: embeds > 0,
+    candidate_embed_sink_count: embeds,
+  };
+}
+
 function feat_schema_org_comment(root) {
   const itemtypes = deepQuerySelectorAll(root, '[itemtype]').filter((el) => /schema\.org\/(Comment|UserComments)/i.test(el.getAttribute('itemtype') || ''));
   const roleComment = deepQuerySelectorAll(root, '[role="comment"]');
@@ -1675,6 +1716,7 @@ function extractAllFeatures(rootElement, rawHTML = '', responseHeaders = {}) {
     feat_external_link_density_low(rootElement),
     feat_like_count_pattern(rootElement),
     feat_interaction_counter_schema(rawHTML),
+    feat_xss_signals(rootElement),
   );
 
   features._extracted_at = typeof window !== 'undefined' ? window.location.href : '';
