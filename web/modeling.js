@@ -66,6 +66,7 @@
   const diagImbalanceStrategy = document.getElementById('diag-imbalance-strategy');
   const diagJobIds = document.getElementById('diag-job-ids');
   const diagCrossValidateButton = document.getElementById('diag-cross-validate');
+  const diagUseSelectedFeatures = document.getElementById('diag-use-selected-features');
   const diagLearningCurveButton = document.getElementById('diag-learning-curve');
   const diagMessage = document.getElementById('diag-message');
   const diagCvResult = document.getElementById('diag-cv-result');
@@ -3592,6 +3593,7 @@
             algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
             imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
             jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+            excludeFeatures: (diagUseSelectedFeatures && diagUseSelectedFeatures.checked) ? getExcludedFeatures() : [],
           }),
         });
         const result = await resolveDiagResponse(res, 'folds', (s) => setMessage(diagMessage, `Running 5-fold cross-validation… (${s}s elapsed)`, false));
@@ -3619,6 +3621,7 @@
             algorithm: diagAlgorithm ? diagAlgorithm.value : 'logistic_regression',
             imbalanceStrategy: diagImbalanceStrategy ? diagImbalanceStrategy.value : 'baseline',
             jobIds: diagJobIds ? diagJobIds.value.trim() : '',
+            excludeFeatures: (diagUseSelectedFeatures && diagUseSelectedFeatures.checked) ? getExcludedFeatures() : [],
           }),
         });
         const result = await resolveDiagResponse(res, 'points', (s) => setMessage(diagMessage, `Computing learning curve… (${s}s elapsed)`, false));

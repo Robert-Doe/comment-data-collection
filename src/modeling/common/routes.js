@@ -733,7 +733,7 @@ function createModelingRouter(dependencies) {
   // Both run multiple training iterations and can take 2-5 minutes with tree
   // models.  Same 202+polling pattern as /train — never holds the HTTP connection.
 
-  function forkDiagTask(task, jobId, variantId, algorithm, imbalanceStrategy, jobIds) {
+  function forkDiagTask(task, jobId, variantId, algorithm, imbalanceStrategy, jobIds, excludeFeatures = []) {
     pruneJobs(diagJobs);
     recordJob(diagJobs, jobId, { status: 'running', startedAt: Date.now() });
 
@@ -765,7 +765,7 @@ function createModelingRouter(dependencies) {
             settled = true;
             reject(err);
           });
-          child.send({ task, variantId, algorithm, imbalanceStrategy, jobIds, artifactRoot: dependencies.artifactRoot, dataset });
+          child.send({ task, variantId, algorithm, imbalanceStrategy, jobIds, excludeFeatures, artifactRoot: dependencies.artifactRoot, dataset });
         });
       })
       .then(async (msg) => {
@@ -820,11 +820,12 @@ function createModelingRouter(dependencies) {
       if (!getModelVariant(variantId)) return res.status(400).json({ error: 'Select a valid model variant' });
       const algorithm = normalizeTrainingAlgorithm(req.body && req.body.algorithm);
       if (!algorithm) return res.status(400).json({ error: 'Select a valid training algorithm' });
-      const jobIds           = normalizeJobIds(req.body && req.body.jobIds || '');
+      const jobIds            = normalizeJobIds(req.body && req.body.jobIds || '');
       const imbalanceStrategy = req.body && req.body.imbalanceStrategy || undefined;
-      const jobId            = crypto.randomUUID();
+      const excludeFeatures   = Array.isArray(req.body && req.body.excludeFeatures) ? req.body.excludeFeatures.map(String) : [];
+      const jobId             = crypto.randomUUID();
       res.status(202).json({ ok: true, jobId, status: 'running' });
-      forkDiagTask('cross-validate', jobId, variantId, algorithm, imbalanceStrategy, jobIds);
+      forkDiagTask('cross-validate', jobId, variantId, algorithm, imbalanceStrategy, jobIds, excludeFeatures);
     } catch (error) { next(error); }
   });
 
@@ -836,9 +837,10 @@ function createModelingRouter(dependencies) {
       if (!algorithm) return res.status(400).json({ error: 'Select a valid training algorithm' });
       const jobIds            = normalizeJobIds(req.body && req.body.jobIds || '');
       const imbalanceStrategy = req.body && req.body.imbalanceStrategy || undefined;
+      const excludeFeatures   = Array.isArray(req.body && req.body.excludeFeatures) ? req.body.excludeFeatures.map(String) : [];
       const jobId             = crypto.randomUUID();
       res.status(202).json({ ok: true, jobId, status: 'running' });
-      forkDiagTask('learning-curve', jobId, variantId, algorithm, imbalanceStrategy, jobIds);
+      forkDiagTask('learning-curve', jobId, variantId, algorithm, imbalanceStrategy, jobIds, excludeFeatures);
     } catch (error) { next(error); }
   });
 

@@ -221,6 +221,12 @@
               <input id="diag-job-ids" type="text" placeholder="Optional: job-1, job-2">
             </label>
           </div>
+          <div style="margin-bottom:10px">
+            <label style="display:inline-flex;align-items:center;gap:8px;font-size:0.82rem;color:#374151;cursor:pointer">
+              <input id="diag-use-selected-features" type="checkbox">
+              Use currently selected features (mirrors the train panel exclusions)
+            </label>
+          </div>
           <div class="panel-actions">
             <button id="diag-cross-validate" class="primary compact" type="button">Run 5-Fold Cross-Validation</button>
             <button id="diag-learning-curve" class="secondary compact" type="button">Run Learning Curve</button>
@@ -344,6 +350,12 @@
           <label class="field">
             <span>Job IDs Filter</span>
             <input id="diag-job-ids" type="text" placeholder="Optional: job-1, job-2">
+          </label>
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="display:inline-flex;align-items:center;gap:8px;font-size:0.82rem;color:#374151;cursor:pointer">
+            <input id="diag-use-selected-features" type="checkbox">
+            Use currently selected features (mirrors the train panel exclusions)
           </label>
         </div>
         <div class="panel-actions">

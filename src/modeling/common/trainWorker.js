@@ -63,6 +63,7 @@ process.on('message', async (msg) => {
         variantId,
         algorithm,
         imbalanceStrategy,
+        excludeFeatures,
         dataset,
       });
       process.send({
@@ -74,6 +75,7 @@ process.on('message', async (msg) => {
         variantId,
         algorithm,
         imbalanceStrategy,
+        excludeFeatures,
         dataset,
       });
       process.send({

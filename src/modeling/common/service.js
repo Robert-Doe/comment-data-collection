@@ -2176,6 +2176,12 @@ async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
   if (!variant) throw new Error('Select a valid model variant');
 
   const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const excludeKeys = Array.isArray(trainingInput.excludeFeatures) ? new Set(trainingInput.excludeFeatures) : null;
+  const effectiveCatalog = excludeKeys && excludeKeys.size
+    ? dataset.featureCatalog.filter((f) => !excludeKeys.has(f.key))
+    : dataset.featureCatalog;
+  if (effectiveCatalog.length < 1) throw new Error('At least one feature must remain after exclusions');
+
   const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
   if (labeledRows.length < 10) {
     throw new Error('Cross-validation needs at least 10 labeled rows');
@@ -2193,10 +2199,10 @@ async function runCrossValidation(items, artifactRoot, trainingInput = {}) {
       continue;
     }
 
-    const vectorizer = fitVectorizer(split.trainRows, dataset.featureCatalog);
+    const vectorizer = fitVectorizer(split.trainRows, effectiveCatalog);
     const trainingPreparation = prepareImbalanceTrainingRows(
       split.trainRows,
-      dataset.featureCatalog,
+      effectiveCatalog,
       vectorizer,
       normalizedStrategy,
       { algorithm: normalizedAlgorithm, seed: `cv:fold${fold}:${labeledRows.length}` },
@@ -2276,6 +2282,12 @@ async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
   if (!variant) throw new Error('Select a valid model variant');
 
   const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const excludeKeys = Array.isArray(trainingInput.excludeFeatures) ? new Set(trainingInput.excludeFeatures) : null;
+  const effectiveCatalog = excludeKeys && excludeKeys.size
+    ? dataset.featureCatalog.filter((f) => !excludeKeys.has(f.key))
+    : dataset.featureCatalog;
+  if (effectiveCatalog.length < 1) throw new Error('At least one feature must remain after exclusions');
+
   const labeledRows = dataset.rows.filter((row) => row.binary_label === 0 || row.binary_label === 1);
   if (labeledRows.length < 10) {
     throw new Error('Learning curve needs at least 10 labeled rows');
@@ -2310,10 +2322,10 @@ async function computeLearningCurve(items, artifactRoot, trainingInput = {}) {
       continue;
     }
 
-    const vectorizer = fitVectorizer(sampledTrainRows, dataset.featureCatalog);
+    const vectorizer = fitVectorizer(sampledTrainRows, effectiveCatalog);
     const trainingPreparation = prepareImbalanceTrainingRows(
       sampledTrainRows,
-      dataset.featureCatalog,
+      effectiveCatalog,
       vectorizer,
       normalizedStrategy,
       { algorithm: normalizedAlgorithm, seed: `lc:${fraction}:${labeledRows.length}` },
