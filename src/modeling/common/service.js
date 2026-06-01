@@ -2726,6 +2726,133 @@ async function analyzeFeatures(items, artifactRoot, trainingInput = {}) {
   return { total_labeled: n, feature_count: featureCatalog.length, threshold_series: THRESHOLD_SERIES, features, summary };
 }
 
+// ── Fold Investigation ────────────────────────────────────────────────────────
+// Compares feature distributions between the test bucket for a given fold and
+// the combined training buckets. Returns Cohen's d per feature, domain breakdown,
+// positive-rate shift, and data-driven suggestions.
+async function investigateFold(items, artifactRoot, trainingInput = {}) {
+  const variant = getModelVariant(trainingInput.variantId);
+  if (!variant) throw new Error('Select a valid model variant');
+
+  const foldIndex = Number(trainingInput.foldIndex);
+  if (!Number.isFinite(foldIndex) || foldIndex < 0 || foldIndex > 4) {
+    throw new Error('foldIndex must be 0–4');
+  }
+
+  const dataset = trainingInput.dataset || extractCandidateDataset(items, { variant });
+  const featureCatalog = dataset.featureCatalog;
+  const labeledRows = dataset.rows.filter((r) => r.binary_label === 0 || r.binary_label === 1);
+  if (labeledRows.length < 10) throw new Error('Need at least 10 labeled rows');
+
+  // Split using the same logic as CV — train-only domains always go to train
+  const split = splitRowsByDomain(labeledRows, { modulo: 5, holdoutBucket: foldIndex });
+  const testRows  = split.testRows;
+  const trainRows = split.trainRows;
+
+  if (!testRows.length) throw new Error('No test rows in this fold — all data may be train-only');
+
+  // ── positive rates ──────────────────────────────────────────────────────────
+  const trainPositiveRate = safeDivide(
+    trainRows.filter((r) => r.binary_label === 1).length, trainRows.length,
+  );
+  const testPositiveRate = safeDivide(
+    testRows.filter((r) => r.binary_label === 1).length, testRows.length,
+  );
+  const overallPositiveRate = safeDivide(
+    labeledRows.filter((r) => r.binary_label === 1).length, labeledRows.length,
+  );
+
+  // ── per-domain breakdown for the test bucket ────────────────────────────────
+  const domainMap = new Map();
+  for (const row of testRows) {
+    const key = row.hostname || row.frame_host || row.item_id || row.dataset_row_id || '(unknown)';
+    if (!domainMap.has(key)) domainMap.set(key, { domain: key, count: 0, positive_count: 0 });
+    const d = domainMap.get(key);
+    d.count += 1;
+    if (row.binary_label === 1) d.positive_count += 1;
+  }
+  const testDomains = Array.from(domainMap.values())
+    .map((d) => ({ ...d, positive_rate: roundNumber(safeDivide(d.positive_count, d.count), 3) }))
+    .sort((a, b) => b.count - a.count);
+
+  // ── feature distribution shift (Cohen's d) ─────────────────────────────────
+  function featureStats(rows, key) {
+    const vals = rows.map((r) => (r.feature_values && r.feature_values[key] != null ? Number(r.feature_values[key]) : 0));
+    const n = vals.length;
+    if (!n) return { mean: 0, variance: 0 };
+    const mean = vals.reduce((s, v) => s + v, 0) / n;
+    const variance = n > 1 ? vals.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : 0;
+    return { mean, variance };
+  }
+
+  const featureShifts = featureCatalog.map((f) => {
+    const train = featureStats(trainRows, f.key);
+    const test  = featureStats(testRows,  f.key);
+    const pooledSd = Math.sqrt((train.variance + test.variance) / 2);
+    const cohensD  = pooledSd > 0 ? (test.mean - train.mean) / pooledSd : 0;
+    return {
+      key:      f.key,
+      title:    f.title || f.key,
+      family:   f.family || '',
+      train_mean: roundNumber(train.mean, 4),
+      test_mean:  roundNumber(test.mean,  4),
+      cohens_d:   roundNumber(cohensD,    4),
+      abs_d:      Math.abs(cohensD),
+    };
+  }).sort((a, b) => b.abs_d - a.abs_d);
+
+  const topShifts = featureShifts.slice(0, 20);
+
+  // ── automatic suggestions ───────────────────────────────────────────────────
+  const suggestions = [];
+  const rateRatio = testPositiveRate > 0 ? trainPositiveRate / testPositiveRate : Infinity;
+
+  if (testPositiveRate < 0.05) {
+    suggestions.push({
+      type: 'data_gap',
+      message: `Only ${(testPositiveRate * 100).toFixed(1)}% of test candidates are labeled positive. The domains in this bucket are predominantly sites without comment sections — the model rarely encounters examples that teach it what a "real" comment region looks like for these site types.`,
+    });
+  } else if (rateRatio > 2) {
+    suggestions.push({
+      type: 'calibration',
+      message: `Training data is ${rateRatio.toFixed(1)}× richer in positives (${(trainPositiveRate * 100).toFixed(1)}%) than this test bucket (${(testPositiveRate * 100).toFixed(1)}%). The model is calibrated to expect more positives and will over-predict on these sites.`,
+    });
+  } else if (testPositiveRate > trainPositiveRate * 2) {
+    suggestions.push({
+      type: 'calibration',
+      message: `Test bucket has an unusually high positive rate (${(testPositiveRate * 100).toFixed(1)}% vs ${(trainPositiveRate * 100).toFixed(1)}% in training). The model may be under-confident on pages densely packed with comment candidates.`,
+    });
+  }
+
+  const largeShifts = topShifts.filter((f) => f.abs_d >= 0.5);
+  if (largeShifts.length > 0) {
+    const families = [...new Set(largeShifts.map((f) => f.family).filter(Boolean))];
+    suggestions.push({
+      type: 'feature_shift',
+      message: `${largeShifts.length} feature(s) show large distributional shift (|Cohen's d| ≥ 0.5): ${largeShifts.slice(0, 3).map((f) => f.title).join(', ')}${largeShifts.length > 3 ? ` and ${largeShifts.length - 3} more` : ''}. ${families.length > 0 ? `Affected families: ${families.join(', ')}.` : ''} Sites in this bucket have structurally different HTML than training sites — adding labeled data from similar sites would help most.`,
+    });
+  }
+
+  if (testDomains.length <= 3) {
+    suggestions.push({
+      type: 'coverage',
+      message: `This bucket only contains ${testDomains.length} domain(s). Performance here is dominated by a handful of sites — a single unusual site structure can tank the whole fold.`,
+    });
+  }
+
+  return {
+    fold: foldIndex,
+    train_count: trainRows.length,
+    test_count: testRows.length,
+    train_positive_rate: roundNumber(trainPositiveRate, 4),
+    test_positive_rate:  roundNumber(testPositiveRate,  4),
+    overall_positive_rate: roundNumber(overallPositiveRate, 4),
+    test_domains: testDomains,
+    top_feature_shifts: topShifts,
+    suggestions,
+  };
+}
+
 module.exports = {
   buildOverview,
   listTrainingAlgorithms,
@@ -2738,6 +2865,7 @@ module.exports = {
   computeLearningCurve,
   getDomainBuckets,
   getDomainCandidates,
+  investigateFold,
   analyzeFeatures,
   getModelDetails,
   buildRuntimeModelBundle,

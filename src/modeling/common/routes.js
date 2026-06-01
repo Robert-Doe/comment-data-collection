@@ -28,6 +28,7 @@ const {
   computeCommentArchetype,
   getDomainBuckets,
   getDomainCandidates,
+  investigateFold,
 } = require('./service');
 const { extractCandidateDataset } = require('./dataset');
 const { parseJobIdList } = require('./utils');
@@ -881,6 +882,19 @@ function createModelingRouter(dependencies) {
       if (!domain) return res.status(400).json({ error: 'domain is required' });
       const dataset = await buildLightDataset(jobIds, variantId);
       const result  = await getDomainCandidates(null, dependencies.artifactRoot, { variantId, domain, dataset });
+      res.json({ ok: true, ...result });
+    } catch (error) { next(error); }
+  });
+
+  // POST /fold-investigation — synchronous: feature distribution shift analysis for one CV fold.
+  router.post('/fold-investigation', async (req, res, next) => {
+    try {
+      const variantId  = String(req.body && req.body.variantId  || '').trim();
+      if (!getModelVariant(variantId)) return res.status(400).json({ error: 'Select a valid model variant' });
+      const foldIndex  = Number(req.body && req.body.foldIndex);
+      const jobIds     = normalizeJobIds(req.body && req.body.jobIds || '');
+      const dataset    = await buildLightDataset(jobIds, variantId);
+      const result     = await investigateFold(null, dependencies.artifactRoot, { variantId, foldIndex, dataset });
       res.json({ ok: true, ...result });
     } catch (error) { next(error); }
   });

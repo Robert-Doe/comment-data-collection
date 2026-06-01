@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bucket Explorer — UGC Scanner</title>
+    <script src="./config.js"></script>
+    <script src="./auth.js"></script>
+    <script>
+      (function () {
+        var appConfig = window.__APP_CONFIG__ || {};
+        var version = appConfig.buildVersion ? String(appConfig.buildVersion) : '';
+        var cacheSuffix = version ? '?v=' + encodeURIComponent(version) : '';
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = './styles.css' + cacheSuffix;
+        document.head.appendChild(stylesheet);
+      })();
+    </script>
+    <style>
+      :root {
+        --c-good:   #16a34a;
+        --c-mid:    #ca8a04;
+        --c-poor:   #dc2626;
+        --c-neutral:#6b7280;
+      }
+
+      .config-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: end; }
+      @media (max-width: 720px) { .config-row { grid-template-columns: 1fr; } }
+
+      /* bucket grid */
+      .bucket-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+      @media (max-width: 900px) { .bucket-grid { grid-template-columns: repeat(3, 1fr); } }
+      @media (max-width: 600px) { .bucket-grid { grid-template-columns: 1fr 1fr; } }
+
+      .bucket-card {
+        background: var(--panel);
+        border: 2px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: default;
+        transition: border-color .15s;
+      }
+      .bucket-card.active { border-color: var(--accent); }
+      .bucket-card .bc-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+      .bucket-card .bc-fold  { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1; }
+      .bucket-card .bc-count { font-size: 12px; color: var(--muted); }
+
+      /* positive rate bar */
+      .pos-bar-track { height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 2px 0; }
+      .pos-bar-fill  { height: 100%; border-radius: 4px; transition: width .4s; }
+
+      /* domain pill list */
+      .domain-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+      .domain-pill {
+        font-size: 10px; font-family: monospace;
+        background: var(--panel-soft, #f1f5ff);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 110px;
+      }
+      .domain-pill.pos { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+
+      .investigate-btn {
+        margin-top: 6px;
+        font-size: 11px;
+        padding: 5px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--accent);
+        background: transparent;
+        color: var(--accent);
+        cursor: pointer;
+        font-weight: 600;
+        transition: background .15s, color .15s;
+      }
+      .investigate-btn:hover { background: var(--accent); color: #fff; }
+      .investigate-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+      /* investigation panel */
+      .inv-panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 28px;
+      }
+      .inv-header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+      .inv-title { font-size: 18px; font-weight: 800; color: var(--text); margin: 0; }
+      .inv-subtitle { font-size: 13px; color: var(--muted); margin: 0; }
+
+      /* rate comparison */
+      .rate-compare { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      @media (max-width: 600px) { .rate-compare { grid-template-columns: 1fr; } }
+      .rate-card {
+        background: var(--panel-soft, #f8faff);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 18px;
+        text-align: center;
+      }
+      .rate-card .rc-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+      .rate-card .rc-val   { font-size: 28px; font-weight: 800; line-height: 1.1; }
+      .rate-card .rc-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .rate-card.warning .rc-val { color: var(--c-poor); }
+      .rate-card.ok      .rc-val { color: var(--c-good); }
+      .rate-card.neutral .rc-val { color: var(--text); }
+
+      /* feature shift table */
+      .shift-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      .shift-table th {
+        padding: 6px 10px; text-align: left; font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+        border-bottom: 1px solid var(--line);
+      }
+      .shift-table th.num { text-align: right; }
+      .shift-table td { padding: 5px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .shift-table tr:last-child td { border-bottom: none; }
+      .shift-table tr:hover td { background: var(--panel-soft, #f8faff); }
+      .shift-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .shift-table td.mono { font-family: monospace; font-size: 11px; color: var(--muted); }
+      .d-badge {
+        display: inline-block;
+        padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .d-large-pos  { background: #fee2e2; color: #b91c1c; }
+      .d-large-neg  { background: #dbeafe; color: #1d4ed8; }
+      .d-medium-pos { background: #fef3c7; color: #92400e; }
+      .d-medium-neg { background: #e0f2fe; color: #075985; }
+      .d-small      { background: #f1f5f9; color: var(--muted); }
+
+      /* domain breakdown */
+      .domain-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      .domain-table th {
+        padding: 6px 10px; text-align: left; font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+        border-bottom: 1px solid var(--line);
+      }
+      .domain-table th.num { text-align: right; }
+      .domain-table td { padding: 5px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .domain-table tr:last-child td { border-bottom: none; }
+      .domain-table tr:hover td { background: var(--panel-soft, #f8faff); }
+      .domain-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .domain-table td.host { font-family: monospace; font-size: 11px; }
+
+      /* suggestions */
+      .suggestion {
+        display: flex; gap: 12px; align-items: flex-start;
+        background: var(--panel-soft, #f8faff);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--accent);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text);
+      }
+      .suggestion.data_gap       { border-left-color: #dc2626; }
+      .suggestion.calibration    { border-left-color: #d97706; }
+      .suggestion.feature_shift  { border-left-color: #7c3aed; }
+      .suggestion.coverage       { border-left-color: #0891b2; }
+      .suggestion-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+
+      .section-title {
+        font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+        color: var(--muted); margin: 0 0 10px;
+      }
+
+      /* mini positive bar in domain table */
+      .mini-bar-wrap { display: flex; align-items: center; gap: 6px; }
+      .mini-bar-track { width: 50px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+      .mini-bar-fill  { height: 100%; border-radius: 3px; }
+      .mini-bar-val { font-size: 11px; font-variant-numeric: tabular-nums; min-width: 36px; }
+
+      .empty-state { padding: 32px; text-align: center; color: var(--muted); font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <nav class="site-nav" aria-label="Primary">
+        <a class="site-nav-link" href="./index.html">Scanner</a>
+        <a class="site-nav-link" href="./modeling.html">Model Lab</a>
+        <a class="site-nav-link" href="./feature-docs.html">Feature Docs</a>
+        <a class="site-nav-link" href="./demo.html">Demo Tour</a>
+        <a class="site-nav-link" href="./ml-guide.html">ML Guide</a>
+        <a class="site-nav-link" href="./public-job.html">Public Intake</a>
+        <a class="site-nav-link" href="./domain-metrics.html">Domain Metrics</a>
+        <a class="site-nav-link active" href="./bucket-explorer.html">Bucket Explorer</a>
+        <a class="site-nav-link" href="./crawler.html">Crawler</a>
+        <a class="site-nav-link" href="./supervisor.html">Summary</a>
+        <a class="site-nav-link" href="./unifier.html">Unifier</a>
+        <button class="site-nav-signout" onclick="window.__AUTH__ && window.__AUTH__.logout()">Sign out</button>
+      </nav>
+      <section class="hero">
+        <p class="eyebrow">Training Data Analysis</p>
+        <h1 class="hero-title">Bucket Explorer</h1>
+      </section>
+    </main>
+    <main class="page-content" style="max-width:1100px">
+
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-header">
+          <h1 style="font-size:1.3rem;margin:0">Bucket Explorer</h1>
+          <p style="margin:4px 0 0;font-size:0.82rem;color:var(--muted)">
+            See which domains fall into each CV fold's test bucket, their label distribution, and investigate why certain folds perform poorly.
+          </p>
+        </div>
+        <div class="panel-body">
+          <div class="config-row" style="margin-bottom:14px">
+            <label class="field">
+              <span>Model Variant</span>
+              <select id="variant-id">
+                <option value="">Loading…</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Job IDs Filter</span>
+              <input id="job-ids" type="text" placeholder="Optional: job-1, job-2">
+            </label>
+            <div style="display:flex;align-items:flex-end">
+              <button id="load-btn" class="primary" type="button" style="width:100%">Load Bucket Map</button>
+            </div>
+          </div>
+          <p id="load-message" class="message" style="margin:0"></p>
+        </div>
+      </div>
+
+      <!-- Bucket overview grid -->
+      <div id="bucket-overview" style="display:none">
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+          <h2 style="font-size:1rem;font-weight:700;margin:0">Domain Buckets</h2>
+          <span id="overview-subtitle" style="font-size:0.8rem;color:var(--muted)"></span>
+        </div>
+        <div class="bucket-grid" id="bucket-grid"></div>
+      </div>
+
+      <!-- Investigation panel -->
+      <div id="investigation-panel" style="display:none">
+        <div class="inv-panel">
+          <div class="inv-header">
+            <h2 class="inv-title" id="inv-title">Fold Investigation</h2>
+            <p class="inv-subtitle" id="inv-subtitle"></p>
+          </div>
+
+          <!-- Rate comparison -->
+          <p class="section-title">Positive Label Rate</p>
+          <div class="rate-compare" id="rate-compare" style="margin-bottom:24px"></div>
+
+          <!-- Suggestions -->
+          <div id="suggestions-section" style="margin-bottom:24px">
+            <p class="section-title">Findings &amp; Data Gaps</p>
+            <div id="suggestions-list"></div>
+          </div>
+
+          <!-- Feature shifts -->
+          <div id="shift-section" style="margin-bottom:24px">
+            <p class="section-title">Top Feature Distribution Shifts (test bucket vs training)</p>
+            <p style="font-size:11.5px;color:var(--muted);margin:0 0 10px">
+              Cohen's d measures how many standard deviations the test bucket mean differs from the training mean for each feature.
+              Large shift (|d| ≥ 0.5) means sites in this test bucket look structurally different from what the model trained on.
+            </p>
+            <div style="overflow-x:auto">
+              <table class="shift-table">
+                <thead><tr>
+                  <th>Feature</th>
+                  <th>Family</th>
+                  <th class="num">Train mean</th>
+                  <th class="num">Test mean</th>
+                  <th class="num">Cohen's d</th>
+                  <th>Shift</th>
+                </tr></thead>
+                <tbody id="shift-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Domain breakdown -->
+          <div id="domain-section">
+            <p class="section-title">Domains in Test Bucket</p>
+            <div style="overflow-x:auto">
+              <table class="domain-table">
+                <thead><tr>
+                  <th>Domain</th>
+                  <th class="num">Candidates</th>
+                  <th class="num">Positives</th>
+                  <th>Positive rate</th>
+                </tr></thead>
+                <tbody id="domain-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p id="inv-message" class="message" style="margin-bottom:16px"></p>
+
+    </main>
+    <script src="./bucket-explorer.js"></script>
+  </body>
+</html>
