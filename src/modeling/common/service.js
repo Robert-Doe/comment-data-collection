@@ -70,11 +70,20 @@ async function buildOverview(items, artifactRoot, options = {}) {
   };
 }
 
-// Domains that must never appear in the test set — always forced into training.
+// Domains (and all their subdomains) that must never appear in the test set.
 // Use this for synthetic or controlled domains whose structure would skew evaluation.
-const TRAIN_ONLY_DOMAINS = new Set([
+// Matching is suffix-based: 'xsscommentdetection.me' catches that exact hostname
+// as well as any subdomain (e.g. api.xsscommentdetection.me).
+const TRAIN_ONLY_DOMAINS = [
   'xsscommentdetection.me',
-]);
+];
+
+function isTrainOnlyDomain(hostname) {
+  if (!hostname) return false;
+  return TRAIN_ONLY_DOMAINS.some(
+    (domain) => hostname === domain || hostname.endsWith('.' + domain),
+  );
+}
 
 function splitRowsByDomain(rows, options = {}) {
   const modulo = Math.max(2, Number(options.modulo) || 5);
@@ -85,8 +94,8 @@ function splitRowsByDomain(rows, options = {}) {
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const stableKey = row.hostname || row.frame_host || row.item_id || row.dataset_row_id;
 
-    // Force synthetic / controlled domains into training regardless of their hash bucket.
-    if (TRAIN_ONLY_DOMAINS.has(stableKey)) {
+    // Force synthetic / controlled domains (including subdomains) into training.
+    if (isTrainOnlyDomain(stableKey)) {
       trainRows.push(row);
       return;
     }
@@ -106,7 +115,7 @@ function splitRowsByDomain(rows, options = {}) {
       mode: 'domain_holdout',
       modulo,
       holdout_bucket: holdoutBucket,
-      train_only_domains: [...TRAIN_ONLY_DOMAINS],
+      train_only_domains: TRAIN_ONLY_DOMAINS.slice(),
     },
   };
 }
