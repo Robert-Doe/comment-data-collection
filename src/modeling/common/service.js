@@ -2752,15 +2752,12 @@ async function investigateFold(items, artifactRoot, trainingInput = {}) {
   if (!testRows.length) throw new Error('No test rows in this fold — all data may be train-only');
 
   // ── positive rates ──────────────────────────────────────────────────────────
-  const trainPositiveRate = safeDivide(
-    trainRows.filter((r) => r.binary_label === 1).length, trainRows.length,
-  );
-  const testPositiveRate = safeDivide(
-    testRows.filter((r) => r.binary_label === 1).length, testRows.length,
-  );
-  const overallPositiveRate = safeDivide(
-    labeledRows.filter((r) => r.binary_label === 1).length, labeledRows.length,
-  );
+  const trainPos = trainRows.filter((r) => r.binary_label === 1).length;
+  const testPos  = testRows.filter((r) => r.binary_label === 1).length;
+  const totalPos = labeledRows.filter((r) => r.binary_label === 1).length;
+  const trainPositiveRate   = trainRows.length   ? trainPos / trainRows.length   : 0;
+  const testPositiveRate    = testRows.length    ? testPos  / testRows.length    : 0;
+  const overallPositiveRate = labeledRows.length ? totalPos / labeledRows.length : 0;
 
   // ── per-domain breakdown for the test bucket ────────────────────────────────
   const domainMap = new Map();
@@ -2772,7 +2769,7 @@ async function investigateFold(items, artifactRoot, trainingInput = {}) {
     if (row.binary_label === 1) d.positive_count += 1;
   }
   const testDomains = Array.from(domainMap.values())
-    .map((d) => ({ ...d, positive_rate: roundNumber(safeDivide(d.positive_count, d.count), 3) }))
+    .map((d) => ({ ...d, positive_rate: roundNumber(d.count ? d.positive_count / d.count : 0, 3) }))
     .sort((a, b) => b.count - a.count);
 
   // ── feature distribution shift (Cohen's d) ─────────────────────────────────
