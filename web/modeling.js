@@ -2243,31 +2243,28 @@
           <span style="font-size:0.82rem;color:#6b7280">${fpCount} false positive candidate${fpCount !== 1 ? 's' : ''} (${testEv && testEv.xss_signal_rates ? 'test set' : 'train set'})</span>
         </div>
         ${fpCount === 0
-          ? `<p style="margin:0;font-size:0.82rem;color:#9ca3af">No false positives at current threshold — nothing to analyse.</p>`
-          : !anySignal
-            ? `<p style="margin:0;font-size:0.82rem;color:#16a34a">None of the ${fpCount} false positive(s) carry any XSS signal — precision loss is not attributable to XSS patterns.</p>`
-            : `<table style="margin:0;width:100%">
-                <thead><tr style="background:#fafafa">
-                  <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280">Signal</th>
-                  <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">FPs with signal</th>
-                  <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">% of all FPs</th>
-                  <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280"></th>
-                </tr></thead>
-                <tbody>${signals.map((s) => {
-                  const rate = s.rate || 0;
-                  const barColor = rate >= 0.5 ? '#dc2626' : rate >= 0.2 ? '#d97706' : '#6b7280';
-                  const barW = Math.max(2, Math.round(rate * 120));
-                  return `<tr>
-                    <td style="padding:4px 10px;font-size:0.78rem;color:#374151">${escapeHtml(s.label)}</td>
-                    <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:#111827;text-align:center">${s.count}</td>
-                    <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:${barColor};text-align:center">${s.count > 0 ? (rate * 100).toFixed(1) + '%' : '—'}</td>
-                    <td style="padding:4px 10px">
-                      <div style="height:7px;width:${barW}px;background:${barColor};border-radius:2px;opacity:0.7"></div>
-                    </td>
-                  </tr>`;
-                }).join('')}</tbody>
-              </table>`}
-        <p style="margin:10px 0 0;font-size:0.72rem;color:#9ca3af">A high rate here means those false positives are structurally XSS-like — they inflate your false positive count for reasons the model can't easily distinguish from real comment regions. Concentrate on recall improvements rather than precision tuning in that scenario.</p>
+          ? `<p style="margin:0;font-size:0.82rem;color:#9ca3af">No false positives at current threshold.</p>`
+          : `<table style="margin:0;width:100%">
+              <thead><tr style="background:#fafafa">
+                <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280">Signal</th>
+                <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">FPs with signal</th>
+                <th style="padding:5px 10px;font-size:0.73rem;text-align:center;color:#6b7280">% of FPs</th>
+                <th style="padding:5px 10px;font-size:0.73rem;text-align:left;color:#6b7280"></th>
+              </tr></thead>
+              <tbody>${signals.map((s) => {
+                const rate = s.rate || 0;
+                const barColor = rate >= 0.5 ? '#dc2626' : rate >= 0.2 ? '#d97706' : '#6b7280';
+                const barW = Math.round(rate * 120);
+                return `<tr>
+                  <td style="padding:4px 10px;font-size:0.78rem;color:#374151">${escapeHtml(s.label)}</td>
+                  <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:#111827;text-align:center">${s.count}</td>
+                  <td style="padding:4px 10px;font-size:0.78rem;font-weight:600;color:${s.count > 0 ? barColor : '#9ca3af'};text-align:center">${s.count > 0 ? (rate * 100).toFixed(1) + '%' : '0%'}</td>
+                  <td style="padding:4px 10px">
+                    ${barW > 0 ? `<div style="height:7px;width:${barW}px;background:${barColor};border-radius:2px;opacity:0.7"></div>` : ''}
+                  </td>
+                </tr>`;
+              }).join('')}</tbody>
+            </table>`}
       </div>`;
       })() : ''}
 
