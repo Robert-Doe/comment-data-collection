@@ -537,6 +537,12 @@
         grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">⬡</div>No trained models yet.</div>';
         updateStatBar([]); return;
       }
+      // Filter out empty/incomplete artifacts — no evaluation data means they're useless shells
+      models = models.filter(function (m) {
+        var ev = (m.evaluation && m.evaluation.test) || (m.evaluation && m.evaluation.train) || {};
+        var cm = ev.candidate_metrics || {};
+        return cm.f1 != null || cm.precision != null || cm.recall != null;
+      });
       models.sort(function (a, b) {
         var ad = new Date(a.created_at || 0).getTime();
         var bd = new Date(b.created_at || 0).getTime();
