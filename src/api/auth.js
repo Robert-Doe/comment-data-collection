@@ -167,8 +167,9 @@ function createAuthModule(databaseUrl) {
       const { token } = req.body || {};
       if (!token) return res.status(400).json({ error: 'Token required' });
       const session = await findSession(String(token).trim());
-      if (!session || session.role !== 'guest')
-        return res.status(401).json({ error: 'Invalid or expired guest token' });
+      const tokenAllowedRoles = ['guest', 'supervisor'];
+      if (!session || !tokenAllowedRoles.includes(session.role))
+        return res.status(401).json({ error: 'Invalid or expired link' });
       const remaining = Math.max(0, Math.floor((new Date(session.expires_at) - Date.now()) / 1000));
       res.json({ token: session.token, role: 'guest', expires_in: remaining, label: session.label });
     } catch (e) { res.status(500).json({ error: 'Server error' }); }
@@ -241,10 +242,15 @@ function createAuthModule(databaseUrl) {
   // ── Admin: guest tokens ───────────────────────────────────────────────────
   async function createGuestTokenHandler(req, res) {
     try {
-      const { label } = req.body || {};
-      const token = await newSession(null, 'guest', TTL_MS.guest, label || 'Guest');
+      const { label, role: requestedRole, ttl_days } = req.body || {};
+      const allowedRoles = ['guest', 'supervisor'];
+      const role = allowedRoles.includes(requestedRole) ? requestedRole : 'guest';
+      const ttl  = role === 'supervisor'
+        ? (ttl_days ? Math.min(90, Math.max(1, Number(ttl_days))) * 24 * 60 * 60 * 1000 : TTL_MS.supervisor)
+        : TTL_MS.guest;
+      const token = await newSession(null, role, ttl, label || (role === 'supervisor' ? 'Supervisor' : 'Guest'));
       const { rows } = await pool.query(
-        'SELECT id, token, label, expires_at FROM auth_sessions WHERE token=$1', [token]
+        'SELECT id, token, role, label, expires_at FROM auth_sessions WHERE token=$1', [token]
       );
       res.status(201).json(rows[0]);
     } catch (e) { res.status(500).json({ error: 'Server error' }); }
@@ -253,7 +259,7 @@ function createAuthModule(databaseUrl) {
   async function listGuestTokensHandler(req, res) {
     try {
       const { rows } = await pool.query(
-        "SELECT id, token, label, expires_at, created_at FROM auth_sessions WHERE role='guest' AND expires_at>NOW() ORDER BY created_at DESC"
+        "SELECT id, token, role, label, expires_at, created_at FROM auth_sessions WHERE role IN ('guest','supervisor') AND user_id IS NULL AND expires_at>NOW() ORDER BY created_at DESC"
       );
       res.json({ tokens: rows });
     } catch (e) { res.status(500).json({ error: 'Server error' }); }
@@ -261,7 +267,7 @@ function createAuthModule(databaseUrl) {
 
   async function revokeGuestTokenHandler(req, res) {
     try {
-      await pool.query("DELETE FROM auth_sessions WHERE id=$1 AND role='guest'", [req.params.id]);
+      await pool.query("DELETE FROM auth_sessions WHERE id=$1 AND role IN ('guest','supervisor') AND user_id IS NULL", [req.params.id]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: 'Server error' }); }
   }

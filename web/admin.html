@@ -128,36 +128,54 @@
     </form>
   </div>
 
-  <!-- ── Guest tokens ───────────────────────────────────────────────────── -->
+  <!-- ── Shareable links ───────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">🔑 Guest Access (15-minute tokens)</div>
-    <p style="font-size:.83rem;color:var(--muted);margin-bottom:1rem">
-      Generate a one-time link and send it to your guest. It expires in 15 minutes and cannot be reused after expiry.
-      Guests get read-only access to the labelling interface.
+    <div class="section-title">🔗 Shareable Access Links</div>
+    <p style="font-size:.83rem;color:var(--muted);margin-bottom:1.2rem">
+      Generate a link you can send directly — no password needed. The recipient clicks it and lands straight in the dashboard.
+      Supervisor links give full read-only research access and last up to 30 days.
+      Guest links expire in 15 minutes and are for brief demos only.
     </p>
 
-    <form class="inline" id="guest-form" style="grid-template-columns: 1fr auto; max-width: 480px;">
+    <form class="inline" id="guest-form" style="grid-template-columns: 1fr 1fr 1fr auto; max-width: 700px; align-items: end;">
       <div>
-        <label>Label (optional — who is this for?)</label>
-        <input type="text" id="guest-label" placeholder="e.g. Dr. Brown — lab visit">
+        <label>Label — who is this for?</label>
+        <input type="text" id="guest-label" placeholder="e.g. Prof. Mensah">
       </div>
-      <div style="display:flex;align-items:flex-end">
+      <div>
+        <label>Access level</label>
+        <select id="guest-role">
+          <option value="supervisor">Supervisor (read-only, full dashboard)</option>
+          <option value="guest">Guest (15 min, demo only)</option>
+        </select>
+      </div>
+      <div>
+        <label>Expires in (supervisor only)</label>
+        <select id="guest-ttl">
+          <option value="7">7 days</option>
+          <option value="14">14 days</option>
+          <option value="30" selected>30 days</option>
+        </select>
+      </div>
+      <div>
         <button type="submit" class="btn btn-green" style="white-space:nowrap">Generate Link</button>
       </div>
     </form>
 
-    <div id="guest-link-box">
-      <strong style="font-size:.82rem">Share this link (expires in 15 minutes):</strong>
-      <div class="link-url" id="guest-link-url"></div>
-      <button class="btn btn-primary copy-btn" onclick="copyGuestLink()">Copy link</button>
-      <div class="expires-in" id="guest-link-expires"></div>
+    <div id="guest-link-box" style="margin-top:1rem">
+      <strong style="font-size:.82rem" id="guest-link-heading">Share this link:</strong>
+      <div style="margin-top:.4rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <div class="link-url" id="guest-link-url" style="flex:1;min-width:200px"></div>
+        <button class="btn btn-primary copy-btn" onclick="copyGuestLink()">Copy link</button>
+      </div>
+      <div class="expires-in" id="guest-link-expires" style="margin-top:.4rem"></div>
     </div>
 
     <div style="margin-top:1.5rem">
-      <strong style="font-size:.85rem">Active Guest Links</strong>
+      <strong style="font-size:.85rem">Active Links</strong>
       <table style="margin-top:.5rem">
-        <thead><tr><th>Label</th><th>Expires</th><th></th></tr></thead>
-        <tbody id="tokens-body"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+        <thead><tr><th>Label</th><th>Role</th><th>Expires</th><th></th></tr></thead>
+        <tbody id="tokens-body"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -239,7 +257,7 @@
     .catch(function () { showMsg('add-msg', 'Network error.', true); });
   });
 
-  // ── Guest tokens ──────────────────────────────────────────────────────────
+  // ── Shareable links ───────────────────────────────────────────────────────
   var currentGuestLink = '';
 
   function loadGuestTokens() {
@@ -247,48 +265,67 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var rows = (d.tokens || []).map(function (t) {
-          var exp = new Date(t.expires_at);
-          var minLeft = Math.max(0, Math.round((exp - Date.now()) / 60000));
-          return '<tr><td>' + (t.label || 'Guest') + '</td>' +
-            '<td class="expires">' + minLeft + ' min remaining</td>' +
+          var exp     = new Date(t.expires_at);
+          var msLeft  = Math.max(0, exp - Date.now());
+          var daysLeft = Math.floor(msLeft / 86400000);
+          var hrsLeft  = Math.floor((msLeft % 86400000) / 3600000);
+          var minLeft  = Math.max(0, Math.round(msLeft / 60000));
+          var expStr   = daysLeft > 0
+            ? daysLeft + 'd ' + hrsLeft + 'h remaining'
+            : minLeft + ' min remaining';
+          return '<tr><td>' + (t.label || 'Link') + '</td>' +
+            '<td>' + badge(t.role || 'guest') + '</td>' +
+            '<td class="expires">' + expStr + '</td>' +
             '<td><button class="btn btn-danger" onclick="revokeToken(\'' + t.id + '\')">Revoke</button></td></tr>';
         });
         document.getElementById('tokens-body').innerHTML =
-          rows.length ? rows.join('') : '<tr><td colspan="3" class="empty">No active guest links.</td></tr>';
+          rows.length ? rows.join('') : '<tr><td colspan="4" class="empty">No active links.</td></tr>';
       });
   }
 
   window.revokeToken = function (id) {
+    if (!confirm('Revoke this link? Anyone using it will be signed out immediately.')) return;
     fetch(apiBase + '/api/admin/guest-tokens/' + id, { method: 'DELETE' })
       .then(function () { loadGuestTokens(); });
   };
 
   document.getElementById('guest-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var label = document.getElementById('guest-label').value.trim();
+    var label   = document.getElementById('guest-label').value.trim();
+    var role    = document.getElementById('guest-role').value;
+    var ttlDays = parseInt(document.getElementById('guest-ttl').value, 10);
     fetch(apiBase + '/api/admin/guest-tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: label || undefined }),
+      body: JSON.stringify({ label: label || undefined, role: role, ttl_days: ttlDays }),
     })
     .then(function (r) { return r.json(); })
     .then(function (t) {
       var url = window.location.origin + '/login.html?token=' + t.token;
       currentGuestLink = url;
+      var exp = new Date(t.expires_at);
+      var isSupervisor = (t.role === 'supervisor');
+      document.getElementById('guest-link-heading').textContent =
+        isSupervisor ? 'Supervisor link (send this to your supervisor):' : 'Guest link (expires in 15 minutes):';
       document.getElementById('guest-link-url').textContent = url;
       document.getElementById('guest-link-expires').textContent =
-        'Expires: ' + new Date(t.expires_at).toLocaleTimeString() + ' (15 min from now)';
+        'Expires: ' + exp.toLocaleDateString() + ' ' + exp.toLocaleTimeString();
       document.getElementById('guest-link-box').style.display = 'block';
       document.getElementById('guest-label').value = '';
       loadGuestTokens();
     })
-    .catch(function () { alert('Failed to generate guest link.'); });
+    .catch(function () { alert('Failed to generate link.'); });
   });
 
   window.copyGuestLink = function () {
     if (navigator.clipboard && currentGuestLink) {
       navigator.clipboard.writeText(currentGuestLink)
-        .then(function () { alert('Link copied to clipboard!'); });
+        .then(function () { alert('Copied! Send this link to your supervisor.'); })
+        .catch(function () {
+          window.prompt('Copy this link:', currentGuestLink);
+        });
+    } else if (currentGuestLink) {
+      window.prompt('Copy this link:', currentGuestLink);
     }
   };
 
