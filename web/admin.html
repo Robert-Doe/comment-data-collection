@@ -261,7 +261,7 @@
   var currentGuestLink = '';
 
   function loadGuestTokens() {
-    fetch(apiBase + '/api/admin/guest-tokens')
+    fetch(apiBase + '/api/admin/tokens')
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var rows = (d.tokens || []).map(function (t) {
@@ -285,7 +285,7 @@
 
   window.revokeToken = function (id) {
     if (!confirm('Revoke this link? Anyone using it will be signed out immediately.')) return;
-    fetch(apiBase + '/api/admin/guest-tokens/' + id, { method: 'DELETE' })
+    fetch(apiBase + '/api/admin/tokens/' + id, { method: 'DELETE' })
       .then(function () { loadGuestTokens(); });
   };
 
@@ -294,7 +294,7 @@
     var label   = document.getElementById('guest-label').value.trim();
     var role    = document.getElementById('guest-role').value;
     var ttlDays = parseInt(document.getElementById('guest-ttl').value, 10);
-    fetch(apiBase + '/api/admin/guest-tokens', {
+    fetch(apiBase + '/api/admin/tokens', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ label: label || undefined, role: role, ttl_days: ttlDays }),
