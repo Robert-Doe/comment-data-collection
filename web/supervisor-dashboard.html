@@ -495,8 +495,9 @@
         updateStatBar([]); return;
       }
       models.sort(function (a, b) {
-        var af = getF1(a), bf = getF1(b);
-        return bf - af;
+        var ad = new Date(a.created_at || 0).getTime();
+        var bd = new Date(b.created_at || 0).getTime();
+        return bd - ad;
       });
       updateStatBar(models);
       expandedModelId = null;
@@ -549,7 +550,7 @@
       '<div class="mc-top">' +
         '<div class="mc-id">' + esc((m.id||'').slice(0,20)+'…') + '</div>' +
         '<div class="mc-badges">' +
-          (isBest ? '<span class="mc-badge best">Best F1</span>' : '') +
+          (isBest ? '<span class="mc-badge best">Latest</span>' : '') +
           strategyBadge(strategy) +
         '</div>' +
       '</div>' +
