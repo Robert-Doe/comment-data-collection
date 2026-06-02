@@ -105,10 +105,12 @@
     document.getElementById('pw').select();
   }
 
-  // If already logged in, skip to dashboard
+  // If already logged in, skip to dashboard — but honour ?next= if present
   try {
     if (localStorage.getItem(TOKEN_KEY)) {
-      window.location.replace('./index.html');
+      var nextParam = params.get('next');
+      var safeNext  = nextParam && nextParam.startsWith(window.location.origin) ? nextParam : './index.html';
+      window.location.replace(safeNext);
     }
   } catch (_) {}
 

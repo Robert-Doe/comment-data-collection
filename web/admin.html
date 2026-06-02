@@ -301,7 +301,8 @@
     })
     .then(function (r) { return r.json(); })
     .then(function (t) {
-      var url = window.location.origin + '/login.html?token=' + t.token;
+      var dest = (t.role === 'supervisor') ? './supervisor-dashboard.html' : './index.html';
+      var url  = window.location.origin + '/login.html?token=' + t.token + '&next=' + encodeURIComponent(window.location.origin + '/' + dest.replace('./', ''));
       currentGuestLink = url;
       var exp = new Date(t.expires_at);
       var isSupervisor = (t.role === 'supervisor');
