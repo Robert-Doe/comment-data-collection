@@ -105,9 +105,10 @@
     document.getElementById('pw').select();
   }
 
-  // If already logged in, skip to dashboard — but honour ?next= if present
+  // If already logged in AND no token in URL, skip to dashboard
+  // If a ?token= is present, always process it — it may carry a different role
   try {
-    if (localStorage.getItem(TOKEN_KEY)) {
+    if (localStorage.getItem(TOKEN_KEY) && !params.get('token')) {
       var nextParam = params.get('next');
       var safeNext  = nextParam && nextParam.startsWith(window.location.origin) ? nextParam : './index.html';
       window.location.replace(safeNext);
