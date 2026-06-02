@@ -180,6 +180,33 @@
     .csv-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted2); margin-bottom:3px; }
     .csv-val { font-size:16px; font-weight:700; color:var(--text); }
 
+    /* CV Modal */
+    .modal-backdrop {
+      display:none; position:fixed; inset:0; background:rgba(4,9,20,.75);
+      backdrop-filter:blur(3px); z-index:200; align-items:center; justify-content:center;
+    }
+    .modal-backdrop.open { display:flex; }
+    .modal-box {
+      background:var(--surface); border:1px solid var(--border-hi);
+      border-radius:14px; width:min(860px,95vw); max-height:88vh;
+      display:flex; flex-direction:column; overflow:hidden;
+      box-shadow:0 24px 64px rgba(0,0,0,.6);
+    }
+    .modal-hdr {
+      padding:16px 20px; border-bottom:1px solid var(--border);
+      display:flex; align-items:baseline; gap:12px; flex-shrink:0;
+    }
+    .modal-hdr h2 { font-size:15px; font-weight:800; color:var(--text); margin:0; }
+    .modal-hdr .meta { font-size:11px; color:var(--muted); flex:1; }
+    .modal-close {
+      width:28px; height:28px; background:none; border:1px solid var(--border);
+      border-radius:6px; color:var(--muted); font-size:16px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+      transition:border-color .15s,color .15s;
+    }
+    .modal-close:hover { border-color:var(--bad); color:var(--bad); }
+    .modal-body { overflow-y:auto; padding:20px; flex:1; }
+
     /* Misc */
     .empty-state { padding:40px; text-align:center; color:var(--muted2); font-size:13px; border:1px dashed var(--border); border-radius:10px; }
     .empty-state .icon { font-size:28px; margin-bottom:8px; }
@@ -306,12 +333,21 @@
       </div>
     </div>
 
-    <!-- CV Results -->
-    <div id="cv-results-section" style="display:none">
-      <div class="section-hdr">
-        <h2>Cross-Validation Results</h2>
-        <span class="pill" id="cv-run-meta"></span>
-      </div>
+  </main>
+</div>
+
+<!-- CV Results Modal -->
+<div class="modal-backdrop" id="cv-modal" onclick="closeCvModal(event)">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <h2>Cross-Validation Results</h2>
+      <span class="meta" id="cv-run-meta"></span>
+      <button class="modal-close" onclick="closeCvModal()" title="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Summary stat row -->
+      <div class="cv-summary" id="cv-summary-row" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px"></div>
+      <!-- Fold table -->
       <div class="cv-panel">
         <div class="cv-panel-hdr">
           <h3>Per-Fold Breakdown</h3>
@@ -328,11 +364,13 @@
             <tbody id="cv-fold-tbody"></tbody>
           </table>
         </div>
-        <div class="cv-summary" id="cv-summary-row"></div>
       </div>
+      <p style="font-size:11px;color:var(--muted2);margin-top:14px;line-height:1.6">
+        These results are automatically saved and visible to the full research team on the Model Lab page.
+        Re-running CV with different feature or strategy settings will add a new saved run — previous runs are preserved.
+      </p>
     </div>
-
-  </main>
+  </div>
 </div>
 
 <script>
@@ -792,7 +830,7 @@
     var btn = document.getElementById('run-cv-btn');
     btn.disabled = true;
     setCvStatus('<span class="spinner"></span> Starting…', 'running');
-    document.getElementById('cv-results-section').style.display = 'none';
+    document.getElementById('cv-modal').classList.remove('open');
     try {
       var d = await api('/api/modeling/cross-validate', {
         method: 'POST',
@@ -824,11 +862,17 @@
   }
   function setCvStatus(html, cls) { var el = document.getElementById('cv-status'); el.innerHTML = html; el.className = 'status-line '+(cls||''); }
 
+  window.closeCvModal = function (e) {
+    // Close only when clicking the backdrop itself or the close button, not the modal box
+    if (e && e.target !== document.getElementById('cv-modal')) return;
+    document.getElementById('cv-modal').classList.remove('open');
+  };
+  // Also close on Escape
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') document.getElementById('cv-modal').classList.remove('open'); });
+
   function renderCVResults(result, variantId, algorithm, jobId) {
     var folds = Array.isArray(result.folds) ? result.folds : [];
-    var section = document.getElementById('cv-results-section');
-    section.style.display = '';
-    document.getElementById('cv-run-meta').textContent = variantId + ' · ' + algorithm + (jobId ? ' · ' + jobId.slice(0,8)+'…' : '');
+    document.getElementById('cv-run-meta').textContent = variantId + ' · ' + algorithm.replace(/_/g,' ') + (jobId ? ' · job ' + jobId.slice(0,8)+'…' : '');
     var active = folds.filter(function(f){return !f.skipped;});
     document.getElementById('cv-fold-meta').textContent = active.length + ' of ' + folds.length + ' folds completed';
     document.getElementById('cv-fold-tbody').innerHTML = folds.map(function (f) {
@@ -859,7 +903,7 @@
       sumCell('Mean Precision', pct(meanPrec)) +
       sumCell('Mean Recall', pct(meanRec)) +
       sumCell('Excluded Features', excludedFeatureKeys.size);
-    section.scrollIntoView({behavior:'smooth',block:'start'});
+    document.getElementById('cv-modal').classList.add('open');
   }
   function sumCell(label, val) {
     return '<div class="cv-sum-cell"><div class="csv-lbl">'+esc(label)+'</div><div class="csv-val">'+esc(String(val))+'</div></div>';
