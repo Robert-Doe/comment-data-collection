@@ -21,7 +21,7 @@ function trainRandomForest(vectors, labels, options = {}) {
   const treeCount = Math.max(5, Math.floor(Number(options.trees || options.nTrees) || 100));
   const maxDepth = Math.max(2, Math.floor(Number(options.maxDepth) || 10));
   const minSamplesSplit = Math.max(2, Math.floor(Number(options.minSamplesSplit) || 8));
-  const sampleRatio = Math.max(0.1, Number(options.sampleRatio) || 1);
+  const sampleRatio = Math.max(0.1, Number(options.sampleRatio) || 0.8);
   const featureSubsampleSize = Math.max(1, Math.min(
     dimension,
     Math.floor(Number(options.featureSubsampleSize) || Math.sqrt(dimension) || 1),
