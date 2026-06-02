@@ -423,31 +423,33 @@
   }).catch(function () { document.getElementById('variant-select').innerHTML = '<option value="">Failed</option>'; });
 
   // ── Load features ─────────────────────────────────────────────────────────
+  // Response has d.grouped: [{key, title, features:[...]}] — not a flat d.features array
   api('/api/modeling/features').then(function (d) {
-    var families = Array.isArray(d.families) ? d.families : [];
-    var features = Array.isArray(d.features) ? d.features : [];
-    allFeatureKeys = features.map(function (f) { return f.key; });
+    var grouped = Array.isArray(d.grouped) ? d.grouped : [];
+    allFeatureKeys = grouped.reduce(function (acc, fam) {
+      return acc.concat((fam.features || []).map(function (f) { return f.key; }));
+    }, []);
     var container = document.getElementById('feature-families');
-    if (!families.length) { container.innerHTML = '<div style="font-size:11px;color:var(--muted2)">No features.</div>'; return; }
-    container.innerHTML = families.map(function (fam) {
-      var famFeats = features.filter(function (f) { return f.family === fam.id || f.family === fam.title; });
+    if (!grouped.length) { container.innerHTML = '<div style="font-size:11px;color:var(--muted2)">No features.</div>'; return; }
+    container.innerHTML = grouped.map(function (fam) {
+      var famFeats = Array.isArray(fam.features) ? fam.features : [];
       if (!famFeats.length) return '';
       return '<div class="family-block">' +
         '<div class="family-header" onclick="toggleFamilyOpen(this)">' +
-          '<div class="family-toggle on" data-family="' + esc(fam.id||fam.title) + '" onclick="event.stopPropagation();toggleFamily(this)"></div>' +
-          '<span class="family-name">' + esc(fam.title||fam.id) + '</span>' +
+          '<div class="family-toggle on" data-family="' + esc(fam.key||fam.title) + '" onclick="event.stopPropagation();toggleFamily(this)"></div>' +
+          '<span class="family-name">' + esc(fam.title||fam.key) + '</span>' +
           '<span class="family-count">' + famFeats.length + '</span>' +
           '<span class="family-chevron">▼</span>' +
         '</div>' +
         '<div class="family-features">' + famFeats.map(function (f) {
           return '<div class="feat-row">' +
             '<input class="feat-cb" type="checkbox" id="fc-'+esc(f.key)+'" checked data-key="'+esc(f.key)+'" onchange="onFeatureToggle(this)">' +
-            '<label class="feat-label" for="fc-'+esc(f.key)+'">' + esc(f.title||f.key) + '</label>' +
+            '<label class="feat-label" for="fc-'+esc(f.key)+'" title="'+esc(f.meaning||f.description||'')+'">' + esc(f.title||f.key) + '</label>' +
           '</div>';
         }).join('') + '</div>' +
       '</div>';
     }).join('');
-  }).catch(function () { document.getElementById('feature-families').innerHTML = '<div style="font-size:11px;color:var(--bad)">Failed.</div>'; });
+  }).catch(function () { document.getElementById('feature-families').innerHTML = '<div style="font-size:11px;color:var(--bad)">Failed to load features.</div>'; });
 
   window.toggleFamilyOpen = function (header) {
     var feats = header.parentElement.querySelector('.family-features');
@@ -670,19 +672,74 @@
       '</div>';
     }
 
-    // ── Feature weights ──
-    var posW = Array.isArray(rel.positive_weights) ? rel.positive_weights.slice(0,10) : [];
-    var negW = Array.isArray(rel.negative_weights) ? rel.negative_weights.slice(0,10) : [];
-    if (posW.length || negW.length) {
-      var maxW = 0;
-      posW.concat(negW).forEach(function (f) { if (Math.abs(f.weight||0) > maxW) maxW = Math.abs(f.weight); });
+    // ── Features used in training ──
+    var catalog = Array.isArray(m.feature_catalog) ? m.feature_catalog : [];
+    if (catalog.length) {
+      var byFamily = {};
+      catalog.forEach(function (f) { var fam = f.family || 'Other'; if (!byFamily[fam]) byFamily[fam] = []; byFamily[fam].push(f.title || f.key); });
       html += '<div class="md-section">' +
-        '<div class="md-title">Feature Weights</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-          weightCol('↑ Pushes toward UGC comment', posW, maxW, true) +
-          weightCol('↓ Pushes away from comment',  negW, maxW, false) +
+        '<div class="md-title">Features Used in Training (' + catalog.length + ')</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+          catalog.map(function (f) {
+            return '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--card);border:1px solid var(--border);color:var(--muted)" title="' + esc(f.family||'') + '">' + esc(f.title||f.key) + '</span>';
+          }).join('') +
         '</div>' +
       '</div>';
+    }
+
+    // ── Feature importance / weights — algorithm-aware ──
+    var algo = (tc.algorithm || m.algorithm || '').toLowerCase();
+    var isLinear = algo.includes('logistic') || algo.includes('linear') || algo.includes('svm');
+    var isTree   = algo.includes('forest') || algo.includes('boost') || algo.includes('tree') || algo.includes('xgb');
+    var NEAR_ZERO = 0.00005;
+
+    if (isLinear) {
+      // Logistic regression: positive = pushes toward comment, negative = pushes away. Makes sense.
+      var posW = (rel.positive_weights || []).filter(function (f) { return Math.abs(f.weight||0) >= NEAR_ZERO; }).slice(0,12);
+      var negW = (rel.negative_weights || []).filter(function (f) { return Math.abs(f.weight||0) >= NEAR_ZERO; }).slice(0,12);
+      if (posW.length || negW.length) {
+        var maxW = 0;
+        posW.concat(negW).forEach(function (f) { if (Math.abs(f.weight||0) > maxW) maxW = Math.abs(f.weight); });
+        html += '<div class="md-section">' +
+          '<div class="md-title">Feature Coefficients (Logistic Regression)</div>' +
+          '<div style="font-size:10px;color:var(--muted2);margin-bottom:10px">Positive coefficient → feature increases probability of being a comment region. Negative → decreases it.</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+            weightCol('↑ Increases comment probability', posW, maxW, true) +
+            weightCol('↓ Decreases comment probability', negW, maxW, false) +
+          '</div>' +
+        '</div>';
+      }
+    } else if (isTree) {
+      // Random Forest / Gradient Boosting: use feature_importances (always positive — no direction)
+      var imps = (rel.feature_importances || []).filter(function (f) { return (f.absolute_weight||f.importance||0) >= NEAR_ZERO; }).slice(0,20);
+      if (!imps.length) {
+        // Fall back to all weights by absolute value
+        var all = (rel.positive_weights || []).concat(rel.negative_weights || []);
+        all.sort(function (a,b) { return Math.abs(b.weight||0) - Math.abs(a.weight||0); });
+        imps = all.filter(function (f) { return Math.abs(f.weight||0) >= NEAR_ZERO; }).slice(0,20).map(function (f) {
+          return { key: f.key, title: f.title, absolute_weight: Math.abs(f.weight||0) };
+        });
+      }
+      if (imps.length) {
+        var maxImp = imps.reduce(function (m, f) { return Math.max(m, f.absolute_weight||f.importance||0); }, 0);
+        html += '<div class="md-section">' +
+          '<div class="md-title">Feature Importances (' + algo.replace(/_/g,' ') + ')</div>' +
+          '<div style="font-size:10px;color:var(--muted2);margin-bottom:10px">How much each feature contributed to decision splits across all trees. Higher = more relied upon. This is not directional — the model decides direction internally.</div>' +
+          imps.map(function (f, i) {
+            var w = f.absolute_weight || f.importance || 0;
+            var barPct = maxImp > 0 ? Math.round(w / maxImp * 100) : 0;
+            var barColor = i < 3 ? 'var(--accent-hi)' : i < 8 ? 'var(--accent)' : 'var(--muted2)';
+            return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">' +
+              '<span style="font-size:10px;color:var(--muted);width:16px;text-align:right;flex-shrink:0">' + (i+1) + '</span>' +
+              '<span style="font-size:11px;color:var(--text);min-width:160px;flex-shrink:0">' + esc(f.title||f.key) + '</span>' +
+              '<div style="flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden">' +
+                '<div style="width:'+barPct+'%;height:100%;background:'+barColor+';border-radius:4px"></div>' +
+              '</div>' +
+              '<span style="font-size:10px;color:var(--muted2);min-width:48px;text-align:right;font-variant-numeric:tabular-nums">' + w.toFixed(4) + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      }
     }
 
     return html;
