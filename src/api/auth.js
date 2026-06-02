@@ -171,7 +171,7 @@ function createAuthModule(databaseUrl) {
       if (!session || !tokenAllowedRoles.includes(session.role))
         return res.status(401).json({ error: 'Invalid or expired link' });
       const remaining = Math.max(0, Math.floor((new Date(session.expires_at) - Date.now()) / 1000));
-      res.json({ token: session.token, role: 'guest', expires_in: remaining, label: session.label });
+      res.json({ token: session.token, role: session.role, expires_in: remaining, label: session.label });
     } catch (e) { res.status(500).json({ error: 'Server error' }); }
   }
 
