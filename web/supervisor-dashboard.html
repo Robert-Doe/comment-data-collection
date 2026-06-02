@@ -9,8 +9,6 @@
   <script src="./auth.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    /* ── Design tokens ─────────────────────────────────────────────────────── */
     :root {
       --bg:        #070d1a;
       --surface:   #0d1526;
@@ -30,402 +28,173 @@
       --font: "IBM Plex Sans","Segoe UI",system-ui,sans-serif;
       --mono: "IBM Plex Mono","Cascadia Code",monospace;
     }
+    body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
 
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
+    /* ── Top bar ── */
+    .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; height:52px; display:flex; align-items:center; gap:16px; flex-shrink:0; position:sticky; top:0; z-index:100; }
+    .topbar-logo { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-hi); }
+    .topbar-sep { width:1px; height:20px; background:var(--border); }
+    .topbar-title { font-size:13px; color:var(--muted); font-weight:500; letter-spacing:.04em; }
+    .topbar-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+    .user-pill { font-size:12px; background:var(--card); border:1px solid var(--border); border-radius:20px; padding:4px 12px; color:var(--muted); }
+    .user-pill span { color:var(--text); font-weight:600; }
+    .signout-btn { font-size:12px; background:none; border:1px solid var(--border); border-radius:6px; padding:4px 10px; color:var(--muted); cursor:pointer; font-family:var(--font); transition:border-color .15s,color .15s; }
+    .signout-btn:hover { border-color:var(--bad); color:var(--bad); }
 
-    /* ── Top bar ───────────────────────────────────────────────────────────── */
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-shrink: 0;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .topbar-logo {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: var(--accent-hi);
-    }
-    .topbar-sep { width: 1px; height: 20px; background: var(--border); }
-    .topbar-title {
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 500;
-      letter-spacing: .04em;
-    }
-    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-    .user-pill {
-      font-size: 12px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 4px 12px;
-      color: var(--muted);
-    }
-    .user-pill span { color: var(--text); font-weight: 600; }
-    .signout-btn {
-      font-size: 12px;
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px 10px;
-      color: var(--muted);
-      cursor: pointer;
-      font-family: var(--font);
-      transition: border-color .15s, color .15s;
-    }
-    .signout-btn:hover { border-color: var(--bad); color: var(--bad); }
+    /* ── Layout ── */
+    .layout { display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
 
-    /* ── Layout ────────────────────────────────────────────────────────────── */
-    .layout {
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      flex: 1;
-      min-height: 0;
-    }
-
-    /* ── Sidebar ───────────────────────────────────────────────────────────── */
-    .sidebar {
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      padding: 20px 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .sb-section { display: flex; flex-direction: column; gap: 10px; }
-    .sb-title {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--muted2);
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
-    }
-    .sb-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 4px;
-      display: block;
-    }
-    .sb-input, .sb-select {
-      width: 100%;
-      padding: 8px 10px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      color: var(--text);
-      font-size: 12px;
-      font-family: var(--font);
-      outline: none;
-      transition: border-color .15s;
-    }
-    .sb-input:focus, .sb-select:focus { border-color: var(--accent); }
-    .sb-input::placeholder { color: var(--muted2); }
-    select.sb-select option { background: var(--card); }
+    /* ── Sidebar ── */
+    .sidebar { background:var(--surface); border-right:1px solid var(--border); padding:20px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:20px; }
+    .sb-section { display:flex; flex-direction:column; gap:10px; }
+    .sb-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted2); padding-bottom:6px; border-bottom:1px solid var(--border); }
+    .sb-label { font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px; display:block; }
+    .sb-input,.sb-select { width:100%; padding:8px 10px; background:var(--card); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:var(--font); outline:none; transition:border-color .15s; }
+    .sb-input:focus,.sb-select:focus { border-color:var(--accent); }
+    .sb-input::placeholder { color:var(--muted2); }
+    select.sb-select option { background:var(--card); }
 
     /* Feature families */
-    .family-block { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-    .family-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      background: var(--card);
-      cursor: pointer;
-      user-select: none;
-      transition: background .15s;
-    }
-    .family-header:hover { background: var(--card-hi); }
-    .family-toggle {
-      width: 32px; height: 18px;
-      background: var(--border);
-      border-radius: 9px;
-      position: relative;
-      flex-shrink: 0;
-      transition: background .2s;
-      cursor: pointer;
-    }
-    .family-toggle.on { background: var(--accent); }
-    .family-toggle::after {
-      content: '';
-      position: absolute;
-      top: 2px; left: 2px;
-      width: 14px; height: 14px;
-      background: #fff;
-      border-radius: 50%;
-      transition: left .2s;
-    }
-    .family-toggle.on::after { left: 16px; }
-    .family-name { font-size: 11px; font-weight: 600; color: var(--text); flex: 1; }
-    .family-count { font-size: 10px; color: var(--muted2); }
-    .family-features {
-      padding: 8px 10px;
-      display: none;
-      flex-direction: column;
-      gap: 4px;
-      border-top: 1px solid var(--border);
-      background: var(--bg);
-    }
-    .family-features.open { display: flex; }
-    .feat-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 3px 0;
-    }
-    .feat-cb {
-      width: 13px; height: 13px;
-      accent-color: var(--accent);
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    .feat-label { font-size: 11px; color: var(--muted); cursor: pointer; line-height: 1.3; }
-    .feat-label:hover { color: var(--text); }
+    .family-block { border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:4px; }
+    .family-header { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--card); cursor:pointer; user-select:none; transition:background .15s; }
+    .family-header:hover { background:var(--card-hi); }
+    .family-toggle { width:32px; height:18px; background:var(--border); border-radius:9px; position:relative; flex-shrink:0; transition:background .2s; cursor:pointer; }
+    .family-toggle.on { background:var(--accent); }
+    .family-toggle::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; background:#fff; border-radius:50%; transition:left .2s; }
+    .family-toggle.on::after { left:16px; }
+    .family-name { font-size:11px; font-weight:600; color:var(--text); flex:1; }
+    .family-count { font-size:10px; color:var(--muted2); }
+    .family-chevron { font-size:9px; color:var(--muted2); transition:transform .2s; }
+    .family-features { padding:8px 10px; display:none; flex-direction:column; gap:4px; border-top:1px solid var(--border); background:var(--bg); }
+    .family-features.open { display:flex; }
+    .feat-row { display:flex; align-items:center; gap:6px; padding:3px 0; }
+    .feat-cb { width:13px; height:13px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+    .feat-label { font-size:11px; color:var(--muted); cursor:pointer; line-height:1.3; }
+    .feat-label:hover { color:var(--text); }
 
-    /* Run button */
-    .run-btn {
-      width: 100%;
-      padding: 11px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      font-family: var(--font);
-      cursor: pointer;
-      letter-spacing: .03em;
-      transition: background .15s, transform .1s;
-    }
-    .run-btn:hover:not(:disabled) { background: var(--accent-hi); }
-    .run-btn:active:not(:disabled) { transform: scale(.98); }
-    .run-btn:disabled { background: var(--muted2); cursor: not-allowed; opacity: .7; }
+    /* Buttons */
+    .run-btn { width:100%; padding:11px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; font-family:var(--font); cursor:pointer; letter-spacing:.03em; transition:background .15s,transform .1s; }
+    .run-btn:hover:not(:disabled) { background:var(--accent-hi); }
+    .run-btn:active:not(:disabled) { transform:scale(.98); }
+    .run-btn:disabled { background:var(--muted2); cursor:not-allowed; opacity:.7; }
+    .mini-btn { padding:5px 8px; font-size:10px; background:var(--card); border:1px solid var(--border); border-radius:5px; color:var(--muted); cursor:pointer; font-family:var(--font); transition:border-color .15s,color .15s; }
+    .mini-btn:hover { border-color:var(--accent); color:var(--accent-hi); }
 
-    .status-line {
-      font-size: 11px;
-      color: var(--muted);
-      text-align: center;
-      min-height: 16px;
-    }
-    .status-line.running { color: var(--accent-hi); }
-    .status-line.error   { color: var(--bad); }
-    .status-line.ok      { color: var(--good); }
+    .status-line { font-size:11px; color:var(--muted); text-align:center; min-height:16px; }
+    .status-line.running { color:var(--accent-hi); }
+    .status-line.error   { color:var(--bad); }
+    .status-line.ok      { color:var(--good); }
 
-    /* ── Main content ──────────────────────────────────────────────────────── */
-    .main {
-      overflow-y: auto;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
+    /* ── Main ── */
+    .main { overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:24px; }
+    .section-hdr { display:flex; align-items:baseline; gap:12px; margin-bottom:14px; }
+    .section-hdr h2 { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); }
+    .section-hdr .pill { font-size:11px; background:var(--card); border:1px solid var(--border); border-radius:20px; padding:2px 8px; color:var(--muted); }
 
-    /* Section headers */
-    .section-hdr {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .section-hdr h2 {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      color: var(--muted);
-    }
-    .section-hdr .pill {
-      font-size: 11px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 2px 8px;
-      color: var(--muted);
-    }
-
-    /* Stat bar at top */
-    .stat-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-    }
-    .stat-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      position: relative;
-      overflow: hidden;
-    }
-    .stat-card::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: var(--accent);
-      border-radius: 10px 10px 0 0;
-    }
-    .stat-card.good::before  { background: var(--good); }
-    .stat-card.warn::before  { background: var(--warn); }
-    .stat-card.bad::before   { background: var(--bad); }
-    .sc-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted2); margin-bottom: 4px; }
-    .sc-val   { font-size: 26px; font-weight: 800; line-height: 1; color: var(--text); }
-    .sc-sub   { font-size: 10px; color: var(--muted2); margin-top: 3px; }
+    /* Stat bar */
+    .stat-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .stat-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; position:relative; overflow:hidden; }
+    .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); border-radius:10px 10px 0 0; }
+    .stat-card.good::before { background:var(--good); }
+    .stat-card.warn::before { background:var(--warn); }
+    .stat-card.bad::before  { background:var(--bad); }
+    .sc-label { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted2); margin-bottom:4px; }
+    .sc-val   { font-size:26px; font-weight:800; line-height:1; color:var(--text); }
+    .sc-sub   { font-size:10px; color:var(--muted2); margin-top:3px; }
 
     /* Model cards */
-    .model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .model-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
-      transition: border-color .15s;
-      cursor: default;
-    }
-    .model-card:hover { border-color: var(--border-hi); }
-    .model-card.best  { border-color: var(--accent-dim); }
-    .mc-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-    .mc-id  { font-size: 10px; font-family: var(--mono); color: var(--muted2); }
-    .mc-badge {
-      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
-      background: var(--accent-dim); color: #fff;
-    }
-    .mc-badge.best { background: var(--good); }
-    .mc-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-    .mc-metric { text-align: center; }
-    .mc-metric .val {
-      font-size: 18px; font-weight: 700;
-      color: var(--text);
-    }
-    .mc-metric .lbl { font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: .05em; }
-    .mc-metric .val.good { color: var(--good); }
-    .mc-metric .val.warn { color: var(--warn); }
-    .mc-metric .val.bad  { color: var(--bad); }
-    .mc-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .mc-tag {
-      font-size: 10px; padding: 2px 6px; border-radius: 4px;
-      background: var(--surface); border: 1px solid var(--border);
-      color: var(--muted);
-    }
+    .model-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .model-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; transition:border-color .15s,box-shadow .15s; cursor:pointer; }
+    .model-card:hover { border-color:var(--border-hi); box-shadow:0 0 0 1px var(--border-hi); }
+    .model-card.best  { border-color:var(--accent-dim); }
+    .model-card.expanded { border-color:var(--accent); }
+    .mc-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px; gap:8px; flex-wrap:wrap; }
+    .mc-id  { font-size:10px; font-family:var(--mono); color:var(--muted2); }
+    .mc-badges { display:flex; gap:4px; flex-wrap:wrap; }
+    .mc-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:4px; background:var(--accent-dim); color:#fff; white-space:nowrap; }
+    .mc-badge.best     { background:var(--good); color:#fff; }
+    .mc-badge.smote    { background:#7c3aed; }
+    .mc-badge.weighted { background:#0891b2; }
+    .mc-badge.oversample { background:#059669; }
+    .mc-badge.undersample { background:#d97706; color:#fff; }
+    .mc-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+    .mc-metric { text-align:center; }
+    .mc-metric .val { font-size:18px; font-weight:700; color:var(--text); }
+    .mc-metric .lbl { font-size:10px; color:var(--muted2); text-transform:uppercase; letter-spacing:.05em; }
+    .mc-metric .val.good { color:var(--good); }
+    .mc-metric .val.warn { color:var(--warn); }
+    .mc-metric .val.bad  { color:var(--bad); }
+    .mc-footer { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .mc-tag { font-size:10px; padding:2px 6px; border-radius:4px; background:var(--surface); border:1px solid var(--border); color:var(--muted); }
+    .mc-expand-hint { font-size:10px; color:var(--muted2); margin-left:auto; }
 
-    /* CV results */
-    .cv-panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
+    /* Model detail panel */
+    .model-detail {
+      display:none;
+      background:var(--bg);
+      border:1px solid var(--border);
+      border-radius:10px;
+      margin-top:8px;
+      overflow:hidden;
     }
-    .cv-panel-hdr {
-      padding: 12px 16px;
-      background: var(--card-hi);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-    }
-    .cv-panel-hdr h3 { font-size: 13px; font-weight: 700; color: var(--text); }
-    .cv-panel-hdr .meta { font-size: 11px; color: var(--muted); }
-    .cv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .cv-table th {
-      padding: 8px 12px;
-      text-align: left;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--muted2);
-      border-bottom: 1px solid var(--border);
-    }
-    .cv-table th.num { text-align: right; }
-    .cv-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid rgba(30,53,96,.4);
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .cv-table tr:last-child td { border-bottom: none; }
-    .cv-table tr:hover td { background: var(--card-hi); }
-    .cv-table td.num { text-align: right; }
-    .cv-table td.best-f1 { font-weight: 800; color: var(--accent-hi); }
+    .model-detail.open { display:block; }
+    .md-section { padding:16px; border-bottom:1px solid var(--border); }
+    .md-section:last-child { border-bottom:none; }
+    .md-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted2); margin-bottom:10px; }
+    .md-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .md-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+    .md-metric { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+    .md-metric .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted2); margin-bottom:3px; }
+    .md-metric .val { font-size:20px; font-weight:800; }
+    .md-metric .val.good { color:var(--good); }
+    .md-metric .val.warn { color:var(--warn); }
+    .md-metric .val.bad  { color:var(--bad); }
+    .md-metric .val.plain { color:var(--text); }
+    .md-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .md-table th { padding:5px 8px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted2); border-bottom:1px solid var(--border); }
+    .md-table th.num { text-align:right; }
+    .md-table td { padding:5px 8px; border-bottom:1px solid rgba(30,53,96,.3); color:var(--text); }
+    .md-table tr:last-child td { border-bottom:none; }
+    .md-table tr:hover td { background:var(--card); }
+    .md-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .weight-bar-pos { height:6px; background:var(--good); border-radius:3px; display:inline-block; }
+    .weight-bar-neg { height:6px; background:var(--bad);  border-radius:3px; display:inline-block; }
+    .xss-bar { height:6px; background:var(--accent); border-radius:3px; }
 
-    /* Summary row */
-    .cv-summary { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--border); }
-    .cv-sum-cell { padding: 12px 16px; border-right: 1px solid var(--border); }
-    .cv-sum-cell:last-child { border-right: none; }
-    .csv-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted2); margin-bottom: 3px; }
-    .csv-val { font-size: 16px; font-weight: 700; color: var(--text); }
-    .csv-sub { font-size: 10px; color: var(--muted2); margin-top: 2px; }
+    /* CV panel */
+    .cv-panel { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .cv-panel-hdr { padding:12px 16px; background:var(--card-hi); border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:12px; }
+    .cv-panel-hdr h3 { font-size:13px; font-weight:700; color:var(--text); }
+    .cv-panel-hdr .meta { font-size:11px; color:var(--muted); }
+    .cv-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .cv-table th { padding:8px 12px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted2); border-bottom:1px solid var(--border); }
+    .cv-table th.num { text-align:right; }
+    .cv-table td { padding:8px 12px; border-bottom:1px solid rgba(30,53,96,.4); color:var(--text); font-variant-numeric:tabular-nums; }
+    .cv-table tr:last-child td { border-bottom:none; }
+    .cv-table tr:hover td { background:var(--card-hi); }
+    .cv-table td.num { text-align:right; }
+    .cv-table td.best-f1 { font-weight:800; color:var(--accent-hi); }
+    .cv-summary { display:grid; grid-template-columns:repeat(5,1fr); border-top:1px solid var(--border); }
+    .cv-sum-cell { padding:12px 16px; border-right:1px solid var(--border); }
+    .cv-sum-cell:last-child { border-right:none; }
+    .csv-lbl { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted2); margin-bottom:3px; }
+    .csv-val { font-size:16px; font-weight:700; color:var(--text); }
 
-    /* Empty / loading states */
-    .empty-state {
-      padding: 40px;
-      text-align: center;
-      color: var(--muted2);
-      font-size: 13px;
-      border: 1px dashed var(--border);
-      border-radius: 10px;
-    }
-    .empty-state .icon { font-size: 28px; margin-bottom: 8px; }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
-
-    /* Spinner */
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      display: inline-block;
-      width: 12px; height: 12px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      vertical-align: middle;
-      margin-right: 4px;
-    }
-
-    /* Pulse dot */
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-    .pulse-dot {
-      display: inline-block;
-      width: 7px; height: 7px;
-      background: var(--good);
-      border-radius: 50%;
-      animation: pulse 1.4s ease infinite;
-      margin-right: 5px;
-      vertical-align: middle;
-    }
-
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
-      .stat-bar { grid-template-columns: repeat(2, 1fr); }
-      .model-grid { grid-template-columns: 1fr; }
-    }
+    /* Misc */
+    .empty-state { padding:40px; text-align:center; color:var(--muted2); font-size:13px; border:1px dashed var(--border); border-radius:10px; }
+    .empty-state .icon { font-size:28px; margin-bottom:8px; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { display:inline-block; width:12px; height:12px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:4px; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+    .pulse-dot { display:inline-block; width:7px; height:7px; background:var(--good); border-radius:50%; animation:pulse 1.4s ease infinite; margin-right:5px; vertical-align:middle; }
+    @media (max-width:900px) { .layout{grid-template-columns:1fr} .stat-bar{grid-template-columns:repeat(2,1fr)} .model-grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
 
-<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
 <header class="topbar">
   <span class="topbar-logo">◈ UGC Research</span>
   <div class="topbar-sep"></div>
@@ -437,31 +206,25 @@
 </header>
 
 <div class="layout">
-
-  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+  <!-- ── Sidebar ── -->
   <aside class="sidebar">
 
-    <!-- Scope -->
     <div class="sb-section">
-      <div class="sb-title">▸ Scope</div>
+      <div class="sb-title">▸ Dataset Scope</div>
       <div>
-        <label class="sb-label">Job ID (Unified Job)</label>
-        <input class="sb-input" id="job-id-input" type="text" placeholder="e.g. unified-2026-05-15">
-        <div style="margin-top:6px;display:flex;gap:6px">
-          <button class="run-btn" style="padding:7px;font-size:11px" id="load-scope-btn">Load Job</button>
-        </div>
+        <label class="sb-label">Job</label>
+        <select class="sb-select" id="job-select">
+          <option value="">Loading jobs…</option>
+        </select>
         <div id="scope-status" class="status-line" style="margin-top:6px;text-align:left"></div>
       </div>
     </div>
 
-    <!-- Configuration -->
     <div class="sb-section">
       <div class="sb-title">▸ Configuration</div>
       <div>
         <label class="sb-label">Model Variant</label>
-        <select class="sb-select" id="variant-select">
-          <option value="">Loading…</option>
-        </select>
+        <select class="sb-select" id="variant-select"><option value="">Loading…</option></select>
       </div>
       <div>
         <label class="sb-label">Algorithm</label>
@@ -477,43 +240,38 @@
           <option value="baseline">Baseline (no resampling)</option>
           <option value="class_weighted">Class Weighted</option>
           <option value="oversample">Oversample Minority</option>
-          <option value="smote">SMOTE-like</option>
+          <option value="smote">SMOTE-like Synthesis</option>
         </select>
       </div>
     </div>
 
-    <!-- Feature Control -->
     <div class="sb-section">
       <div class="sb-title">▸ Feature Control</div>
-      <div style="font-size:11px;color:var(--muted2);margin-bottom:6px">
-        Toggle entire families or individual features on/off. Excluded features are greyed out and not used in CV.
-      </div>
-      <div id="feature-families">
-        <div class="empty-state" style="padding:16px;font-size:11px">Loading feature catalog…</div>
-      </div>
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:6px">Toggle families or individual features. Disabled features are excluded from CV runs.</div>
+      <div id="feature-families"><div class="empty-state" style="padding:14px;font-size:11px">Loading…</div></div>
       <div style="display:flex;gap:6px;margin-top:4px">
-        <button onclick="setAllFeatures(true)"  style="flex:1;padding:5px;font-size:10px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer">Enable all</button>
-        <button onclick="setAllFeatures(false)" style="flex:1;padding:5px;font-size:10px;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer">Disable all</button>
+        <button class="mini-btn" style="flex:1" onclick="setAllFeatures(true)">Enable all</button>
+        <button class="mini-btn" style="flex:1" onclick="setAllFeatures(false)">Disable all</button>
       </div>
+      <div id="excluded-count" style="font-size:10px;color:var(--muted2);text-align:center;margin-top:2px"></div>
     </div>
 
-    <!-- Run -->
     <div class="sb-section">
       <div class="sb-title">▸ Actions</div>
       <button class="run-btn" id="run-cv-btn">Run 5-Fold Cross-Validation</button>
       <div id="cv-status" class="status-line"></div>
       <div style="font-size:10px;color:var(--muted2);line-height:1.5;margin-top:4px">
-        Results are shared — any CV run here is visible to the research team immediately.
+        Results are shared — any CV run here is visible to the full research team immediately.
       </div>
     </div>
 
   </aside>
 
-  <!-- ── Main content ──────────────────────────────────────────────────────── -->
+  <!-- ── Main ── -->
   <main class="main">
 
     <!-- Stat bar -->
-    <div class="stat-bar" id="stat-bar">
+    <div class="stat-bar">
       <div class="stat-card">
         <div class="sc-label">Models Trained</div>
         <div class="sc-val" id="stat-models">—</div>
@@ -522,32 +280,29 @@
       <div class="stat-card good">
         <div class="sc-label">Best F1</div>
         <div class="sc-val" id="stat-f1">—</div>
-        <div class="sc-sub" id="stat-f1-sub">test set</div>
+        <div class="sc-sub">test set</div>
       </div>
       <div class="stat-card">
         <div class="sc-label">Best Precision</div>
         <div class="sc-val" id="stat-prec">—</div>
-        <div class="sc-sub">at best threshold</div>
+        <div class="sc-sub">at optimal threshold</div>
       </div>
       <div class="stat-card">
         <div class="sc-label">Best Recall</div>
         <div class="sc-val" id="stat-rec">—</div>
-        <div class="sc-sub">at best threshold</div>
+        <div class="sc-sub">at optimal threshold</div>
       </div>
     </div>
 
-    <!-- Trained models -->
+    <!-- Models -->
     <div>
       <div class="section-hdr">
         <h2>Trained Models</h2>
         <span class="pill" id="models-count">loading…</span>
-        <button onclick="loadModels()" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--muted);cursor:pointer;margin-left:auto">↻ Refresh</button>
+        <button class="mini-btn" style="margin-left:auto" onclick="loadModels()">↻ Refresh</button>
       </div>
       <div class="model-grid" id="model-grid">
-        <div class="empty-state" style="grid-column:1/-1">
-          <div class="icon">⬡</div>
-          Loading models…
-        </div>
+        <div class="empty-state" style="grid-column:1/-1"><span class="spinner"></span> Loading…</div>
       </div>
     </div>
 
@@ -565,15 +320,10 @@
         <div style="overflow-x:auto">
           <table class="cv-table">
             <thead><tr>
-              <th>Fold</th>
-              <th class="num">Train</th>
-              <th class="num">Test</th>
-              <th class="num">F1 @0.50</th>
-              <th class="num">Best F1 ★</th>
-              <th class="num">Threshold</th>
-              <th class="num">Precision</th>
-              <th class="num">Recall</th>
-              <th class="num">ROC-AUC</th>
+              <th>Fold</th><th class="num">Train</th><th class="num">Test</th>
+              <th class="num">F1 @0.50</th><th class="num">Best F1 ★</th>
+              <th class="num">Threshold</th><th class="num">Precision</th>
+              <th class="num">Recall</th><th class="num">ROC-AUC</th>
             </tr></thead>
             <tbody id="cv-fold-tbody"></tbody>
           </table>
@@ -589,22 +339,19 @@
 (function () {
   'use strict';
 
-  // ── Config & auth ──────────────────────────────────────────────────────────
-  var cfg     = window.__APP_CONFIG__ || {};
-  var API     = (cfg.apiBase || cfg.apiBaseUrl || '').replace(/\/+$/, '');
+  // ── API ────────────────────────────────────────────────────────────────────
+  var cfg = window.__APP_CONFIG__ || {};
+  var API = (cfg.apiBase || cfg.apiBaseUrl || '').replace(/\/+$/, '');
   if (!API) {
     var h = location.hostname;
-    API = (h === 'localhost' || h === '127.0.0.1')
-      ? 'http://localhost:3000'
-      : 'https://api.' + h.replace(/^www\./, '');
+    API = (h === 'localhost' || h === '127.0.0.1') ? 'http://localhost:3000'
+        : 'https://api.' + h.replace(/^www\./, '');
   }
-
   function authHeaders() {
     var t = (window.__AUTH__ && window.__AUTH__.getToken && window.__AUTH__.getToken())
             || localStorage.getItem('ugc_auth_token') || '';
     return t ? { Authorization: 'Bearer ' + t } : {};
   }
-
   async function api(path, opts) {
     opts = opts || {};
     var res = await fetch(API + path, Object.assign({}, opts, {
@@ -614,268 +361,388 @@
     if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
     return body;
   }
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function pct(v, dec) { dec = dec != null ? dec : 1; return v != null ? (v*100).toFixed(dec)+'%' : '—'; }
+  function metricClass(v, good, warn) { if (v==null) return 'plain'; if (v>=good) return 'good'; if (v>=warn) return 'warn'; return 'bad'; }
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
+  // ── Auth check ────────────────────────────────────────────────────────────
+  var role = localStorage.getItem('ugc_auth_role') || '';
+  if (role && role !== 'supervisor' && role !== 'admin') { window.location.replace('./index.html'); }
+  api('/api/auth/check').then(function (d) {
+    document.getElementById('user-name').textContent = d.display_name || d.email || 'Supervisor';
+  }).catch(function(){});
 
-  function pct(v) { return v != null ? (v * 100).toFixed(1) + '%' : '—'; }
-
-  function metricColor(v, good, warn) {
-    if (v == null) return '';
-    if (v >= good) return 'good';
-    if (v >= warn) return 'warn';
-    return 'bad';
-  }
-
-  // ── User info ──────────────────────────────────────────────────────────────
-  (function () {
-    var role = localStorage.getItem('ugc_auth_role') || '';
-    if (role && role !== 'supervisor' && role !== 'admin') {
-      window.location.replace('./index.html');
-      return;
-    }
-    api('/api/auth/check').then(function (d) {
-      var name = d.display_name || d.email || 'Supervisor';
-      document.getElementById('user-name').textContent = name;
-    }).catch(function () {});
-  })();
-
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────────
   var excludedFeatureKeys = new Set();
-  var allFeatureKeys      = [];
-  var currentPollTimer    = null;
+  var allFeatureKeys = [];
+  var currentPollTimer = null;
+  var expandedModelId = null;
+  var UNIFIED_JOB_ID = null;
 
-  // ── Load variants ──────────────────────────────────────────────────────────
+  // ── Load jobs ─────────────────────────────────────────────────────────────
+  api('/api/jobs?limit=50').then(function (d) {
+    var jobs = Array.isArray(d.jobs) ? d.jobs : [];
+    var sel = document.getElementById('job-select');
+
+    // Identify unified job — has source_job_ids array with entries
+    var unifiedJob = jobs.find(function (j) { return Array.isArray(j.source_job_ids) && j.source_job_ids.length > 3; })
+                  || jobs.find(function (j) { return (j.source_filename || '').toLowerCase().includes('unified'); });
+
+    if (unifiedJob) UNIFIED_JOB_ID = unifiedJob.id;
+
+    sel.innerHTML = '<option value="">— All jobs —</option>' + jobs.map(function (j) {
+      var label = j.source_filename || j.id.slice(0, 8);
+      var isUnified = j.id === (unifiedJob && unifiedJob.id);
+      var urls  = j.total_urls ? ' (' + j.total_urls + ' URLs)' : '';
+      return '<option value="' + esc(j.id) + '"' + (isUnified ? ' selected' : '') + '>'
+        + esc(label + urls) + (isUnified ? ' ★ Unified' : '') + '</option>';
+    }).join('');
+
+    // Set scope status
+    if (unifiedJob) {
+      document.getElementById('scope-status').textContent = '★ Unified dataset auto-selected';
+      document.getElementById('scope-status').className = 'status-line ok';
+    }
+
+    // Trigger model load with unified job
+    loadModels();
+  }).catch(function (err) {
+    document.getElementById('job-select').innerHTML = '<option value="">Failed to load jobs</option>';
+  });
+
+  // Reload models when job changes
+  document.getElementById('job-select').addEventListener('change', function () { loadModels(); });
+
+  // ── Load variants ─────────────────────────────────────────────────────────
   api('/api/modeling/variants').then(function (d) {
     var variants = Array.isArray(d.variants) ? d.variants : [];
     var sel = document.getElementById('variant-select');
     sel.innerHTML = variants.map(function (v) {
       return '<option value="' + esc(v.id) + '">' + esc(v.title || v.id) + '</option>';
     }).join('') || '<option value="">No variants</option>';
-  }).catch(function () {
-    document.getElementById('variant-select').innerHTML = '<option value="">Failed to load</option>';
-  });
+  }).catch(function () { document.getElementById('variant-select').innerHTML = '<option value="">Failed</option>'; });
 
-  // ── Load feature catalog ───────────────────────────────────────────────────
+  // ── Load features ─────────────────────────────────────────────────────────
   api('/api/modeling/features').then(function (d) {
     var families = Array.isArray(d.families) ? d.families : [];
     var features = Array.isArray(d.features) ? d.features : [];
     allFeatureKeys = features.map(function (f) { return f.key; });
-
     var container = document.getElementById('feature-families');
-    if (!families.length) {
-      container.innerHTML = '<div style="font-size:11px;color:var(--muted2)">No features found.</div>';
-      return;
-    }
-
+    if (!families.length) { container.innerHTML = '<div style="font-size:11px;color:var(--muted2)">No features.</div>'; return; }
     container.innerHTML = families.map(function (fam) {
       var famFeats = features.filter(function (f) { return f.family === fam.id || f.family === fam.title; });
       if (!famFeats.length) return '';
-      var featsHtml = famFeats.map(function (f) {
-        return '<div class="feat-row">' +
-          '<input class="feat-cb" type="checkbox" id="fc-' + esc(f.key) + '" checked data-key="' + esc(f.key) + '" onchange="onFeatureToggle(this)">' +
-          '<label class="feat-label" for="fc-' + esc(f.key) + '">' + esc(f.title || f.key) + '</label>' +
-          '</div>';
-      }).join('');
       return '<div class="family-block">' +
-        '<div class="family-header" onclick="toggleFamilyFeatures(this)">' +
-          '<div class="family-toggle on" data-family="' + esc(fam.id || fam.title) + '" onclick="event.stopPropagation();toggleFamily(this)"></div>' +
-          '<span class="family-name">' + esc(fam.title || fam.id) + '</span>' +
+        '<div class="family-header" onclick="toggleFamilyOpen(this)">' +
+          '<div class="family-toggle on" data-family="' + esc(fam.id||fam.title) + '" onclick="event.stopPropagation();toggleFamily(this)"></div>' +
+          '<span class="family-name">' + esc(fam.title||fam.id) + '</span>' +
           '<span class="family-count">' + famFeats.length + '</span>' +
+          '<span class="family-chevron">▼</span>' +
         '</div>' +
-        '<div class="family-features">' + featsHtml + '</div>' +
-        '</div>';
+        '<div class="family-features">' + famFeats.map(function (f) {
+          return '<div class="feat-row">' +
+            '<input class="feat-cb" type="checkbox" id="fc-'+esc(f.key)+'" checked data-key="'+esc(f.key)+'" onchange="onFeatureToggle(this)">' +
+            '<label class="feat-label" for="fc-'+esc(f.key)+'">' + esc(f.title||f.key) + '</label>' +
+          '</div>';
+        }).join('') + '</div>' +
+      '</div>';
     }).join('');
-  }).catch(function () {
-    document.getElementById('feature-families').innerHTML =
-      '<div style="font-size:11px;color:var(--bad)">Failed to load features.</div>';
-  });
+  }).catch(function () { document.getElementById('feature-families').innerHTML = '<div style="font-size:11px;color:var(--bad)">Failed.</div>'; });
 
-  window.toggleFamilyFeatures = function (header) {
+  window.toggleFamilyOpen = function (header) {
     var feats = header.parentElement.querySelector('.family-features');
-    if (feats) feats.classList.toggle('open');
+    var chev  = header.querySelector('.family-chevron');
+    if (feats) { feats.classList.toggle('open'); if (chev) chev.style.transform = feats.classList.contains('open') ? 'rotate(180deg)' : ''; }
   };
-
   window.toggleFamily = function (toggle) {
-    var isOn = toggle.classList.contains('on');
-    var newOn = !isOn;
+    var newOn = !toggle.classList.contains('on');
     toggle.classList.toggle('on', newOn);
-    var family = toggle.getAttribute('data-family');
-    var block = toggle.closest('.family-block');
-    block.querySelectorAll('.feat-cb').forEach(function (cb) {
+    toggle.closest('.family-block').querySelectorAll('.feat-cb').forEach(function (cb) {
       cb.checked = newOn;
-      if (!newOn) excludedFeatureKeys.add(cb.dataset.key);
-      else excludedFeatureKeys.delete(cb.dataset.key);
+      if (!newOn) excludedFeatureKeys.add(cb.dataset.key); else excludedFeatureKeys.delete(cb.dataset.key);
     });
+    updateExcludedCount();
   };
-
   window.onFeatureToggle = function (cb) {
-    if (!cb.checked) excludedFeatureKeys.add(cb.dataset.key);
-    else excludedFeatureKeys.delete(cb.dataset.key);
-    // Update family toggle state
+    if (!cb.checked) excludedFeatureKeys.add(cb.dataset.key); else excludedFeatureKeys.delete(cb.dataset.key);
     var block = cb.closest('.family-block');
-    if (!block) return;
-    var allCbs = block.querySelectorAll('.feat-cb');
-    var allOn  = Array.from(allCbs).every(function (c) { return c.checked; });
-    var toggle = block.querySelector('.family-toggle');
-    if (toggle) toggle.classList.toggle('on', allOn);
+    if (block) { var allOn = Array.from(block.querySelectorAll('.feat-cb')).every(function (c) { return c.checked; }); var t = block.querySelector('.family-toggle'); if (t) t.classList.toggle('on', allOn); }
+    updateExcludedCount();
   };
-
   window.setAllFeatures = function (enabled) {
-    document.querySelectorAll('.feat-cb').forEach(function (cb) {
-      cb.checked = enabled;
-      if (!enabled) excludedFeatureKeys.add(cb.dataset.key);
-      else excludedFeatureKeys.delete(cb.dataset.key);
-    });
-    document.querySelectorAll('.family-toggle').forEach(function (t) {
-      t.classList.toggle('on', enabled);
-    });
+    document.querySelectorAll('.feat-cb').forEach(function (cb) { cb.checked = enabled; if (!enabled) excludedFeatureKeys.add(cb.dataset.key); else excludedFeatureKeys.delete(cb.dataset.key); });
+    document.querySelectorAll('.family-toggle').forEach(function (t) { t.classList.toggle('on', enabled); });
+    updateExcludedCount();
   };
+  function updateExcludedCount() {
+    var n = excludedFeatureKeys.size;
+    var el = document.getElementById('excluded-count');
+    el.textContent = n > 0 ? n + ' feature' + (n>1?'s':'') + ' excluded' : '';
+  }
 
-  // ── Load scope (job) ───────────────────────────────────────────────────────
-  document.getElementById('load-scope-btn').addEventListener('click', function () {
-    var jobId = document.getElementById('job-id-input').value.trim();
-    var el    = document.getElementById('scope-status');
-    if (!jobId) { el.textContent = 'Enter a job ID first.'; el.className = 'status-line error'; return; }
-    el.innerHTML = '<span class="spinner"></span> Checking…';
-    el.className = 'status-line running';
-    api('/api/modeling/overview?jobIds=' + encodeURIComponent(jobId))
-      .then(function (d) {
-        var count = (d.labeled_candidate_count || d.total_labeled || '?');
-        el.textContent = '✓ Job loaded — ' + count + ' labeled candidates';
-        el.className = 'status-line ok';
-        loadModels(jobId);
-      })
-      .catch(function (err) {
-        el.textContent = err.message || 'Failed to load job.';
-        el.className = 'status-line error';
-      });
-  });
-
-  // ── Load models ────────────────────────────────────────────────────────────
-  window.loadModels = function (jobId) {
-    var url = '/api/modeling/models';
-    if (jobId) url += '?jobIds=' + encodeURIComponent(jobId);
-    var grid = document.getElementById('model-grid');
+  // ── Load models ───────────────────────────────────────────────────────────
+  window.loadModels = function () {
+    var jobId = document.getElementById('job-select').value;
+    var url   = '/api/modeling/models' + (jobId ? '?jobIds=' + encodeURIComponent(jobId) : '');
+    var grid  = document.getElementById('model-grid');
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><span class="spinner"></span> Loading…</div>';
 
     api(url).then(function (d) {
       var models = Array.isArray(d.models) ? d.models : [];
-      document.getElementById('models-count').textContent = models.length + ' model' + (models.length !== 1 ? 's' : '');
-
+      document.getElementById('models-count').textContent = models.length + ' model' + (models.length!==1?'s':'');
       if (!models.length) {
-        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">⬡</div>No trained models yet. Run cross-validation to get started.</div>';
-        updateStatBar([]);
-        return;
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">⬡</div>No trained models yet.</div>';
+        updateStatBar([]); return;
       }
-
-      // Sort by best test F1
       models.sort(function (a, b) {
-        var af = (a.evaluation && a.evaluation.test && a.evaluation.test.candidate_metrics && a.evaluation.test.candidate_metrics.f1) || 0;
-        var bf = (b.evaluation && b.evaluation.test && b.evaluation.test.candidate_metrics && b.evaluation.test.candidate_metrics.f1) || 0;
+        var af = getF1(a), bf = getF1(b);
         return bf - af;
       });
-
       updateStatBar(models);
-      grid.innerHTML = models.map(function (m, i) { return renderModelCard(m, i === 0); }).join('');
+      expandedModelId = null;
+      grid.innerHTML = models.map(function (m, i) { return renderModelCard(m, i===0); }).join('');
+      grid.querySelectorAll('.model-card').forEach(function (card) {
+        card.addEventListener('click', function () { toggleModelDetail(card.dataset.modelId, models); });
+      });
     }).catch(function () {
       grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;color:var(--bad)">Failed to load models.</div>';
     });
   };
 
+  function getF1(m) {
+    var ev = (m.evaluation && m.evaluation.test) || (m.evaluation && m.evaluation.train) || {};
+    var cm = ev.candidate_metrics || {};
+    return cm.f1 != null ? cm.f1 : 0;
+  }
+
   function updateStatBar(models) {
-    if (!models.length) {
-      ['stat-models','stat-f1','stat-prec','stat-rec'].forEach(function (id) {
-        document.getElementById(id).textContent = '—';
-      });
-      return;
-    }
+    if (!models.length) { ['stat-models','stat-f1','stat-prec','stat-rec'].forEach(function(id){document.getElementById(id).textContent='—';}); return; }
     document.getElementById('stat-models').textContent = models.length;
     var best = models[0];
-    var cm = best.evaluation && best.evaluation.test && best.evaluation.test.candidate_metrics;
-    if (!cm) cm = best.evaluation && best.evaluation.train && best.evaluation.train.candidate_metrics;
-    document.getElementById('stat-f1').textContent   = cm ? pct(cm.f1)        : '—';
-    document.getElementById('stat-prec').textContent = cm ? pct(cm.precision)  : '—';
-    document.getElementById('stat-rec').textContent  = cm ? pct(cm.recall)     : '—';
+    var ev = (best.evaluation && best.evaluation.test) || (best.evaluation && best.evaluation.train) || {};
+    var cm = ev.candidate_metrics || {};
+    document.getElementById('stat-f1').textContent   = pct(cm.f1);
+    document.getElementById('stat-prec').textContent = pct(cm.precision);
+    document.getElementById('stat-rec').textContent  = pct(cm.recall);
+  }
+
+  function strategyBadge(strategy) {
+    if (!strategy) return '';
+    var s = String(typeof strategy === 'object' ? (strategy.id || '') : strategy).toLowerCase();
+    if (s.includes('smote'))      return '<span class="mc-badge smote">SMOTE</span>';
+    if (s.includes('weight'))     return '<span class="mc-badge weighted">Weighted</span>';
+    if (s.includes('over'))       return '<span class="mc-badge oversample">Oversample</span>';
+    if (s.includes('under'))      return '<span class="mc-badge undersample">Undersample</span>';
+    return '';
   }
 
   function renderModelCard(m, isBest) {
     var ev   = (m.evaluation && m.evaluation.test) || (m.evaluation && m.evaluation.train) || {};
     var cm   = ev.candidate_metrics || {};
-    var f1   = cm.f1   != null ? cm.f1   : null;
-    var prec = cm.precision != null ? cm.precision : null;
-    var rec  = cm.recall    != null ? cm.recall    : null;
     var tc   = m.training_config || {};
     var algo = (tc.algorithm || m.algorithm || '').replace(/_/g,' ');
-    var variant = (m.variant_id || '').replace(/-/g,' ');
+    var strategy = tc.imbalance_strategy || tc.imbalanceStrategy || '';
     var features = tc.feature_count || (Array.isArray(m.feature_catalog) ? m.feature_catalog.length : '?');
     var created  = m.created_at ? new Date(m.created_at).toLocaleDateString() : '—';
-
-    return '<div class="model-card' + (isBest ? ' best' : '') + '">' +
+    var variant  = (m.variant_id || '').replace(/-/g,' ');
+    return '<div class="model-card' + (isBest?' best':'') + '" data-model-id="' + esc(m.id) + '">' +
       '<div class="mc-top">' +
-        '<div class="mc-id">' + esc((m.id || '').slice(0,16) + '…') + '</div>' +
-        (isBest ? '<span class="mc-badge best">Best F1</span>' : '<span class="mc-badge">' + esc(algo) + '</span>') +
+        '<div class="mc-id">' + esc((m.id||'').slice(0,20)+'…') + '</div>' +
+        '<div class="mc-badges">' +
+          (isBest ? '<span class="mc-badge best">Best F1</span>' : '') +
+          strategyBadge(strategy) +
+        '</div>' +
       '</div>' +
       '<div class="mc-metrics">' +
-        metricTile('F1', f1, .8, .6) +
-        metricTile('Precision', prec, .8, .6) +
-        metricTile('Recall', rec, .8, .6) +
+        mcMetric('F1', cm.f1, .8, .6) + mcMetric('Precision', cm.precision, .8, .6) + mcMetric('Recall', cm.recall, .8, .6) +
       '</div>' +
       '<div class="mc-footer">' +
         '<span class="mc-tag">' + esc(variant) + '</span>' +
         '<span class="mc-tag">' + esc(algo) + '</span>' +
         '<span class="mc-tag">' + features + ' features</span>' +
         '<span class="mc-tag" style="margin-left:auto">' + esc(created) + '</span>' +
+        '<span class="mc-expand-hint">Click for details ▾</span>' +
+      '</div>' +
+      '<div class="model-detail" id="detail-' + esc(m.id) + '"><div style="padding:16px;color:var(--muted2);font-size:12px"><span class="spinner"></span> Loading details…</div></div>' +
+    '</div>';
+  }
+  function mcMetric(label, val, good, warn) {
+    var cls = val==null?'plain':val>=good?'good':val>=warn?'warn':'bad';
+    return '<div class="mc-metric"><div class="val '+cls+'">' + pct(val) + '</div><div class="lbl">' + label + '</div></div>';
+  }
+
+  // ── Model detail ──────────────────────────────────────────────────────────
+  window.toggleModelDetail = function (modelId, models) {
+    var detail = document.getElementById('detail-' + modelId);
+    var card   = detail && detail.closest('.model-card');
+    if (!detail) return;
+    var isOpen = detail.classList.contains('open');
+    // Close all others
+    document.querySelectorAll('.model-detail.open').forEach(function (d) { d.classList.remove('open'); d.closest('.model-card') && d.closest('.model-card').classList.remove('expanded'); });
+    if (isOpen) { expandedModelId = null; return; }
+    detail.classList.add('open');
+    if (card) card.classList.add('expanded');
+    expandedModelId = modelId;
+
+    // If already loaded, skip
+    if (detail.dataset.loaded) return;
+    detail.dataset.loaded = '1';
+
+    api('/api/modeling/models/' + encodeURIComponent(modelId)).then(function (d) {
+      detail.innerHTML = renderModelDetail(d.model || d);
+    }).catch(function (err) {
+      detail.innerHTML = '<div style="padding:16px;color:var(--bad);font-size:12px">Failed to load: ' + esc(err.message) + '</div>';
+    });
+  };
+
+  function renderModelDetail(m) {
+    if (!m) return '<div style="padding:16px;color:var(--muted2)">No data.</div>';
+    var trainEv = (m.evaluation && m.evaluation.train) || {};
+    var testEv  = (m.evaluation && m.evaluation.test)  || {};
+    var trainCm = trainEv.candidate_metrics || {};
+    var testCm  = testEv.candidate_metrics  || {};
+    var trainRm = trainEv.ranking_metrics   || {};
+    var testRm  = testEv.ranking_metrics    || {};
+    var tc   = m.training_config || {};
+    var rel  = m.reliance || {};
+    var xss  = (testEv.xss_signal_rates) || (trainEv.xss_signal_rates) || null;
+    var strategy = tc.imbalance_strategy || tc.imbalanceStrategy || 'baseline';
+    var stratLabel = typeof strategy === 'object' ? (strategy.title || strategy.id || 'baseline') : String(strategy);
+
+    var html = '';
+
+    // ── Core metrics ──
+    html += '<div class="md-section">' +
+      '<div class="md-title">Evaluation Metrics (Train / Test)</div>' +
+      '<div class="md-grid3">' +
+        mdMetric('F1 Score', testCm.f1, trainCm.f1, .8, .6) +
+        mdMetric('Precision', testCm.precision, trainCm.precision, .8, .6) +
+        mdMetric('Recall', testCm.recall, trainCm.recall, .8, .6) +
+        mdMetric('AUC-ROC', testCm.roc_auc, trainCm.roc_auc, .85, .7) +
+        mdMetric('Top-1 Acc', testRm.top_1_accuracy, trainRm.top_1_accuracy, .9, .75) +
+        mdMetric('PR-AUC', testCm.pr_auc, trainCm.pr_auc, .75, .5) +
       '</div>' +
     '</div>';
+
+    // ── Configuration ──
+    html += '<div class="md-section">' +
+      '<div class="md-title">Training Configuration</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">' +
+        cfgRow('Algorithm', (tc.algorithm||m.algorithm||'—').replace(/_/g,' ')) +
+        cfgRow('Imbalance strategy', stratLabel) +
+        cfgRow('Variant', m.variant_id||'—') +
+        cfgRow('Features', tc.feature_count || (Array.isArray(m.feature_catalog)?m.feature_catalog.length:'—')) +
+        cfgRow('Threshold', m.threshold != null ? m.threshold.toFixed(3) : '0.500') +
+        cfgRow('Created', m.created_at ? new Date(m.created_at).toLocaleString() : '—') +
+      '</div>' +
+    '</div>';
+
+    // ── Confusion matrix ──
+    var conf = testCm.confusion || {};
+    if (conf.true_positive != null) {
+      html += '<div class="md-section">' +
+        '<div class="md-title">Confusion Matrix (Test Set)</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:260px">' +
+          confCell('TP', conf.true_positive, 'var(--good)') +
+          confCell('FP', conf.false_positive, 'var(--warn)') +
+          confCell('FN', conf.false_negative, 'var(--bad)') +
+          confCell('TN', conf.true_negative,  'var(--muted)') +
+        '</div>' +
+      '</div>';
+    }
+
+    // ── XSS signal rates ──
+    if (xss && xss.false_positive_count != null) {
+      var fpCount = xss.false_positive_count || 0;
+      var signals = Array.isArray(xss.signals) ? xss.signals : [];
+      html += '<div class="md-section">' +
+        '<div class="md-title">XSS Signal Presence in False Positives (' + fpCount + ' FPs)</div>' +
+        (fpCount === 0
+          ? '<div style="font-size:11px;color:var(--muted2)">No false positives at current threshold.</div>'
+          : '<table class="md-table"><thead><tr><th>Signal</th><th class="num">FPs with signal</th><th class="num">% of FPs</th></tr></thead><tbody>' +
+            signals.map(function (s) {
+              var r = s.rate || 0;
+              var col = r >= .5 ? 'var(--bad)' : r >= .2 ? 'var(--warn)' : 'var(--muted)';
+              return '<tr><td>' + esc(s.label) + '</td><td class="num">' + s.count + '</td>' +
+                '<td class="num" style="color:' + col + ';font-weight:700">' + (s.count > 0 ? (r*100).toFixed(1)+'%' : '0%') + '</td></tr>';
+            }).join('') + '</tbody></table>') +
+      '</div>';
+    }
+
+    // ── Feature weights ──
+    var posW = Array.isArray(rel.positive_weights) ? rel.positive_weights.slice(0,10) : [];
+    var negW = Array.isArray(rel.negative_weights) ? rel.negative_weights.slice(0,10) : [];
+    if (posW.length || negW.length) {
+      var maxW = 0;
+      posW.concat(negW).forEach(function (f) { if (Math.abs(f.weight||0) > maxW) maxW = Math.abs(f.weight); });
+      html += '<div class="md-section">' +
+        '<div class="md-title">Feature Weights</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+          weightCol('↑ Pushes toward UGC comment', posW, maxW, true) +
+          weightCol('↓ Pushes away from comment',  negW, maxW, false) +
+        '</div>' +
+      '</div>';
+    }
+
+    return html;
   }
 
-  function metricTile(label, val, good, warn) {
-    var cls = val == null ? '' : val >= good ? 'good' : val >= warn ? 'warn' : 'bad';
-    return '<div class="mc-metric">' +
-      '<div class="val ' + cls + '">' + pct(val) + '</div>' +
-      '<div class="lbl">' + label + '</div>' +
+  function mdMetric(label, testVal, trainVal, good, warn) {
+    var cls = metricClass(testVal, good, warn);
+    var trainStr = trainVal != null ? ' / ' + pct(trainVal) : '';
+    return '<div class="md-metric"><div class="lbl">' + esc(label) + '</div>' +
+      '<div class="val ' + cls + '">' + pct(testVal) + '</div>' +
+      '<div style="font-size:10px;color:var(--muted2)">train' + esc(trainStr) + '</div></div>';
+  }
+  function cfgRow(label, val) {
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:7px 10px">' +
+      '<div style="font-size:10px;color:var(--muted2);margin-bottom:2px">' + esc(label) + '</div>' +
+      '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(String(val)) + '</div></div>';
+  }
+  function confCell(label, val, color) {
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center">' +
+      '<div style="font-size:10px;color:var(--muted2)">' + label + '</div>' +
+      '<div style="font-size:18px;font-weight:800;color:' + color + '">' + (val != null ? val : '—') + '</div></div>';
+  }
+  function weightCol(title, weights, maxW, isPos) {
+    return '<div>' +
+      '<div style="font-size:10px;color:' + (isPos?'var(--good)':'var(--bad)') + ';font-weight:700;margin-bottom:8px">' + esc(title) + '</div>' +
+      weights.map(function (f, i) {
+        var w = Math.abs(f.weight || 0);
+        var barW = maxW > 0 ? Math.round(w / maxW * 80) : 0;
+        return '<div style="margin-bottom:5px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">' +
+            '<span style="color:var(--muted)">' + (i+1) + '. ' + esc(f.title||f.key||'—') + '</span>' +
+            '<span style="color:var(--muted2);font-variant-numeric:tabular-nums">' + (f.weight!=null?f.weight.toFixed(4):'—') + '</span>' +
+          '</div>' +
+          '<div style="height:5px;width:' + barW + 'px;background:' + (isPos?'var(--good)':'var(--bad)') + ';border-radius:3px;opacity:.8"></div>' +
+        '</div>';
+      }).join('') +
     '</div>';
   }
 
-  // ── Cross-validation ───────────────────────────────────────────────────────
-  document.getElementById('run-cv-btn').addEventListener('click', runCrossValidation);
-
-  async function runCrossValidation() {
+  // ── Cross-validation ──────────────────────────────────────────────────────
+  document.getElementById('run-cv-btn').addEventListener('click', runCV);
+  async function runCV() {
     var variantId = document.getElementById('variant-select').value;
-    var jobIds    = document.getElementById('job-id-input').value.trim();
+    var jobId     = document.getElementById('job-select').value;
     var algorithm = document.getElementById('algo-select').value;
     var strategy  = document.getElementById('strategy-select').value;
-
     if (!variantId) { setCvStatus('Select a model variant first.', 'error'); return; }
-
     var btn = document.getElementById('run-cv-btn');
     btn.disabled = true;
-    setCvStatus('<span class="spinner"></span> Starting cross-validation…', 'running');
+    setCvStatus('<span class="spinner"></span> Starting…', 'running');
     document.getElementById('cv-results-section').style.display = 'none';
-
     try {
       var d = await api('/api/modeling/cross-validate', {
         method: 'POST',
-        body: JSON.stringify({
-          variantId:        variantId,
-          algorithm:        algorithm,
-          imbalanceStrategy:strategy,
-          jobIds:           jobIds || '',
-          excludeFeatures:  Array.from(excludedFeatureKeys),
-        }),
+        body: JSON.stringify({ variantId:variantId, algorithm:algorithm, imbalanceStrategy:strategy, jobIds:jobId||'', excludeFeatures:Array.from(excludedFeatureKeys) }),
       });
-
       if (!d.jobId) throw new Error('No job ID returned');
-      pollCvStatus(d.jobId, btn, variantId, algorithm, jobIds);
-    } catch (err) {
-      setCvStatus(err.message || 'Failed to start.', 'error');
-      btn.disabled = false;
-    }
+      pollCV(d.jobId, btn, variantId, algorithm, jobId);
+    } catch (err) { setCvStatus(err.message||'Failed.', 'error'); btn.disabled = false; }
   }
-
-  function pollCvStatus(jobId, btn, variantId, algorithm, jobIds) {
+  function pollCV(jobId, btn, variantId, algorithm, scopeJobId) {
     if (currentPollTimer) clearInterval(currentPollTimer);
     var elapsed = 0;
     currentPollTimer = setInterval(async function () {
@@ -884,90 +751,59 @@
       try {
         var d = await api('/api/modeling/diag-status/' + jobId);
         if (d.status === 'done') {
-          clearInterval(currentPollTimer);
-          btn.disabled = false;
+          clearInterval(currentPollTimer); btn.disabled = false;
           setCvStatus('<span class="pulse-dot"></span> Complete', 'ok');
-          if (d.result) renderCvResults(d.result, variantId, algorithm, jobIds);
-          loadModels(jobIds || undefined);
+          if (d.result) renderCVResults(d.result, variantId, algorithm, scopeJobId);
+          loadModels();
         } else if (d.status === 'error') {
-          clearInterval(currentPollTimer);
-          btn.disabled = false;
+          clearInterval(currentPollTimer); btn.disabled = false;
           setCvStatus(d.error || 'CV failed.', 'error');
         }
-      } catch (_) {}
+      } catch(_) {}
     }, 3000);
   }
+  function setCvStatus(html, cls) { var el = document.getElementById('cv-status'); el.innerHTML = html; el.className = 'status-line '+(cls||''); }
 
-  function setCvStatus(html, cls) {
-    var el = document.getElementById('cv-status');
-    el.innerHTML = html;
-    el.className = 'status-line ' + (cls || '');
-  }
-
-  function renderCvResults(result, variantId, algorithm, jobIds) {
+  function renderCVResults(result, variantId, algorithm, jobId) {
     var folds = Array.isArray(result.folds) ? result.folds : [];
     var section = document.getElementById('cv-results-section');
     section.style.display = '';
-
-    document.getElementById('cv-run-meta').textContent =
-      variantId + ' · ' + algorithm + (jobIds ? ' · ' + jobIds : '');
-
-    var activeFolds = folds.filter(function (f) { return !f.skipped; });
-    document.getElementById('cv-fold-meta').textContent =
-      activeFolds.length + ' of ' + folds.length + ' folds completed';
-
-    // Fold rows
+    document.getElementById('cv-run-meta').textContent = variantId + ' · ' + algorithm + (jobId ? ' · ' + jobId.slice(0,8)+'…' : '');
+    var active = folds.filter(function(f){return !f.skipped;});
+    document.getElementById('cv-fold-meta').textContent = active.length + ' of ' + folds.length + ' folds completed';
     document.getElementById('cv-fold-tbody').innerHTML = folds.map(function (f) {
-      if (f.skipped) {
-        return '<tr><td>' + f.fold + '</td><td colspan="8" style="color:var(--muted2);font-size:11px">Skipped — ' + esc(f.reason || 'insufficient data') + '</td></tr>';
-      }
-      var cm = f.candidate_metrics || {};
-      var bm = f.best_threshold_metrics || {};
-      var f1Color  = metricColor(cm.f1, .8, .6);
-      var bf1Color = metricColor(bm.f1, .8, .6);
+      if (f.skipped) return '<tr><td>' + f.fold + '</td><td colspan="8" style="color:var(--muted2);font-size:11px">Skipped — ' + esc(f.reason||'') + '</td></tr>';
+      var cm = f.candidate_metrics || {}; var bm = f.best_threshold_metrics || {};
+      var cls = bm.f1 >= .8 ? 'var(--good)' : bm.f1 >= .6 ? 'var(--warn)' : 'var(--bad)';
       return '<tr>' +
         '<td>' + f.fold + '</td>' +
-        '<td class="num">' + (f.train_count || '—') + '</td>' +
-        '<td class="num">' + (f.test_count  || '—') + '</td>' +
-        '<td class="num" style="color:var(--' + (f1Color || 'muted') + ')">' + pct(cm.f1) + '</td>' +
-        '<td class="num best-f1">' + pct(bm.f1) + '</td>' +
-        '<td class="num">' + (bm.threshold != null ? bm.threshold.toFixed(2) : '—') + '</td>' +
+        '<td class="num">' + (f.train_count||'—') + '</td>' +
+        '<td class="num">' + (f.test_count||'—') + '</td>' +
+        '<td class="num" style="color:' + (cm.f1>=.8?'var(--good)':cm.f1>=.6?'var(--warn)':'var(--bad)') + '">' + pct(cm.f1) + '</td>' +
+        '<td class="num best-f1" style="color:' + cls + '">' + pct(bm.f1) + '</td>' +
+        '<td class="num">' + (bm.threshold!=null?bm.threshold.toFixed(2):'—') + '</td>' +
         '<td class="num">' + pct(bm.precision) + '</td>' +
-        '<td class="num">' + pct(bm.recall)    + '</td>' +
-        '<td class="num">' + (f.roc_auc != null ? f.roc_auc.toFixed(4) : (cm.roc_auc != null ? cm.roc_auc.toFixed(4) : '—')) + '</td>' +
+        '<td class="num">' + pct(bm.recall) + '</td>' +
+        '<td class="num">' + (cm.roc_auc!=null?cm.roc_auc.toFixed(4):'—') + '</td>' +
       '</tr>';
-    }).join('') || '<tr><td colspan="9" style="color:var(--muted2);text-align:center;padding:16px">No fold data</td></tr>';
-
-    // Summary
-    if (result.summary) {
-      var s = result.summary;
-      document.getElementById('cv-summary-row').innerHTML =
-        sumCell('Mean F1 @0.50', pct(s.mean_f1)) +
-        sumCell('Mean Best F1', pct(s.mean_best_f1)) +
-        sumCell('Mean Precision', pct(s.mean_precision)) +
-        sumCell('Mean Recall', pct(s.mean_recall)) +
-        sumCell('Mean ROC-AUC', s.mean_roc_auc != null ? s.mean_roc_auc.toFixed(4) : '—');
-    } else {
-      // Compute from folds
-      var vals = activeFolds.map(function (f) { return (f.best_threshold_metrics || {}).f1; }).filter(function (v) { return v != null; });
-      var mean = vals.length ? (vals.reduce(function (a,b){return a+b;},0)/vals.length) : null;
-      document.getElementById('cv-summary-row').innerHTML =
-        sumCell('Active Folds', activeFolds.length) +
-        sumCell('Mean Best F1', pct(mean)) +
-        sumCell('Features excluded', excludedFeatureKeys.size) +
-        sumCell('Algorithm', algorithm.replace(/_/g,' ')) +
-        sumCell('Variant', variantId);
-    }
-
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted2);padding:16px">No fold data</td></tr>';
+    var vals = active.map(function(f){return (f.best_threshold_metrics||{}).f1;}).filter(function(v){return v!=null;});
+    var mean = vals.length ? vals.reduce(function(a,b){return a+b;},0)/vals.length : null;
+    var precs = active.map(function(f){return (f.best_threshold_metrics||{}).precision;}).filter(function(v){return v!=null;});
+    var meanPrec = precs.length ? precs.reduce(function(a,b){return a+b;},0)/precs.length : null;
+    var recs = active.map(function(f){return (f.best_threshold_metrics||{}).recall;}).filter(function(v){return v!=null;});
+    var meanRec = recs.length ? recs.reduce(function(a,b){return a+b;},0)/recs.length : null;
+    document.getElementById('cv-summary-row').innerHTML =
+      sumCell('Active Folds', active.length + ' / ' + folds.length) +
+      sumCell('Mean Best F1', pct(mean)) +
+      sumCell('Mean Precision', pct(meanPrec)) +
+      sumCell('Mean Recall', pct(meanRec)) +
+      sumCell('Excluded Features', excludedFeatureKeys.size);
+    section.scrollIntoView({behavior:'smooth',block:'start'});
   }
-
   function sumCell(label, val) {
-    return '<div class="cv-sum-cell"><div class="csv-lbl">' + esc(label) + '</div><div class="csv-val">' + esc(String(val)) + '</div></div>';
+    return '<div class="cv-sum-cell"><div class="csv-lbl">'+esc(label)+'</div><div class="csv-val">'+esc(String(val))+'</div></div>';
   }
-
-  // ── Init ───────────────────────────────────────────────────────────────────
-  loadModels();
 
 }());
 </script>
