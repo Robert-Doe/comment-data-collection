@@ -28,6 +28,7 @@ const { buildHtmlSnapshotDot, hydrateCandidateMarkupFromSnapshot, analyzeHtmlSna
 const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { createUnifierRouter } = require('./unifierRoutes');
+const { createDomKeeperRouter } = require('../domkeeper/routes');
 const { createAuthModule } = require('./auth');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { loadInBatches } = require('../shared/loadInBatches');
@@ -339,6 +340,9 @@ function createApp(config = getConfig()) {
   app.set('trust proxy', true);
   app.use(cors(createCorsOptions(config)));
   app.use(requestTracker.middleware);
+  // DOM Keeper classifier — mounted before the global 1mb JSON parser so its
+  // own larger body parser handles the candidate payload (see src/domkeeper/).
+  app.use('/api/domkeeper', createDomKeeperRouter({ config }));
   app.use(express.json({ limit: '1mb' }));
   app.use(config.artifactUrlBasePath, express.static(config.artifactRoot));
   app.use('/api/modeling', createModelingRouter({

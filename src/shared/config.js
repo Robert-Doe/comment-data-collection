@@ -179,6 +179,25 @@ function getConfig() {
     smtpSecure: booleanFromEnv('SMTP_SECURE', false),
     smtpUser: String(process.env.SMTP_USER || '').trim(),
     smtpPass: String(process.env.SMTP_PASS || ''),
+
+    // ── DOM Keeper candidate classifier (src/domkeeper/) ──────────────────
+    // A relay endpoint the DOM Keeper browser extension calls to have Claude
+    // judge which detected regions are real comment sinks. Disabled unless
+    // DOMKEEPER_CLASSIFY_TOKEN is set. The Anthropic key stays here only.
+    domKeeper: {
+      classifyToken: String(process.env.DOMKEEPER_CLASSIFY_TOKEN || '').trim(),
+      anthropicApiKey: String(process.env.ANTHROPIC_API_KEY || '').trim(),
+      anthropicBaseUrl: String(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, ''),
+      anthropicVersion: String(process.env.ANTHROPIC_VERSION || '2023-06-01').trim(),
+      model: String(process.env.DOMKEEPER_CLASSIFY_MODEL || 'claude-sonnet-5').trim(),
+      maxOutputTokens: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_OUTPUT_TOKENS', 4096),
+      upstreamTimeoutMs: integerFromEnv('DOMKEEPER_CLASSIFY_TIMEOUT_MS', 90000),
+      maxCandidates: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_CANDIDATES', 40),
+      maxBodyBytes: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_BODY_BYTES', 4 * 1024 * 1024),
+      sampleTextChars: integerFromEnv('DOMKEEPER_CLASSIFY_SAMPLE_CHARS', 600),
+      rateWindowMs: integerFromEnv('DOMKEEPER_CLASSIFY_RATE_WINDOW_MS', 60000),
+      rateMax: integerFromEnv('DOMKEEPER_CLASSIFY_RATE_MAX', 20),
+    },
   };
 }
 
