@@ -58,14 +58,15 @@ const CATALOG_KEYS = [
 const ACTION_RANK = { ignore: 0, monitor: 1, purify: 2 };
 
 // Input modes — how much of the candidate export the LLM is shown.
+//   structure_only  (DEFAULT) ONLY the catalog features, one object per candidate —
+//                   no text, no heuristic, no prior. The same input the local model
+//                   gets. This is the default so the LLM's answer is directly
+//                   comparable to the forest's and can't lean on the visible text.
 //   full            everything: features + text sample + heuristic + local model prior
-//   structure_only  ONLY the catalog features, one object per candidate — no text,
-//                   no heuristic, no prior. The same input the local model gets, for a
-//                   controlled "can the LLM replicate the forest from structure alone" test.
 const CLASSIFY_MODES = ['full', 'structure_only'];
 
 function normalizeMode(raw) {
-  const m = String(raw || 'full').trim().toLowerCase();
+  const m = String(raw || 'structure_only').trim().toLowerCase();
   if (CLASSIFY_MODES.includes(m)) return m;
   const err = new Error(`Invalid DOM Keeper classify mode "${raw}". Use one of: ${CLASSIFY_MODES.join(', ')}.`);
   err.statusCode = 400;
