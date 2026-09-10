@@ -97,6 +97,7 @@ function createDomKeeperRouter({ config } = {}) {
       },
       provider_options: ['race', 'anthropic', 'openai'],
       provider_aliases: { claude: 'anthropic' },
+      classify_modes: ['full', 'structure_only'],
       model: defaultModel,
       max_candidates: Number(dk.maxCandidates) || 40,
     });

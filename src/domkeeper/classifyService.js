@@ -57,6 +57,21 @@ const CATALOG_KEYS = [
 
 const ACTION_RANK = { ignore: 0, monitor: 1, purify: 2 };
 
+// Input modes — how much of the candidate export the LLM is shown.
+//   full            everything: features + text sample + heuristic + local model prior
+//   structure_only  ONLY the catalog features, one object per candidate — no text,
+//                   no heuristic, no prior. The same input the local model gets, for a
+//                   controlled "can the LLM replicate the forest from structure alone" test.
+const CLASSIFY_MODES = ['full', 'structure_only'];
+
+function normalizeMode(raw) {
+  const m = String(raw || 'full').trim().toLowerCase();
+  if (CLASSIFY_MODES.includes(m)) return m;
+  const err = new Error(`Invalid DOM Keeper classify mode "${raw}". Use one of: ${CLASSIFY_MODES.join(', ')}.`);
+  err.statusCode = 400;
+  throw err;
+}
+
 // ── compaction ───────────────────────────────────────────────────────────
 
 function truncate(str, n) {
@@ -89,10 +104,12 @@ function pickFeatures(features) {
 function compact(payload, opts = {}) {
   const max = Number.isFinite(opts.max) ? opts.max : 40;
   const sampleChars = Number.isFinite(opts.sampleChars) ? opts.sampleChars : 600;
+  const mode = normalizeMode(opts.mode);
   const src = Array.isArray(payload && payload.candidates) ? payload.candidates : [];
 
   // Rank by the strongest local signal so, if we have to drop some, we drop
-  // the least interesting ones.
+  // the least interesting ones. (structure_only still ranks this way — the
+  // signal just isn't shown to the LLM.)
   const ranked = src
     .map((c) => {
       const p = c && c.verdict && typeof c.verdict.probability === 'number' ? c.verdict.probability : 0;
@@ -102,6 +119,11 @@ function compact(payload, opts = {}) {
     .sort((a, b) => b.rank - a.rank);
 
   const kept = ranked.slice(0, max).map(({ c }) => {
+    if (mode === 'structure_only') {
+      // Exactly what the local model sees: the catalog feature object, nothing
+      // else. No text, no css, no heuristic, no prior.
+      return { seq: c.seq, features: pickFeatures(c.features) };
+    }
     const h = c.heuristic || {};
     const v = c.verdict || {};
     return {
@@ -133,7 +155,7 @@ function compact(payload, opts = {}) {
     local_model_id: (payload && payload.model && payload.model.artifact_id) || null,
   };
 
-  return { page, candidates: kept, dropped: Math.max(0, src.length - kept.length) };
+  return { page, candidates: kept, dropped: Math.max(0, src.length - kept.length), mode };
 }
 
 // ── the prompt ───────────────────────────────────────────────────────────
@@ -190,45 +212,62 @@ const ASSESSMENT_TOOL = {
   },
 };
 
-const SYSTEM_PROMPT = [
-  'You are a web-structure analyst working inside DOM Keeper, a browser extension that defends against DOM-based XSS in user-generated content (UGC).',
-  '',
-  'DOM Keeper builds an inert mirror of each page and a trained model flags candidate regions that might be UGC containers. Your task: for each candidate, decide whether it is a place where END USERS submit content that accumulates over time — comments, replies, reviews, forum/board posts, Q&A answers, ratings with text, guestbook entries.',
-  '',
-  'Judge the CONTAINER, not the current text. The question is "can a stranger get markup rendered here by posting", not "does this contain prose".',
-  '',
-  'Count as UGC sinks:',
-  '  - comment threads and reply trees under articles, videos, posts',
-  '  - review / rating sections with free-text',
-  '  - forum, message-board, and discussion threads',
-  '  - Q&A answer lists, guestbooks, social-post reply lists',
-  '',
-  'Do NOT count:',
-  '  - author bios, "about" blocks, staff cards',
-  '  - tag lists, hashtag clouds, category chips',
-  '  - editorial article body copy, pull quotes, captions',
-  '  - navigation, headers, footers, cookie/consent UI',
-  '  - product specs, price blocks, "add to cart"',
-  '  - recommendation / "related" / "trending" carousels of links',
-  '  - like/share counters with no text body',
-  '',
-  'Security posture: a MISSED comment sink (false negative) is worse than an over-cautious flag (false positive). When a region is a plausible comment surface and the evidence is mixed, lean toward "monitor", not "ignore". Reserve "purify" for regions you are confident are live UGC sinks.',
-  '',
-  'You are given: the same structural features the trained model uses, the raw visible text sample (the model cannot read text), the extension\'s heuristic signals, and the local model\'s own probability. Use the local model as a prior and correct it where the text or feature evidence disagrees.',
-  '',
-  'Return exactly one assessment per candidate via the report_candidate_assessments tool. No prose outside the tool call.',
-].join('\n');
+// The one paragraph that changes with the input mode — what evidence the LLM
+// is told it has. Everything else in the prompt is identical across modes.
+const EVIDENCE_PARAGRAPH = {
+  full:
+    'You are given: the same structural features the trained model uses, the raw visible text sample (the model cannot read text), the extension\'s heuristic signals, and the local model\'s own probability. Use the local model as a prior and correct it where the text or feature evidence disagrees.',
+  structure_only:
+    'You are given ONLY the structural, attribute, and microdata features the trained model itself consumes — one feature object per candidate, keyed by seq. There is NO visible text sample, NO heuristic signals, and NO prior probability. This is a controlled comparison: decide whether each region is a UGC container from that structure alone, exactly as the model must. Use the full 0-1 range and do not default to 0.5.',
+};
+
+function systemPrompt(mode = 'full') {
+  const evidence = EVIDENCE_PARAGRAPH[mode] || EVIDENCE_PARAGRAPH.full;
+  return [
+    'You are a web-structure analyst working inside DOM Keeper, a browser extension that defends against DOM-based XSS in user-generated content (UGC).',
+    '',
+    'DOM Keeper builds an inert mirror of each page and a trained model flags candidate regions that might be UGC containers. Your task: for each candidate, decide whether it is a place where END USERS submit content that accumulates over time — comments, replies, reviews, forum/board posts, Q&A answers, ratings with text, guestbook entries.',
+    '',
+    'Judge the CONTAINER, not the current text. The question is "can a stranger get markup rendered here by posting", not "does this contain prose".',
+    '',
+    'Count as UGC sinks:',
+    '  - comment threads and reply trees under articles, videos, posts',
+    '  - review / rating sections with free-text',
+    '  - forum, message-board, and discussion threads',
+    '  - Q&A answer lists, guestbooks, social-post reply lists',
+    '',
+    'Do NOT count:',
+    '  - author bios, "about" blocks, staff cards',
+    '  - tag lists, hashtag clouds, category chips',
+    '  - editorial article body copy, pull quotes, captions',
+    '  - navigation, headers, footers, cookie/consent UI',
+    '  - product specs, price blocks, "add to cart"',
+    '  - recommendation / "related" / "trending" carousels of links',
+    '  - like/share counters with no text body',
+    '',
+    'Security posture: a MISSED comment sink (false negative) is worse than an over-cautious flag (false positive). When a region is a plausible comment surface and the evidence is mixed, lean toward "monitor", not "ignore". Reserve "purify" for regions you are confident are live UGC sinks.',
+    '',
+    evidence,
+    '',
+    'Return exactly one assessment per candidate via the report_candidate_assessments tool. No prose outside the tool call.',
+  ].join('\n');
+}
+
+// Back-compat: the default (full) prompt as a constant.
+const SYSTEM_PROMPT = systemPrompt('full');
 
 function buildRequest(compacted) {
+  const mode = normalizeMode(compacted && compacted.mode);
   const userPayload = {
     page: compacted.page,
+    mode,
     note: compacted.dropped > 0
       ? `${compacted.dropped} lower-signal candidate(s) were omitted to fit the budget.`
       : undefined,
     candidates: compacted.candidates,
   };
   return {
-    system: SYSTEM_PROMPT,
+    system: systemPrompt(mode),
     messages: [{
       role: 'user',
       content:
@@ -626,12 +665,14 @@ function buildClassificationResponse(compacted, result) {
     const a = bySeq.get(c.seq) || null;
     const likelihood = a && typeof a.likelihood === 'number'
       ? Math.min(1, Math.max(0, a.likelihood)) : null;
+    // structure_only candidates carry only { seq, features } — the rest is absent.
+    const localModel = c.local_model || null;
     return {
       seq: c.seq,
-      tag: c.tag,
-      css: c.css,
-      local_model: c.local_model,
-      local_heuristic_score: c.local_heuristic.score,
+      tag: c.tag || (c.features && c.features.tag_name) || null,
+      css: c.css || null,
+      local_model: localModel,
+      local_heuristic_score: c.local_heuristic ? c.local_heuristic.score : null,
       answered: Boolean(a),
       will_host_user_comments: a ? Boolean(a.will_host_user_comments) : null,
       likelihood,
@@ -640,7 +681,7 @@ function buildClassificationResponse(compacted, result) {
       reason: (a && a.reason) || null,
       combined_score: likelihood != null
         ? likelihood
-        : (c.local_model && typeof c.local_model.probability === 'number' ? c.local_model.probability : null),
+        : (localModel && typeof localModel.probability === 'number' ? localModel.probability : null),
     };
   });
 
@@ -688,11 +729,13 @@ async function classifyCandidates(payload, cfg) {
     e.statusCode = 400; throw e;
   }
   const providerMode = requestedProviderMode(payload, cfg);
+  const mode = normalizeMode(payload.mode);
   if (payload.candidates.length === 0) {
     const model = cfg.anthropicModel || cfg.model || cfg.openaiModel || 'claude-sonnet-5';
     return {
       provider: null,
       provider_mode: providerMode,
+      mode,
       model,
       providers_attempted: [],
       provider_errors: [],
@@ -704,11 +747,13 @@ async function classifyCandidates(payload, cfg) {
     };
   }
 
-  const compacted = compact(payload, { max: cfg.maxCandidates, sampleChars: cfg.sampleTextChars });
+  const compacted = compact(payload, { max: cfg.maxCandidates, sampleChars: cfg.sampleTextChars, mode });
   const req = buildRequest(compacted);
   const providerConfig = configuredProviders(cfg, req, payload);
   const result = await raceProviders(providerConfig.providers, providerConfig.providerMode);
-  return buildClassificationResponse(compacted, result);
+  const response = buildClassificationResponse(compacted, result);
+  response.mode = mode;
+  return response;
 }
 
 module.exports = {
@@ -716,6 +761,8 @@ module.exports = {
   // exported for tests / reuse
   compact,
   buildRequest,
+  systemPrompt,
+  CLASSIFY_MODES,
   callClaude,
   callOpenAI,
   CATALOG_KEYS,
