@@ -11,14 +11,14 @@
  * structure only, never text.
  *
  * This service is the second opinion. Given the extension's candidate export
- * (`window.__DOM_KEEPER_CANDIDATES_JSON__()` output), it asks the Claude API
+ * (`window.__DOM_KEEPER_CANDIDATES_JSON__()` output), it asks configured LLM providers
  * a sharper question: *will this region actually accumulate content that end
  * users type in — comments, replies, reviews, forum posts, Q&A answers — as
  * opposed to merely containing text that looks user-written?* The answer
  * decides where DOM Keeper should spend its hardening budget.
  *
  * Pure functions, no Express, no DB. `src/domkeeper/routes.js` wraps this in
- * a router; the Anthropic key comes from the caller (config), never hard-coded.
+ * a router; provider keys come from the caller (config), never hard-coded.
  *
  * Ported from the standalone prototype that briefly lived in the DOM Keeper
  * repo (`domkeeper.v3/server/lib/*`); this is now the single home.
@@ -240,7 +240,47 @@ function buildRequest(compacted) {
   };
 }
 
-// ── the Claude call ──────────────────────────────────────────────────────
+// ── provider calls ───────────────────────────────────────────────────────
+
+function createRequestSignal(timeoutMs, externalSignal) {
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer = null;
+
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+  }
+
+  const abortFromExternal = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+
+  if (externalSignal) {
+    if (externalSignal.aborted) abortFromExternal();
+    else externalSignal.addEventListener('abort', abortFromExternal, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    cleanup: () => {
+      if (timer) clearTimeout(timer);
+      if (externalSignal) externalSignal.removeEventListener('abort', abortFromExternal);
+    },
+  };
+}
+
+function parseJson(text) {
+  try { return JSON.parse(text); } catch (_) { return { raw: text }; }
+}
+
+function providerHttpStatus(status) {
+  return (status === 401 || status === 403) ? 502 : status;
+}
 
 /**
  * @param {object} args  { apiKey, baseUrl, version, model, maxTokens,
@@ -250,7 +290,7 @@ function buildRequest(compacted) {
 async function callClaude(args) {
   const {
     apiKey, baseUrl, version, model, maxTokens, timeoutMs,
-    system, messages, tools, toolChoice,
+    system, messages, tools, toolChoice, signal,
   } = args;
 
   if (!apiKey) {
@@ -259,14 +299,13 @@ async function callClaude(args) {
     throw err;
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const requestSignal = createRequestSignal(timeoutMs, signal);
 
   let res;
   try {
     res = await fetch(`${baseUrl}/v1/messages`, {
       method: 'POST',
-      signal: controller.signal,
+      signal: requestSignal.signal,
       headers: {
         'content-type': 'application/json',
         'x-api-key': apiKey,
@@ -275,24 +314,25 @@ async function callClaude(args) {
       body: JSON.stringify({ model, max_tokens: maxTokens, system, messages, tools, tool_choice: toolChoice }),
     });
   } catch (e) {
-    clearTimeout(timer);
     const err = new Error(
-      e.name === 'AbortError'
+      e.name === 'AbortError' && requestSignal.timedOut()
         ? `Claude API timed out after ${timeoutMs}ms`
+        : e.name === 'AbortError'
+          ? 'Claude API request was cancelled.'
         : `Could not reach the Claude API: ${e.message}`,
     );
-    err.statusCode = 504;
+    err.statusCode = requestSignal.timedOut() ? 504 : 499;
     throw err;
+  } finally {
+    requestSignal.cleanup();
   }
-  clearTimeout(timer);
 
   const text = await res.text();
-  let body;
-  try { body = JSON.parse(text); } catch (_) { body = { raw: text }; }
+  const body = parseJson(text);
 
   if (!res.ok) {
     const err = new Error((body && body.error && body.error.message) || `Claude API returned ${res.status}`);
-    err.statusCode = (res.status === 401 || res.status === 403) ? 502 : res.status;
+    err.statusCode = providerHttpStatus(res.status);
     err.upstream = (body && body.error) || body;
     throw err;
   }
@@ -300,6 +340,8 @@ async function callClaude(args) {
   const content = Array.isArray(body.content) ? body.content : [];
   const toolUse = content.find((b) => b.type === 'tool_use');
   return {
+    provider: 'anthropic',
+    model: body.model || model,
     raw: body,
     toolInput: toolUse ? toolUse.input : null,
     usage: body.usage || {},
@@ -307,49 +349,228 @@ async function callClaude(args) {
   };
 }
 
-// ── orchestration ────────────────────────────────────────────────────────
+function openAiTool(tool) {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  };
+}
+
+function parseOpenAiToolInput(body, toolName) {
+  const choices = Array.isArray(body && body.choices) ? body.choices : [];
+  const message = choices[0] && choices[0].message ? choices[0].message : {};
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  const toolCall = toolCalls.find((call) =>
+    call && call.type === 'function' && call.function && call.function.name === toolName);
+  if (!toolCall || !toolCall.function || typeof toolCall.function.arguments !== 'string') {
+    const err = new Error('OpenAI API did not return the assessment tool call.');
+    err.statusCode = 502;
+    err.upstream = { finish_reason: choices[0] && choices[0].finish_reason };
+    throw err;
+  }
+
+  try {
+    return JSON.parse(toolCall.function.arguments);
+  } catch (e) {
+    const err = new Error(`OpenAI API returned invalid JSON tool arguments: ${e.message}`);
+    err.statusCode = 502;
+    throw err;
+  }
+}
 
 /**
- * @param {object} payload  the __DOM_KEEPER_CANDIDATES_JSON__() object
- * @param {object} cfg      { anthropicApiKey, anthropicBaseUrl, anthropicVersion,
- *                            model, maxOutputTokens, upstreamTimeoutMs,
- *                            maxCandidates, sampleTextChars }
+ * @param {object} args  { apiKey, baseUrl, organization, project, model,
+ *                          maxTokens, timeoutMs, system, messages, signal }
+ * @returns {Promise<{ provider: string, model: string, toolInput: object|null, usage: object, stopReason: string, raw: object }>}
  */
-async function classifyCandidates(payload, cfg) {
-  if (!payload || typeof payload !== 'object') {
-    const e = new Error('Body must be a JSON object.'); e.statusCode = 400; throw e;
-  }
-  if (!Array.isArray(payload.candidates)) {
-    const e = new Error('Body is missing a "candidates" array (send the output of __DOM_KEEPER_CANDIDATES_JSON__()).');
-    e.statusCode = 400; throw e;
-  }
-  if (payload.candidates.length === 0) {
-    return {
-      model: cfg.model,
-      page: { url: payload.url || null, title: payload.title || null },
-      generated_at: new Date().toISOString(),
-      assessments: [], purify_targets: [], monitor_targets: [],
-      page_summary: 'No candidate regions were supplied.',
-      dropped: 0, unanswered_seqs: [], usage: null,
-    };
+async function callOpenAI(args) {
+  const {
+    apiKey, baseUrl, organization, project, model, maxTokens, timeoutMs,
+    system, messages, signal,
+  } = args;
+
+  if (!apiKey) {
+    const err = new Error('Server is not configured with an OPENAI_API_KEY.');
+    err.statusCode = 503;
+    throw err;
   }
 
-  const compacted = compact(payload, { max: cfg.maxCandidates, sampleChars: cfg.sampleTextChars });
-  const req = buildRequest(compacted);
+  const requestSignal = createRequestSignal(timeoutMs, signal);
+  const headers = {
+    'content-type': 'application/json',
+    authorization: `Bearer ${apiKey}`,
+  };
+  if (organization) headers['OpenAI-Organization'] = organization;
+  if (project) headers['OpenAI-Project'] = project;
 
-  const result = await callClaude({
-    apiKey: cfg.anthropicApiKey,
-    baseUrl: cfg.anthropicBaseUrl,
-    version: cfg.anthropicVersion || '2023-06-01',
-    model: cfg.model,
-    maxTokens: cfg.maxOutputTokens || 4096,
-    timeoutMs: cfg.upstreamTimeoutMs || 90000,
-    system: req.system,
-    messages: req.messages,
-    tools: req.tools,
-    toolChoice: req.tool_choice,
+  let res;
+  try {
+    res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      signal: requestSignal.signal,
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: system }, ...messages],
+        tools: [openAiTool(ASSESSMENT_TOOL)],
+        tool_choice: { type: 'function', function: { name: ASSESSMENT_TOOL.name } },
+        max_tokens: maxTokens,
+        temperature: 0,
+      }),
+    });
+  } catch (e) {
+    const err = new Error(
+      e.name === 'AbortError' && requestSignal.timedOut()
+        ? `OpenAI API timed out after ${timeoutMs}ms`
+        : e.name === 'AbortError'
+          ? 'OpenAI API request was cancelled.'
+          : `Could not reach the OpenAI API: ${e.message}`,
+    );
+    err.statusCode = requestSignal.timedOut() ? 504 : 499;
+    throw err;
+  } finally {
+    requestSignal.cleanup();
+  }
+
+  const text = await res.text();
+  const body = parseJson(text);
+
+  if (!res.ok) {
+    const err = new Error((body && body.error && body.error.message) || `OpenAI API returned ${res.status}`);
+    err.statusCode = providerHttpStatus(res.status);
+    err.upstream = (body && body.error) || body;
+    throw err;
+  }
+
+  const usage = body.usage || {};
+  return {
+    provider: 'openai',
+    model: body.model || model,
+    raw: body,
+    toolInput: parseOpenAiToolInput(body, ASSESSMENT_TOOL.name),
+    usage: {
+      input_tokens: usage.prompt_tokens,
+      output_tokens: usage.completion_tokens,
+      total_tokens: usage.total_tokens,
+    },
+    stopReason: body.choices && body.choices[0] ? body.choices[0].finish_reason : null,
+  };
+}
+
+// ── orchestration ────────────────────────────────────────────────────────
+
+function summarizeProviderError(provider, err) {
+  return {
+    provider: provider.name,
+    model: provider.model,
+    status: err.statusCode || 500,
+    message: err.message || 'Provider request failed.',
+  };
+}
+
+function aggregateProviderError(errors) {
+  const err = new Error(
+    'All configured DOM Keeper LLM providers failed: ' +
+    errors.map((e) => `${e.provider}(${e.status}): ${e.message}`).join('; '),
+  );
+  err.statusCode = errors[0] && errors[0].status ? errors[0].status : 502;
+  err.providerErrors = errors;
+  return err;
+}
+
+function configuredProviders(cfg, req) {
+  const maxTokens = cfg.maxOutputTokens || 4096;
+  const timeoutMs = cfg.upstreamTimeoutMs || 90000;
+  const providers = [];
+
+  if (cfg.anthropicApiKey) {
+    const model = cfg.anthropicModel || cfg.model || 'claude-sonnet-5';
+    providers.push({
+      name: 'anthropic',
+      model,
+      call: (signal) => callClaude({
+        apiKey: cfg.anthropicApiKey,
+        baseUrl: cfg.anthropicBaseUrl || 'https://api.anthropic.com',
+        version: cfg.anthropicVersion || '2023-06-01',
+        model,
+        maxTokens,
+        timeoutMs,
+        system: req.system,
+        messages: req.messages,
+        tools: req.tools,
+        toolChoice: req.tool_choice,
+        signal,
+      }),
+    });
+  }
+
+  if (cfg.openaiApiKey) {
+    const model = cfg.openaiModel || 'gpt-4o-mini';
+    providers.push({
+      name: 'openai',
+      model,
+      call: (signal) => callOpenAI({
+        apiKey: cfg.openaiApiKey,
+        baseUrl: cfg.openaiBaseUrl || 'https://api.openai.com',
+        organization: cfg.openaiOrganization,
+        project: cfg.openaiProject,
+        model,
+        maxTokens,
+        timeoutMs,
+        system: req.system,
+        messages: req.messages,
+        signal,
+      }),
+    });
+  }
+
+  return providers;
+}
+
+function raceProviders(providers) {
+  if (!providers.length) {
+    const err = new Error('No DOM Keeper LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const controllers = providers.map(() => new AbortController());
+  const providerErrors = [];
+  let pending = providers.length;
+  let settled = false;
+
+  return new Promise((resolve, reject) => {
+    providers.forEach((provider, index) => {
+      provider.call(controllers[index].signal)
+        .then((result) => {
+          if (settled) return;
+          settled = true;
+          controllers.forEach((controller, controllerIndex) => {
+            if (controllerIndex !== index) controller.abort();
+          });
+          resolve({
+            ...result,
+            provider: result.provider || provider.name,
+            model: result.model || provider.model,
+            providersAttempted: providers.map((p) => p.name),
+            providerErrors: providerErrors.slice(),
+          });
+        })
+        .catch((err) => {
+          if (settled) return;
+          providerErrors.push(summarizeProviderError(provider, err));
+          pending -= 1;
+          if (pending === 0) reject(aggregateProviderError(providerErrors));
+        });
+    });
   });
+}
 
+function buildClassificationResponse(compacted, result) {
   const toolInput = result.toolInput || {};
   const rawAssessments = Array.isArray(toolInput.assessments) ? toolInput.assessments : [];
 
@@ -390,7 +611,10 @@ async function classifyCandidates(payload, cfg) {
     .map((a) => a.seq);
 
   return {
-    model: cfg.model,
+    provider: result.provider,
+    model: result.model,
+    providers_attempted: result.providersAttempted || [result.provider],
+    provider_errors: result.providerErrors || [],
     page: compacted.page,
     generated_at: new Date().toISOString(),
     assessments: assessments.sort((x, y) =>
@@ -406,12 +630,48 @@ async function classifyCandidates(payload, cfg) {
   };
 }
 
+/**
+ * @param {object} payload  the __DOM_KEEPER_CANDIDATES_JSON__() object
+ * @param {object} cfg      { anthropicApiKey, anthropicBaseUrl, anthropicVersion,
+ *                            model, maxOutputTokens, upstreamTimeoutMs,
+ *                            maxCandidates, sampleTextChars }
+ */
+async function classifyCandidates(payload, cfg) {
+  if (!payload || typeof payload !== 'object') {
+    const e = new Error('Body must be a JSON object.'); e.statusCode = 400; throw e;
+  }
+  if (!Array.isArray(payload.candidates)) {
+    const e = new Error('Body is missing a "candidates" array (send the output of __DOM_KEEPER_CANDIDATES_JSON__()).');
+    e.statusCode = 400; throw e;
+  }
+  if (payload.candidates.length === 0) {
+    const model = cfg.anthropicModel || cfg.model || cfg.openaiModel || 'claude-sonnet-5';
+    return {
+      provider: null,
+      model,
+      providers_attempted: [],
+      provider_errors: [],
+      page: { url: payload.url || null, title: payload.title || null },
+      generated_at: new Date().toISOString(),
+      assessments: [], purify_targets: [], monitor_targets: [],
+      page_summary: 'No candidate regions were supplied.',
+      dropped: 0, unanswered_seqs: [], usage: null,
+    };
+  }
+
+  const compacted = compact(payload, { max: cfg.maxCandidates, sampleChars: cfg.sampleTextChars });
+  const req = buildRequest(compacted);
+  const result = await raceProviders(configuredProviders(cfg, req));
+  return buildClassificationResponse(compacted, result);
+}
+
 module.exports = {
   classifyCandidates,
   // exported for tests / reuse
   compact,
   buildRequest,
   callClaude,
+  callOpenAI,
   CATALOG_KEYS,
   SYSTEM_PROMPT,
   ASSESSMENT_TOOL,

@@ -4,9 +4,9 @@ A relay endpoint used by the **DOM Keeper browser extension** (separate repo).
 The extension builds an inert mirror of each page and a trained random forest
 scores candidate regions for "is this user-generated content". That verdict
 reads structure only. This endpoint adds a second opinion: it hands the
-candidate metadata **plus the visible-text sample** to the Claude API and
-asks which regions are actually places where end users post comments — the
-ones worth hardening against injection.
+candidate metadata **plus the visible-text sample** to configured server-side
+LLM providers and asks which regions are actually places where end users post
+comments — the ones worth hardening against injection.
 
 It has **no access to any labelled data or job**. It is a stateless prompt
 relay. It is intentionally not behind the session/DB auth the rest of the API
@@ -17,22 +17,30 @@ static token instead.
 
 | file | role |
 |------|------|
-| `src/domkeeper/classifyService.js` | pure functions: `compact` → `buildRequest` → `callClaude` → merge answers back onto each `seq`. No Express, no DB. |
+| `src/domkeeper/classifyService.js` | pure functions: `compact` → `buildRequest` → provider calls → merge answers back onto each `seq`. No Express, no DB. |
 | `src/domkeeper/routes.js` | `createDomKeeperRouter({ config })` — the Express router (own body parser, static-token auth, per-IP rate limit). |
 | `src/api/server.js` | mounts it: `app.use('/api/domkeeper', createDomKeeperRouter({ config }))`, **before** the global `express.json({ limit: '1mb' })` so the larger candidate payload parses. |
 | `src/shared/config.js` | `config.domKeeper` block, all from env. |
 
 ## Enable it
 
-Add two vars to `.env.digitalocean` (the `api` service's `env_file`):
+Add a caller token and at least one provider key to `.env.digitalocean` (the
+`api` service's `env_file`):
 
 ```
 DOMKEEPER_CLASSIFY_TOKEN=<long random string>   # what the extension sends as Bearer
 ANTHROPIC_API_KEY=<your Claude API key>          # server-side only
+OPENAI_API_KEY=<your OpenAI API key>             # optional fallback/race provider
 ```
 
 Without `DOMKEEPER_CLASSIFY_TOKEN` the route returns `503` (disabled).
-Optional: `DOMKEEPER_CLASSIFY_MODEL` (default `claude-sonnet-5`),
+Without at least one provider key, non-empty classifications return `503`.
+If both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are present, the endpoint sends
+both requests concurrently and returns the first valid provider response. The
+slower request is cancelled client-side after a winner is chosen.
+
+Optional: `DOMKEEPER_ANTHROPIC_MODEL` (default `claude-sonnet-5`),
+`DOMKEEPER_OPENAI_MODEL` (default `gpt-4o-mini`),
 `DOMKEEPER_CLASSIFY_MAX_CANDIDATES` (40), `DOMKEEPER_CLASSIFY_RATE_MAX` (20/min/IP).
 
 ### Deploy (DigitalOcean droplet, docker-compose)
@@ -58,7 +66,8 @@ No new npm dependency — the route uses `express`, `crypto`, and global
 ### `GET /api/domkeeper/health`
 ```json
 { "ok": true, "service": "domkeeper-classify", "enabled": true,
-  "has_api_key": true, "model": "claude-sonnet-5", "max_candidates": 40 }
+  "has_api_key": true, "has_anthropic_key": true, "has_openai_key": true,
+  "provider_mode": "race", "model": "claude-sonnet-5", "max_candidates": 40 }
 ```
 
 ### `POST /api/domkeeper/classify`
@@ -71,6 +80,9 @@ Response:
 ```jsonc
 {
   "model": "claude-sonnet-5",
+  "provider": "anthropic",
+  "providers_attempted": ["anthropic", "openai"],
+  "provider_errors": [],
   "page": { "url": "...", "title": "...", "total_candidates": 25 },
   "assessments": [
     { "seq": 12086, "recommended_action": "purify", "will_host_user_comments": true,
@@ -86,7 +98,7 @@ Response:
 }
 ```
 
-## What is sent to Claude
+## What is Sent to Providers
 
 Per candidate: the 81 features from `src/modeling/common/featureCatalog.js`, a
 ~600-char text sample, DOM Keeper's heuristic signals, the local model's
@@ -96,7 +108,7 @@ HTML, or the extension's ~250-key raw feature dict. See `compact()` in
 
 ## Security
 
-- `ANTHROPIC_API_KEY`: env only, never logged, never in a response.
+- `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`: env only, never logged, never in a response.
 - caller auth: `DOMKEEPER_CLASSIFY_TOKEN`, constant-time compared.
 - body cap 4 MB, candidate cap 40, per-IP fixed-window rate limit.
 - request bodies are not logged (they contain sampled page text).

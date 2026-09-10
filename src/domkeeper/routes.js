@@ -79,8 +79,15 @@ function createDomKeeperRouter({ config } = {}) {
       ok: true,
       service: 'domkeeper-classify',
       enabled: Boolean(dk.classifyToken),
-      has_api_key: Boolean(dk.anthropicApiKey),
-      model: dk.model || 'claude-sonnet-5',
+      has_api_key: Boolean(dk.anthropicApiKey || dk.openaiApiKey),
+      has_anthropic_key: Boolean(dk.anthropicApiKey),
+      has_openai_key: Boolean(dk.openaiApiKey),
+      provider_mode: 'race',
+      models: {
+        anthropic: dk.anthropicModel || dk.model || 'claude-sonnet-5',
+        openai: dk.openaiModel || 'gpt-4o-mini',
+      },
+      model: dk.anthropicModel || dk.model || dk.openaiModel || 'claude-sonnet-5',
       max_candidates: Number(dk.maxCandidates) || 40,
     });
   });
@@ -107,7 +114,12 @@ function createDomKeeperRouter({ config } = {}) {
         anthropicApiKey: dk.anthropicApiKey,
         anthropicBaseUrl: dk.anthropicBaseUrl || 'https://api.anthropic.com',
         anthropicVersion: dk.anthropicVersion || '2023-06-01',
-        model: dk.model || 'claude-sonnet-5',
+        anthropicModel: dk.anthropicModel || dk.model || 'claude-sonnet-5',
+        openaiApiKey: dk.openaiApiKey,
+        openaiBaseUrl: dk.openaiBaseUrl || 'https://api.openai.com',
+        openaiOrganization: dk.openaiOrganization,
+        openaiProject: dk.openaiProject,
+        openaiModel: dk.openaiModel || 'gpt-4o-mini',
         maxOutputTokens: Number(dk.maxOutputTokens) || 4096,
         upstreamTimeoutMs: Number(dk.upstreamTimeoutMs) || 90000,
         maxCandidates: Number(dk.maxCandidates) || 40,
@@ -116,6 +128,7 @@ function createDomKeeperRouter({ config } = {}) {
       console.log(
         `[domkeeper/classify] ${ip} candidates=${count} → ${result.assessments.length} assessed, ` +
         `purify=${result.purify_targets.length}, ${Date.now() - t0}ms, ` +
+        `provider=${result.provider || '?'}, ` +
         `tokens in/out=${(result.usage && result.usage.input_tokens) || '?'}/${(result.usage && result.usage.output_tokens) || '?'}`,
       );
       res.json(result);
@@ -124,6 +137,7 @@ function createDomKeeperRouter({ config } = {}) {
       console.error(`[domkeeper/classify] ${ip} error ${status}: ${err.message}`);
       res.status(status).json({
         error: err.message || 'Internal error.',
+        ...(err.providerErrors ? { provider_errors: err.providerErrors } : {}),
         // Only leak upstream error detail when explicitly in development.
         ...(process.env.NODE_ENV === 'development' && err.upstream ? { upstream: err.upstream } : {}),
       });

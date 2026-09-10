@@ -181,15 +181,20 @@ function getConfig() {
     smtpPass: String(process.env.SMTP_PASS || ''),
 
     // ── DOM Keeper candidate classifier (src/domkeeper/) ──────────────────
-    // A relay endpoint the DOM Keeper browser extension calls to have Claude
-    // judge which detected regions are real comment sinks. Disabled unless
-    // DOMKEEPER_CLASSIFY_TOKEN is set. The Anthropic key stays here only.
+    // A relay endpoint the DOM Keeper browser extension calls to have server-side
+    // LLM providers judge which detected regions are real comment sinks. Disabled
+    // unless DOMKEEPER_CLASSIFY_TOKEN is set. Provider keys stay here only.
     domKeeper: {
       classifyToken: String(process.env.DOMKEEPER_CLASSIFY_TOKEN || '').trim(),
       anthropicApiKey: String(process.env.ANTHROPIC_API_KEY || '').trim(),
       anthropicBaseUrl: String(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, ''),
       anthropicVersion: String(process.env.ANTHROPIC_VERSION || '2023-06-01').trim(),
-      model: String(process.env.DOMKEEPER_CLASSIFY_MODEL || 'claude-sonnet-5').trim(),
+      anthropicModel: String(process.env.DOMKEEPER_ANTHROPIC_MODEL || process.env.DOMKEEPER_CLASSIFY_MODEL || 'claude-sonnet-5').trim(),
+      openaiApiKey: String(process.env.OPENAI_API_KEY || '').trim(),
+      openaiBaseUrl: String(process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/+$/, ''),
+      openaiOrganization: String(process.env.OPENAI_ORGANIZATION || '').trim(),
+      openaiProject: String(process.env.OPENAI_PROJECT || '').trim(),
+      openaiModel: String(process.env.DOMKEEPER_OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini').trim(),
       maxOutputTokens: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_OUTPUT_TOKENS', 4096),
       upstreamTimeoutMs: integerFromEnv('DOMKEEPER_CLASSIFY_TIMEOUT_MS', 90000),
       maxCandidates: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_CANDIDATES', 40),
