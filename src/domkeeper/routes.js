@@ -75,6 +75,10 @@ function createDomKeeperRouter({ config } = {}) {
   }
 
   router.get('/health', (_req, res) => {
+    const providerMode = dk.providerMode || 'race';
+    const anthropicModel = dk.anthropicModel || dk.model || 'claude-sonnet-5';
+    const openaiModel = dk.openaiModel || 'gpt-4o-mini';
+    const defaultModel = providerMode === 'openai' ? openaiModel : anthropicModel;
     res.json({
       ok: true,
       service: 'domkeeper-classify',
@@ -82,12 +86,18 @@ function createDomKeeperRouter({ config } = {}) {
       has_api_key: Boolean(dk.anthropicApiKey || dk.openaiApiKey),
       has_anthropic_key: Boolean(dk.anthropicApiKey),
       has_openai_key: Boolean(dk.openaiApiKey),
-      provider_mode: 'race',
+      provider_mode: providerMode,
       models: {
-        anthropic: dk.anthropicModel || dk.model || 'claude-sonnet-5',
-        openai: dk.openaiModel || 'gpt-4o-mini',
+        anthropic: anthropicModel,
+        openai: openaiModel,
       },
-      model: dk.anthropicModel || dk.model || dk.openaiModel || 'claude-sonnet-5',
+      model_options: {
+        anthropic: Array.isArray(dk.anthropicModels) ? dk.anthropicModels : [anthropicModel],
+        openai: Array.isArray(dk.openaiModels) ? dk.openaiModels : [openaiModel],
+      },
+      provider_options: ['race', 'anthropic', 'openai'],
+      provider_aliases: { claude: 'anthropic' },
+      model: defaultModel,
       max_candidates: Number(dk.maxCandidates) || 40,
     });
   });
@@ -120,6 +130,9 @@ function createDomKeeperRouter({ config } = {}) {
         openaiOrganization: dk.openaiOrganization,
         openaiProject: dk.openaiProject,
         openaiModel: dk.openaiModel || 'gpt-4o-mini',
+        openaiModels: dk.openaiModels,
+        anthropicModels: dk.anthropicModels,
+        providerMode: dk.providerMode || 'race',
         maxOutputTokens: Number(dk.maxOutputTokens) || 4096,
         upstreamTimeoutMs: Number(dk.upstreamTimeoutMs) || 90000,
         maxCandidates: Number(dk.maxCandidates) || 40,

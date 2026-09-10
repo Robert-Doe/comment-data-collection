@@ -41,6 +41,9 @@ slower request is cancelled client-side after a winner is chosen.
 
 Optional: `DOMKEEPER_ANTHROPIC_MODEL` (default `claude-sonnet-5`),
 `DOMKEEPER_OPENAI_MODEL` (default `gpt-4o-mini`),
+`DOMKEEPER_PROVIDER_MODE` (`race`, `anthropic`, or `openai`; default `race`),
+`DOMKEEPER_ANTHROPIC_MODELS` / `DOMKEEPER_OPENAI_MODELS` (comma-separated
+allowlists the extension may choose from),
 `DOMKEEPER_CLASSIFY_MAX_CANDIDATES` (40), `DOMKEEPER_CLASSIFY_RATE_MAX` (20/min/IP).
 
 ### Deploy (DigitalOcean droplet, docker-compose)
@@ -67,7 +70,17 @@ No new npm dependency — the route uses `express`, `crypto`, and global
 ```json
 { "ok": true, "service": "domkeeper-classify", "enabled": true,
   "has_api_key": true, "has_anthropic_key": true, "has_openai_key": true,
-  "provider_mode": "race", "model": "claude-sonnet-5", "max_candidates": 40 }
+  "provider_mode": "race", "provider_options": ["race", "anthropic", "openai"],
+  "provider_aliases": { "claude": "anthropic" },
+  "models": { "anthropic": "claude-sonnet-5", "openai": "gpt-4o-mini" },
+  "model_options": { "anthropic": ["claude-sonnet-5"], "openai": ["gpt-4o-mini"] },
+  "model": "claude-sonnet-5", "max_candidates": 40 }
+```
+
+Public deployed check:
+
+```bash
+curl -s https://api.xsscommentdetection.me/api/domkeeper/health
 ```
 
 ### `POST /api/domkeeper/classify`
@@ -76,11 +89,25 @@ Header: `Authorization: Bearer <DOMKEEPER_CLASSIFY_TOKEN>`
 Body: the extension's `window.__DOM_KEEPER_CANDIDATES_JSON__()` output
 (`{ url, title, model, candidates: [ { seq, css, sample_text, verdict, heuristic, features }, … ] }`).
 
+Optional extension-selected provider/model fields:
+
+```json
+{
+  "provider_mode": "openai",
+  "models": { "openai": "gpt-4o-mini" }
+}
+```
+
+`provider_mode` may be `race`, `anthropic`, `claude`, or `openai`; `provider`
+is accepted as a backward-friendly alias. Requested models must be present in
+the server's health `model_options` allowlist.
+
 Response:
 ```jsonc
 {
   "model": "claude-sonnet-5",
   "provider": "anthropic",
+  "provider_mode": "race",
   "providers_attempted": ["anthropic", "openai"],
   "provider_errors": [],
   "page": { "url": "...", "title": "...", "total_candidates": 25 },

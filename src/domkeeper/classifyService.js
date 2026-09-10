@@ -482,13 +482,50 @@ function aggregateProviderError(errors) {
   return err;
 }
 
-function configuredProviders(cfg, req) {
+function requestedProviderMode(payload, cfg) {
+  const raw = String(
+    (payload && payload.provider_mode) ||
+    (payload && payload.provider) ||
+    cfg.providerMode ||
+    'race',
+  ).trim().toLowerCase();
+  const aliases = { claude: 'anthropic', anthropic: 'anthropic', openai: 'openai', race: 'race' };
+  const requested = aliases[raw] || raw;
+
+  if (['race', 'anthropic', 'openai'].includes(requested)) return requested;
+  const err = new Error('Invalid DOM Keeper provider selection. Use provider_mode: race, anthropic, claude, or openai.');
+  err.statusCode = 400;
+  throw err;
+}
+
+function requestedModel(payload, providerName, defaultModel, allowedModels) {
+  const models = payload && payload.models && typeof payload.models === 'object' ? payload.models : {};
+  const directKey = providerName === 'openai' ? 'openai_model' : 'anthropic_model';
+  const requested = String(models[providerName] || (payload && payload[directKey]) || defaultModel || '').trim();
+  const allowed = Array.isArray(allowedModels) && allowedModels.length ? allowedModels : [defaultModel].filter(Boolean);
+
+  if (!requested) return defaultModel;
+  if (!allowed.includes(requested)) {
+    const err = new Error(`Model ${requested} is not allowed for ${providerName}. Use one of: ${allowed.join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return requested;
+}
+
+function configuredProviders(cfg, req, payload) {
   const maxTokens = cfg.maxOutputTokens || 4096;
   const timeoutMs = cfg.upstreamTimeoutMs || 90000;
+  const providerMode = requestedProviderMode(payload, cfg);
   const providers = [];
 
-  if (cfg.anthropicApiKey) {
-    const model = cfg.anthropicModel || cfg.model || 'claude-sonnet-5';
+  if (cfg.anthropicApiKey && (providerMode === 'race' || providerMode === 'anthropic')) {
+    const model = requestedModel(
+      payload,
+      'anthropic',
+      cfg.anthropicModel || cfg.model || 'claude-sonnet-5',
+      cfg.anthropicModels,
+    );
     providers.push({
       name: 'anthropic',
       model,
@@ -508,8 +545,8 @@ function configuredProviders(cfg, req) {
     });
   }
 
-  if (cfg.openaiApiKey) {
-    const model = cfg.openaiModel || 'gpt-4o-mini';
+  if (cfg.openaiApiKey && (providerMode === 'race' || providerMode === 'openai')) {
+    const model = requestedModel(payload, 'openai', cfg.openaiModel || 'gpt-4o-mini', cfg.openaiModels);
     providers.push({
       name: 'openai',
       model,
@@ -528,12 +565,16 @@ function configuredProviders(cfg, req) {
     });
   }
 
-  return providers;
+  return { providerMode, providers };
 }
 
-function raceProviders(providers) {
+function raceProviders(providers, providerMode) {
   if (!providers.length) {
-    const err = new Error('No DOM Keeper LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.');
+    const err = new Error(
+      providerMode === 'race'
+        ? 'No DOM Keeper LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.'
+        : `The requested DOM Keeper provider is not configured or is unavailable: ${providerMode}.`,
+    );
     err.statusCode = 503;
     throw err;
   }
@@ -556,6 +597,7 @@ function raceProviders(providers) {
             ...result,
             provider: result.provider || provider.name,
             model: result.model || provider.model,
+            providerMode,
             providersAttempted: providers.map((p) => p.name),
             providerErrors: providerErrors.slice(),
           });
@@ -612,6 +654,7 @@ function buildClassificationResponse(compacted, result) {
 
   return {
     provider: result.provider,
+    provider_mode: result.providerMode || 'race',
     model: result.model,
     providers_attempted: result.providersAttempted || [result.provider],
     provider_errors: result.providerErrors || [],
@@ -644,10 +687,12 @@ async function classifyCandidates(payload, cfg) {
     const e = new Error('Body is missing a "candidates" array (send the output of __DOM_KEEPER_CANDIDATES_JSON__()).');
     e.statusCode = 400; throw e;
   }
+  const providerMode = requestedProviderMode(payload, cfg);
   if (payload.candidates.length === 0) {
     const model = cfg.anthropicModel || cfg.model || cfg.openaiModel || 'claude-sonnet-5';
     return {
       provider: null,
+      provider_mode: providerMode,
       model,
       providers_attempted: [],
       provider_errors: [],
@@ -661,7 +706,8 @@ async function classifyCandidates(payload, cfg) {
 
   const compacted = compact(payload, { max: cfg.maxCandidates, sampleChars: cfg.sampleTextChars });
   const req = buildRequest(compacted);
-  const result = await raceProviders(configuredProviders(cfg, req));
+  const providerConfig = configuredProviders(cfg, req, payload);
+  const result = await raceProviders(providerConfig.providers, providerConfig.providerMode);
   return buildClassificationResponse(compacted, result);
 }
 

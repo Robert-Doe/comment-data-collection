@@ -20,6 +20,21 @@ function booleanFromEnv(name, fallback) {
   return !/^(0|false|no|off)$/i.test(String(value).trim());
 }
 
+function listFromEnv(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined || value === '') return fallback;
+  const items = String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return items.length ? Array.from(new Set(items)) : fallback;
+}
+
+function providerModeFromEnv(name, fallback) {
+  const value = String(process.env[name] || fallback || 'race').trim().toLowerCase();
+  return ['race', 'anthropic', 'openai'].includes(value) ? value : fallback;
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -134,6 +149,19 @@ function getConfig() {
     workerLockDurationMs,
   );
   const workerMaxStalledCount = clamp(integerFromEnv('WORKER_MAX_STALLED_COUNT', 2), 1, 5);
+  const domKeeperAnthropicModel = String(
+    process.env.DOMKEEPER_ANTHROPIC_MODEL || process.env.DOMKEEPER_CLASSIFY_MODEL || 'claude-sonnet-5',
+  ).trim();
+  const domKeeperOpenAiModel = String(process.env.DOMKEEPER_OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini').trim();
+  const domKeeperAnthropicModels = Array.from(new Set([
+    domKeeperAnthropicModel,
+    ...listFromEnv('DOMKEEPER_ANTHROPIC_MODELS', []),
+  ].filter(Boolean)));
+  const domKeeperOpenAiModels = Array.from(new Set([
+    domKeeperOpenAiModel,
+    ...listFromEnv('DOMKEEPER_OPENAI_MODELS', []),
+  ].filter(Boolean)));
+  const domKeeperProviderMode = providerModeFromEnv('DOMKEEPER_PROVIDER_MODE', 'race');
 
   return {
     port: numberFromEnv('PORT', 3000),
@@ -189,12 +217,15 @@ function getConfig() {
       anthropicApiKey: String(process.env.ANTHROPIC_API_KEY || '').trim(),
       anthropicBaseUrl: String(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, ''),
       anthropicVersion: String(process.env.ANTHROPIC_VERSION || '2023-06-01').trim(),
-      anthropicModel: String(process.env.DOMKEEPER_ANTHROPIC_MODEL || process.env.DOMKEEPER_CLASSIFY_MODEL || 'claude-sonnet-5').trim(),
+      anthropicModel: domKeeperAnthropicModel,
+      anthropicModels: domKeeperAnthropicModels,
       openaiApiKey: String(process.env.OPENAI_API_KEY || '').trim(),
       openaiBaseUrl: String(process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/+$/, ''),
       openaiOrganization: String(process.env.OPENAI_ORGANIZATION || '').trim(),
       openaiProject: String(process.env.OPENAI_PROJECT || '').trim(),
-      openaiModel: String(process.env.DOMKEEPER_OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini').trim(),
+      openaiModel: domKeeperOpenAiModel,
+      openaiModels: domKeeperOpenAiModels,
+      providerMode: domKeeperProviderMode,
       maxOutputTokens: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_OUTPUT_TOKENS', 4096),
       upstreamTimeoutMs: integerFromEnv('DOMKEEPER_CLASSIFY_TIMEOUT_MS', 90000),
       maxCandidates: integerFromEnv('DOMKEEPER_CLASSIFY_MAX_CANDIDATES', 40),
