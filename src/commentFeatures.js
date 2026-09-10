@@ -2142,7 +2142,11 @@ function discoverCandidateRoots(options = {}) {
     maxNodes: Math.max(0, Number(options.maxTraversalNodes || 0)),
     timeBudgetMs: Math.max(0, Number(options.timeBudgetMs || 0)),
   };
-  const scope = document.body || document.documentElement;
+  // `options.root` lets a caller scope discovery to a subtree instead of the
+  // whole page — used by the DOM Keeper extension to run this exact function
+  // on its inert mirror twin, so training-time and inference-time candidate
+  // discovery are literally the same code. Omitted → whole-page (unchanged).
+  const scope = options.root || document.body || document.documentElement;
   const nodes = deepQuerySelectorAll(scope, getCandidateScopeSelector(candidateMode), true, traversalOptions);
   const candidates = [];
 
