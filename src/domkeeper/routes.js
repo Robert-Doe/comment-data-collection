@@ -14,9 +14,13 @@
  * candidate export runs a few hundred KB to a few MB).
  *
  * Routes:
- *   GET  /api/domkeeper/health    liveness + config summary (no secrets)
- *   POST /api/domkeeper/classify  body = __DOM_KEEPER_CANDIDATES_JSON__()
- *                                 header: Authorization: Bearer <DOMKEEPER_CLASSIFY_TOKEN>
+ *   GET  /api/domkeeper/health       liveness + config summary (no secrets)
+ *   POST /api/domkeeper/classify     body = __DOM_KEEPER_CANDIDATES_JSON__()
+ *                                    header: Authorization: Bearer <DOMKEEPER_CLASSIFY_TOKEN>
+ *   POST /api/domkeeper/scan-scripts body = { url, title, scripts: [{src, snippets}] } —
+ *                                    client-extracted id/className candidates from the
+ *                                    page's own JS, not raw source. Same token.
+ *                                    See scriptScanService.js.
  *
  * Auth here is a single static token (config.domKeeper.classifyToken), NOT the
  * session/DB auth the rest of the API uses — the browser extension can't do an
@@ -31,6 +35,7 @@ const crypto = require('crypto');
 const express = require('express');
 
 const { classifyCandidates } = require('./classifyService');
+const { scanScripts } = require('./scriptScanService');
 
 function constantTimeEqual(a, b) {
   const bufA = Buffer.from(String(a || ''));
@@ -99,6 +104,7 @@ function createDomKeeperRouter({ config } = {}) {
       provider_aliases: { claude: 'anthropic' },
       classify_modes: ['structure_only', 'full'],
       classify_mode_default: 'structure_only',
+      scan_scripts_enabled: Boolean(dk.classifyToken),
       model: defaultModel,
       max_candidates: Number(dk.maxCandidates) || 40,
     });
@@ -154,6 +160,58 @@ function createDomKeeperRouter({ config } = {}) {
         error: err.message || 'Internal error.',
         ...(err.providerErrors ? { provider_errors: err.providerErrors } : {}),
         // Only leak upstream error detail when explicitly in development.
+        ...(process.env.NODE_ENV === 'development' && err.upstream ? { upstream: err.upstream } : {}),
+      });
+    }
+  });
+
+  router.post('/scan-scripts', async (req, res) => {
+    const ip = (String(req.headers['x-forwarded-for'] || '').split(',')[0].trim())
+      || req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+
+    if (!dk.classifyToken) {
+      return res.status(503).json({ error: 'DOM Keeper classifier is not enabled on this server (no DOMKEEPER_CLASSIFY_TOKEN).' });
+    }
+    if (!tokenOk(req)) {
+      return res.status(401).json({ error: 'Missing or invalid bearer token.' });
+    }
+    if (rateLimited(ip)) {
+      return res.status(429).json({ error: 'Rate limit exceeded, slow down.' });
+    }
+
+    const payload = req.body;
+    const scriptCount = payload && Array.isArray(payload.scripts) ? payload.scripts.length : '?';
+    const t0 = Date.now();
+    try {
+      const result = await scanScripts(payload, {
+        anthropicApiKey: dk.anthropicApiKey,
+        anthropicBaseUrl: dk.anthropicBaseUrl || 'https://api.anthropic.com',
+        anthropicVersion: dk.anthropicVersion || '2023-06-01',
+        anthropicModel: dk.anthropicModel || dk.model || 'claude-sonnet-5',
+        openaiApiKey: dk.openaiApiKey,
+        openaiBaseUrl: dk.openaiBaseUrl || 'https://api.openai.com',
+        openaiOrganization: dk.openaiOrganization,
+        openaiProject: dk.openaiProject,
+        openaiModel: dk.openaiModel || 'gpt-4o-mini',
+        providerMode: dk.providerMode || 'race',
+        maxOutputTokens: Number(dk.maxOutputTokens) || 4096,
+        upstreamTimeoutMs: Number(dk.upstreamTimeoutMs) || 90000,
+        maxScripts: Number(dk.scanMaxScripts) || 25,
+        maxSnippetsPerScript: Number(dk.scanMaxSnippetsPerScript) || 25,
+        maxSnippetsTotal: Number(dk.scanMaxSnippetsTotal) || 200,
+      });
+      console.log(
+        `[domkeeper/scan-scripts] ${ip} scripts=${scriptCount} → ${result.candidates.length} candidate(s), ` +
+        `${Date.now() - t0}ms, provider=${result.provider || '?'}, ` +
+        `tokens in/out=${(result.usage && result.usage.input_tokens) || '?'}/${(result.usage && result.usage.output_tokens) || '?'}`,
+      );
+      res.json(result);
+    } catch (err) {
+      const status = err.statusCode || 500;
+      console.error(`[domkeeper/scan-scripts] ${ip} error ${status}: ${err.message}`);
+      res.status(status).json({
+        error: err.message || 'Internal error.',
+        ...(err.providerErrors ? { provider_errors: err.providerErrors } : {}),
         ...(process.env.NODE_ENV === 'development' && err.upstream ? { upstream: err.upstream } : {}),
       });
     }
