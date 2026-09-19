@@ -257,6 +257,34 @@ function structuralSignature(el) {
   return signature;
 }
 
+// Used only by the reply/nesting-tolerance homogeneity relaxation below —
+// a bare, uncached child-tag list (no element's own tag prefix), since that
+// relaxation needs to compare two tag lists directly, not a formatted string.
+function structuralChildTags(el) {
+  return directChildren(el)
+    .map((child) => (child.tagName ? child.tagName.toLowerCase() : 'unknown'))
+    .filter(Boolean)
+    .sort();
+}
+
+// Two sibling "units" (e.g. comment items) are still considered the same
+// repeating shape if one has up to `tolerance` extra child tags the other
+// lacks — this is what lets a comment-with-a-reply-thread still count as
+// the same repeating unit as a comment-without-one. tolerance <= 0 falls
+// back to an exact tag-list match (today's behaviour, unchanged).
+function homogeneitySignaturesMatch(tagsA, tagsB, tolerance) {
+  if (tolerance <= 0) return tagsA.join(',') === tagsB.join(',');
+  const [shorter, longer] = tagsA.length <= tagsB.length ? [tagsA, tagsB] : [tagsB, tagsA];
+  if (longer.length - shorter.length > tolerance) return false;
+  const remaining = longer.slice();
+  for (const tag of shorter) {
+    const idx = remaining.indexOf(tag);
+    if (idx === -1) return false;
+    remaining.splice(idx, 1);
+  }
+  return true;
+}
+
 function hashString(value) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -695,8 +723,8 @@ function feat_node_id(root) {
   return { node_id: hashString(base) };
 }
 
-function feat_repeating_group_count(root) {
-  const group = dominantUnitGroup(root);
+function feat_repeating_group_count(root, options = {}) {
+  const group = getEffectiveUnitGroup(root, options);
   const xpathGroup = dominantXPathChildGroup(root);
   return {
     repeating_group_count: group ? group.elements.length : 0,
@@ -1315,7 +1343,27 @@ function feat_submit_button_label(root) {
   };
 }
 
-function feat_sibling_homogeneity_score(root) {
+// Sig-based group size only (never conflated with the xpath-based one),
+// extended by reply/nesting tolerance the same way getEffectiveUnitGroup
+// does. Kept separate from getEffectiveUnitGroup so dominant_sig_proportion
+// below stays a true sig-only figure instead of silently picking up
+// whichever strategy is larger, the way the combined dominantUnitGroup does.
+function getEffectiveSigGroupSize(root, options = {}) {
+  const group = dominantChildGroup(root);
+  if (!group || !group.elements.length) return 0;
+  const tolerance = Math.max(0, Number(options.homogeneityReplyTolerance || 0));
+  if (tolerance <= 0) return group.elements.length;
+  const repTags = structuralChildTags(group.elements[0]);
+  const already = new Set(group.elements);
+  let extra = 0;
+  directChildren(root).forEach((child) => {
+    if (already.has(child)) return;
+    if (homogeneitySignaturesMatch(repTags, structuralChildTags(child), tolerance)) extra += 1;
+  });
+  return group.elements.length + extra;
+}
+
+function feat_sibling_homogeneity_score(root, options = {}) {
   const children = directChildren(root);
   if (children.length < 2) {
     return {
@@ -1324,16 +1372,18 @@ function feat_sibling_homogeneity_score(root) {
       dominant_xpath_star_proportion: 0,
     };
   }
-  const sigCounts = {};
   const xpathCounts = {};
   children.forEach((child) => {
-    const sigKey = sigId(child);
     const xpathKey = getXPathStar(child);
-    sigCounts[sigKey] = (sigCounts[sigKey] || 0) + 1;
     xpathCounts[xpathKey] = (xpathCounts[xpathKey] || 0) + 1;
   });
-  const maxSigCount = Math.max(...Object.values(sigCounts));
   const maxXPathCount = Math.max(...Object.values(xpathCounts));
+
+  // With no reply/nesting tolerance configured this is exactly the original
+  // exact-sig-match count. With tolerance set, a comment's extra reply-thread
+  // wrapper no longer drags this candidate's reported homogeneity down.
+  const maxSigCount = getEffectiveSigGroupSize(root, options);
+
   const maxCount = Math.max(maxSigCount, maxXPathCount);
   const score = ratio(maxCount, children.length);
   return {
@@ -1629,7 +1679,7 @@ function feat_like_count_pattern(root) {
   };
 }
 
-function extractAllFeatures(rootElement, rawHTML = '', responseHeaders = {}) {
+function extractAllFeatures(rootElement, rawHTML = '', responseHeaders = {}, options = {}) {
   if (!rootElement) return { error: 'no_root_element' };
 
   const features = Object.assign(
@@ -1648,7 +1698,7 @@ function extractAllFeatures(rootElement, rawHTML = '', responseHeaders = {}) {
     feat_structural_signature(rootElement),
     feat_sigpath(rootElement),
     feat_node_id(rootElement),
-    feat_repeating_group_count(rootElement),
+    feat_repeating_group_count(rootElement, options),
     feat_min_k_threshold_pass(rootElement),
     feat_wildcard_xpath_template(rootElement),
     feat_internal_depth_filter(rootElement),
@@ -1691,7 +1741,7 @@ function extractAllFeatures(rootElement, rawHTML = '', responseHeaders = {}) {
     feat_pagination_load_more(rootElement),
     feat_char_counter_near_textarea(rootElement),
     feat_submit_button_label(rootElement),
-    feat_sibling_homogeneity_score(rootElement),
+    feat_sibling_homogeneity_score(rootElement, options),
     feat_collapse_expand_control(rootElement),
     feat_price_currency_in_unit(rootElement),
     feat_nav_header_ancestor(rootElement),
@@ -2047,11 +2097,20 @@ function looksLikeContainer(el, options = {}) {
   const semantic = hasHighConfidenceUgcKeyword(attrSummary)
     || hasMediumConfidenceUgcKeyword(attrSummary)
     || /\bfeed\b/i.test(attrSummary);
-  const stats = getCandidateStructureStats(el);
+  const stats = getCandidateStructureStats(el, options);
+  // A single base threshold, configurable via options.homogeneityThreshold
+  // (default 0.5, matching the historical hardcoded value below) — the two
+  // looser research-mode fallbacks and the one stricter one stay offset
+  // from it by the same margins they always had, so raising or lowering
+  // this one number tightens/relaxes all of them together instead of
+  // requiring four separate knobs.
+  const baseHomogeneityThreshold = Number.isFinite(Number(options.homogeneityThreshold))
+    ? Number(options.homogeneityThreshold)
+    : 0.5;
   const hasRoleOrMicrodata = el.matches('[role="feed"], [role="comment"], [itemtype*="Comment"], [itemtype*="Review"]');
   const strongRepeatedStructure = stats.repeated >= 4 && stats.homogeneity >= 0.75;
   const structuralOverride = researchMode
-    && ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= 0.5 && stats.textLength >= 1);
+    && ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= baseHomogeneityThreshold && stats.textLength >= 1);
 
   if (researchMode && (structuralOverride || hasRoleOrMicrodata)) {
     return true;
@@ -2065,10 +2124,10 @@ function looksLikeContainer(el, options = {}) {
   if (semantic && stats.textLength >= (researchMode ? 20 : 40)) return true;
 
   if (researchMode) {
-    if ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= 0.5 && stats.textLength >= 1) return true;
-    if (stats.xpathRepeated >= 3 && stats.xpathHomogeneity >= 0.45 && stats.textLength >= 1) return true;
-    if (stats.repeated >= 3 && stats.homogeneity >= 0.45 && stats.textLength >= 1) return true;
-    if (stats.childCount >= 4 && stats.homogeneity >= 0.6 && stats.textLength >= 1) return true;
+    if ((stats.xpathRepeated >= 2 || stats.repeated >= 2) && stats.homogeneity >= baseHomogeneityThreshold && stats.textLength >= 1) return true;
+    if (stats.xpathRepeated >= 3 && stats.xpathHomogeneity >= Math.max(0, baseHomogeneityThreshold - 0.05) && stats.textLength >= 1) return true;
+    if (stats.repeated >= 3 && stats.homogeneity >= Math.max(0, baseHomogeneityThreshold - 0.05) && stats.textLength >= 1) return true;
+    if (stats.childCount >= 4 && stats.homogeneity >= Math.min(1, baseHomogeneityThreshold + 0.1) && stats.textLength >= 1) return true;
     return false;
   }
 
@@ -2108,12 +2167,67 @@ function pathIsAncestor(ancestorPath, descendantPath) {
   return descendantPath.startsWith(`${ancestorPath}/`);
 }
 
-function getCandidateStructureStats(el) {
+// Tags that are never UGC content regardless of what text/code they carry —
+// a <script> full of JS, or a bare <link>/<meta>, isn't "text evidence" just
+// because textContent happens to be non-empty for one of them.
+const NON_CONTENT_LEAF_TAGS = new Set([
+  'script', 'style', 'link', 'meta', 'template', 'noscript',
+  'base', 'br', 'hr', 'wbr', 'source', 'track', 'param', 'input',
+]);
+
+// A repeated group of childless elements that carry no real content (a row
+// of <script>/<link> tags, or a childless <div> with no visible text) isn't
+// a UGC-shaped repetition — it's just markup that happens to share a tag
+// name. options.excludeLeafRepeats (default off — unchanged behaviour) drops
+// such a group from the repeated/xpathRepeated counts entirely, so it can no
+// longer qualify a candidate or inflate its homogeneity.
+function isTrivialLeafElement(el, options) {
+  if (directChildren(el).length > 0) return false;
+  const tag = el.tagName ? el.tagName.toLowerCase() : '';
+  if (NON_CONTENT_LEAF_TAGS.has(tag)) return true;
+  const minText = Math.max(0, Number(options.leafRepeatMinTextLength || 0));
+  return textOf(el).length <= minText;
+}
+
+// The one place reply/nesting tolerance actually happens: extends whichever
+// dominant group (sig-based or xpath-based) `dominantUnitGroup` already
+// picked with any other direct child whose own child-tag shape is within
+// `options.homogeneityReplyTolerance` extra tags of the group's shape. Used
+// by both candidacy gating (getCandidateStructureStats) and the reported
+// unit-count/homogeneity features below, so a comment-with-a-reply-thread
+// is treated consistently everywhere instead of only at the discovery gate.
+// tolerance <= 0 (default) returns the group unchanged.
+function getEffectiveUnitGroup(root, options = {}) {
+  const group = dominantUnitGroup(root);
+  const tolerance = Math.max(0, Number(options.homogeneityReplyTolerance || 0));
+  if (!group || tolerance <= 0 || !group.elements.length) return group;
+  const repTags = structuralChildTags(group.elements[0]);
+  const already = new Set(group.elements);
+  const extra = [];
+  directChildren(root).forEach((child) => {
+    if (already.has(child)) return;
+    if (homogeneitySignaturesMatch(repTags, structuralChildTags(child), tolerance)) extra.push(child);
+  });
+  if (!extra.length) return group;
+  return Object.assign({}, group, { elements: group.elements.concat(extra) });
+}
+
+function getCandidateStructureStats(el, options = {}) {
   const childCount = directChildren(el).length;
-  const unitGroup = dominantUnitGroup(el);
+  const unitGroup = getEffectiveUnitGroup(el, options);
   const xpathGroup = dominantXPathChildGroup(el);
-  const repeated = unitGroup?.elements.length || 0;
-  const xpathRepeated = xpathGroup?.elements.length || 0;
+  let repeated = unitGroup?.elements.length || 0;
+  let xpathRepeated = xpathGroup?.elements.length || 0;
+
+  if (options.excludeLeafRepeats) {
+    if (unitGroup && unitGroup.elements.length && unitGroup.elements.every((node) => isTrivialLeafElement(node, options))) {
+      repeated = 0;
+    }
+    if (xpathGroup && xpathGroup.elements.length && xpathGroup.elements.every((node) => isTrivialLeafElement(node, options))) {
+      xpathRepeated = 0;
+    }
+  }
+
   const homogeneity = childCount > 1 ? ratio(Math.max(repeated, xpathRepeated), childCount) : 0;
   const xpathHomogeneity = childCount > 1 ? ratio(xpathRepeated, childCount) : 0;
   return {
@@ -2149,10 +2263,16 @@ function discoverCandidateRoots(options = {}) {
   const scope = options.root || document.body || document.documentElement;
   const nodes = deepQuerySelectorAll(scope, getCandidateScopeSelector(candidateMode), true, traversalOptions);
   const candidates = [];
+  // Gate repeated-sibling candidacy on the node's own tree depth BEFORE
+  // homogeneity is even computed — default 0 keeps every depth eligible
+  // (unchanged). Raising it excludes shallow, page-chrome-level repeats
+  // (nav bars, footer link lists) from ever reaching the homogeneity check.
+  const minCandidateDepth = Math.max(0, Number(options.minCandidateDepth || 0));
 
   nodes.forEach((node) => {
+    if (minCandidateDepth > 0 && nodeDepth(node, scope) < minCandidateDepth) return;
     if (!looksLikeContainer(node, { ...options, candidateMode })) return;
-    const stats = getCandidateStructureStats(node);
+    const stats = getCandidateStructureStats(node, options);
     const score = quickCandidateScore(node);
     if (candidateMode !== 'repetition_first' && score < 3) return;
     candidates.push({
@@ -2217,15 +2337,36 @@ function extractCandidateRegions(rawHTML = '', responseHeaders = {}, options = {
   });
   const results = [];
   for (const root of roots) {
-    const features = extractAllFeatures(root, rawHTML, responseHeaders);
+    const features = extractAllFeatures(root, rawHTML, responseHeaders, options);
     results.push(Object.assign({}, features, collectSampleText(root), collectCandidateMarkup(root), scoreFeatures(features)));
   }
   if (results.length === 0) {
     return [];
   }
 
+  // Default ('repetition') keeps the exact historical tie-break order —
+  // raw repeated-sibling count decides first, and the heuristic's own
+  // semantic verdict (`detected`/`score`) only breaks ties after that.
+  // 'semantic' flips this: a candidate the heuristic actually recognises
+  // as UGC (schema.org markup, comment keywords, reply/avatar/timestamp
+  // patterns, etc.) outranks a structurally-larger but semantically blank
+  // container (nav bars, footer link lists, a whole post bundled with its
+  // comments) — this is what fixes "the parent gets priority over the more
+  // specific comment region" without touching candidacy/discovery at all.
+  const rankingPriority = options.rankingPriority === 'semantic' ? 'semantic' : 'repetition';
+
   results.sort((left, right) => {
     if (candidateMode === 'repetition_first') {
+      if (rankingPriority === 'semantic') {
+        return (
+          Number(!!right.detected) - Number(!!left.detected)
+            || (right.score || 0) - (left.score || 0)
+            || (right.repeating_group_count || right.min_k_count || right.unit_count || 0) - (left.repeating_group_count || left.min_k_count || left.unit_count || 0)
+            || (right.xpath_star_group_count || 0) - (left.xpath_star_group_count || 0)
+            || (right.sibling_homogeneity_score || 0) - (left.sibling_homogeneity_score || 0)
+            || (right.total_text_length || 0) - (left.total_text_length || 0)
+        );
+      }
       return (
         (right.repeating_group_count || right.min_k_count || right.unit_count || 0) - (left.repeating_group_count || left.min_k_count || left.unit_count || 0)
           || (right.xpath_star_group_count || 0) - (left.xpath_star_group_count || 0)
