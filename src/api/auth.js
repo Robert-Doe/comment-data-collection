@@ -96,6 +96,7 @@ function createAuthModule(databaseUrl) {
   async function authMiddleware(req, res, next) {
     // Synthetic data pages must be accessible to the internal crawler without auth
     if (req.path.startsWith('/synthetic')) return next();
+    if (req.path.startsWith('/test/pages')) return next();
     if (PUBLIC.has(req.path)) return next();
 
     const hdr   = req.headers['authorization'] || '';

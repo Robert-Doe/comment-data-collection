@@ -29,6 +29,10 @@ const { normalizeJobScanSettings } = require('../shared/jobSettings');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { createUnifierRouter } = require('./unifierRoutes');
 const { createDomKeeperRouter } = require('../domkeeper/routes');
+const {
+  createXssTestPagesRouter,
+  publicMountPath: xssTestPagesMountPath,
+} = require('../shared/xssTestPages');
 const { createAuthModule } = require('./auth');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { loadInBatches } = require('../shared/loadInBatches');
@@ -358,6 +362,7 @@ function createApp(config = getConfig()) {
     scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
     getJobLabelSummaries: () => getJobLabelSummaries(config.databaseUrl),
   }));
+  app.use(xssTestPagesMountPath, createXssTestPagesRouter());
 
   // ── Auth + Admin routes ───────────────────────────────────────────────────────
   // Auth middleware is applied per-route (not globally) so existing unprotected

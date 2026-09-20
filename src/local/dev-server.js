@@ -42,6 +42,10 @@ const { analyzeManualCapture } = require('../shared/manualCapture');
 const { createModelingRouter } = require('../modeling/common/routes');
 const { listModelArtifacts } = require('../modeling/common/artifacts');
 const { createRequestTracker } = require('../shared/requestTracker');
+const {
+  createXssTestPagesRouter,
+  publicMountPath: xssTestPagesMountPath,
+} = require('../shared/xssTestPages');
 const { cloneValueWithArtifactCopies } = require('../shared/jobArtifacts');
 const {
   decodeProjectBackup,
@@ -1043,6 +1047,7 @@ function createLocalApp(options = {}) {
     ),
     scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
   }));
+  app.use(xssTestPagesMountPath, createXssTestPagesRouter());
 
   async function loadJobItems(jobId, job, progress) {
     const total = Math.max(1, Number(job && job.total_urls) || 1);
