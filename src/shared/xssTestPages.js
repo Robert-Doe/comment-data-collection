@@ -2048,37 +2048,158 @@ function renderLiveStoredScript(config) {
     target.innerHTML = html;
     arm(target);
   }
-  function renderComments() {
-    var root = $('live-feed');
+  function createButton(label, action, comment) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'comment-action';
+    button.setAttribute('data-action', action);
+    button.setAttribute('data-comment-id', comment.id || '');
+    button.textContent = label;
+    return button;
+  }
+  function createSemanticReplyForm(comment) {
+    var form = document.createElement('form');
+    form.className = 'reply-form';
+    form.setAttribute('data-reply-target', comment.id || '');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+    });
+    var label = document.createElement('label');
+    label.textContent = 'Reply';
+    var textarea = document.createElement('textarea');
+    textarea.name = 'reply';
+    textarea.placeholder = 'Write a reply';
+    var submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.textContent = 'Post reply';
+    form.appendChild(label);
+    form.appendChild(textarea);
+    form.appendChild(submit);
+    return form;
+  }
+  function addSemanticFeatures(panel, comment, index) {
+    var actions = document.createElement('footer');
+    actions.className = 'comment-actions';
+    actions.appendChild(createButton('Comment', 'comment', comment));
+    actions.appendChild(createButton('Like', 'like', comment));
+    actions.appendChild(createButton('Reply', 'reply', comment));
+    actions.appendChild(createButton('Share', 'share', comment));
+    actions.appendChild(createButton('Report', 'report', comment));
+    panel.appendChild(actions);
+    panel.appendChild(createSemanticReplyForm(comment));
+    if (index % 3 === 0) {
+      var replies = document.createElement('section');
+      replies.className = 'reply-list';
+      replies.setAttribute('aria-label', 'Replies');
+      var reply = document.createElement('article');
+      reply.className = 'reply-card';
+      var replyAuthor = document.createElement('strong');
+      replyAuthor.textContent = 'Thread moderator';
+      var replyBody = document.createElement('p');
+      replyBody.textContent = 'Thanks for adding the context. This thread stays attached to the stored comment.';
+      reply.appendChild(replyAuthor);
+      reply.appendChild(replyBody);
+      replies.appendChild(reply);
+      panel.appendChild(replies);
+    }
+  }
+  function createSemanticComment(comment, index) {
+    var article = document.createElement('article');
+    article.className = 'comment-card semantic-comment' + (comment.content_type === 'html' ? ' attack-comment' : '');
+    article.setAttribute('data-stored-comment-id', comment.id || '');
+    article.setAttribute('data-session-id', comment.session_id || '');
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar tone-' + (index % 6);
+    avatar.textContent = initial(comment.author);
+    var panel = document.createElement('div');
+    panel.className = 'comment-panel';
+    var meta = document.createElement('header');
+    meta.className = 'comment-meta';
+    var author = document.createElement('strong');
+    author.textContent = text(comment.author);
+    var badge = document.createElement('span');
+    badge.textContent = comment.content_type === 'html' ? text(comment.sink) : 'stored text';
+    meta.appendChild(author);
+    meta.appendChild(badge);
+    var body = document.createElement('div');
+    body.className = 'comment-body';
+    panel.appendChild(meta);
+    panel.appendChild(body);
+    article.appendChild(avatar);
+    article.appendChild(panel);
+    renderHtml(body, comment);
+    addSemanticFeatures(panel, comment, index);
+    return article;
+  }
+  function createLegacyComment(comment, index) {
+    var row = document.createElement('div');
+    row.className = 'legacy-comment-row' + (comment.content_type === 'html' ? ' legacy-attack' : '');
+    row.setAttribute('data-cid', comment.id || '');
+    row.setAttribute('data-session', comment.session_id || '');
+    var head = document.createElement('div');
+    head.className = 'legacy-head';
+    var avatar = document.createElement('span');
+    avatar.className = 'legacy-avatar tone-' + (index % 6);
+    avatar.textContent = initial(comment.author);
+    var name = document.createElement('span');
+    name.className = 'legacy-name';
+    name.textContent = text(comment.author);
+    var badge = document.createElement('span');
+    badge.className = 'legacy-badge';
+    badge.textContent = comment.content_type === 'html' ? text(comment.sink) : 'text';
+    head.appendChild(avatar);
+    head.appendChild(name);
+    head.appendChild(badge);
+    var body = document.createElement('div');
+    body.className = 'legacy-body';
+    var tools = document.createElement('div');
+    tools.className = 'legacy-tools';
+    ['comment', 'reply', 'vote', 'flag'].forEach(function (action) {
+      var item = document.createElement('span');
+      item.className = 'legacy-tool legacy-' + action;
+      item.setAttribute('data-action', action);
+      item.textContent = action;
+      tools.appendChild(item);
+    });
+    var replyBox = document.createElement('div');
+    replyBox.className = 'legacy-reply-box';
+    replyBox.setAttribute('contenteditable', 'true');
+    replyBox.setAttribute('data-placeholder', 'reply here');
+    var nested = document.createElement('div');
+    nested.className = 'legacy-nested-replies';
+    if (index % 4 === 0) {
+      var nestedItem = document.createElement('div');
+      nestedItem.className = 'legacy-reply';
+      nestedItem.textContent = 'legacy reply attached to this row';
+      nested.appendChild(nestedItem);
+    }
+    row.appendChild(head);
+    row.appendChild(body);
+    row.appendChild(tools);
+    row.appendChild(replyBox);
+    row.appendChild(nested);
+    renderHtml(body, comment);
+    return row;
+  }
+  function renderSemanticComments() {
+    var root = $('semantic-live-feed');
     if (!root) return;
     root.textContent = '';
     state.comments.forEach(function (comment, index) {
-      var article = document.createElement('article');
-      article.className = 'comment-card' + (comment.content_type === 'html' ? ' attack-comment' : '');
-      article.setAttribute('data-stored-comment-id', comment.id || '');
-      article.setAttribute('data-session-id', comment.session_id || '');
-      var avatar = document.createElement('div');
-      avatar.className = 'avatar tone-' + (index % 6);
-      avatar.textContent = initial(comment.author);
-      var panel = document.createElement('div');
-      panel.className = 'comment-panel';
-      var meta = document.createElement('div');
-      meta.className = 'comment-meta';
-      var author = document.createElement('strong');
-      author.textContent = text(comment.author);
-      var badge = document.createElement('span');
-      badge.textContent = comment.content_type === 'html' ? text(comment.sink) : 'stored text';
-      meta.appendChild(author);
-      meta.appendChild(badge);
-      var body = document.createElement('div');
-      body.className = 'comment-body';
-      panel.appendChild(meta);
-      panel.appendChild(body);
-      article.appendChild(avatar);
-      article.appendChild(panel);
-      root.appendChild(article);
-      renderHtml(body, comment);
+      root.appendChild(createSemanticComment(comment, index));
     });
+  }
+  function renderLegacyComments() {
+    var root = $('legacy-live-feed');
+    if (!root) return;
+    root.textContent = '';
+    state.comments.forEach(function (comment, index) {
+      root.appendChild(createLegacyComment(comment, index));
+    });
+  }
+  function renderComments() {
+    renderSemanticComments();
+    renderLegacyComments();
   }
   async function loadComments() {
     var session = sessionId();
@@ -2193,7 +2314,7 @@ function renderLiveStoredPage(req, room = liveDefaultRoom) {
     .panel-head p { margin:0; color:var(--muted); line-height:1.45; }
     .story-body { padding:20px; color:#263244; line-height:1.65; }
     .story-body p { margin:0 0 14px; }
-    #live-feed { padding:18px; }
+    #semantic-live-feed, #legacy-live-feed { padding:18px; }
     .comment-card { display:grid; grid-template-columns:42px minmax(0,1fr); gap:12px; margin-bottom:14px; }
     .avatar { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:12px; }
     .tone-0 { background:var(--accent); } .tone-1 { background:var(--violet); } .tone-2 { background:var(--amber); } .tone-3 { background:var(--blue); } .tone-4 { background:var(--rose); } .tone-5 { background:#475467; }
@@ -2203,9 +2324,32 @@ function renderLiveStoredPage(req, room = liveDefaultRoom) {
     .comment-meta strong { color:#1f2937; font-size:14px; }
     .comment-body { color:#263244; line-height:1.5; overflow-wrap:anywhere; word-break:break-word; }
     .comment-body img, .comment-body svg { max-width:100%; height:auto; }
+    .comment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid #eef2f7; }
+    .comment-action { width:auto; margin:0; padding:6px 9px; min-height:32px; border-color:#cbd5e1; background:#fff; color:#344054; font-size:12px; }
+    .reply-form { margin-top:10px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; }
+    .reply-form label { grid-column:1 / -1; margin:0; }
+    .reply-form textarea { min-height:58px; font:13px Arial, Helvetica, sans-serif; }
+    .reply-form button { width:auto; min-height:36px; margin:0; padding:8px 12px; }
+    .reply-list { margin-top:10px; padding-left:14px; border-left:3px solid #d5dbe6; }
+    .reply-card { padding:8px 0; color:#344054; }
+    .reply-card p { margin:4px 0 0; }
     .stored-comment-frame { width:100%; min-height:120px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; }
     .comment-shadow-host, live-stored-comment { display:block; border:1px dashed #98a2b3; border-radius:6px; padding:10px; background:#f8fafc; }
     .shady-distributed-comment { padding:8px; border-left:3px solid var(--amber); background:#fff8ed; }
+    .legacy-region { margin-top:18px; }
+    .legacy-comment-row { border:1px solid #d5dbe6; border-radius:8px; background:#fff; padding:12px; margin-bottom:12px; }
+    .legacy-attack { background:#fffdfa; border-color:#a7b2c3; }
+    .legacy-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#667085; font-size:12px; }
+    .legacy-avatar { width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:11px; }
+    .legacy-name { color:#1f2937; font-weight:700; }
+    .legacy-badge { margin-left:auto; }
+    .legacy-body { color:#263244; line-height:1.5; overflow-wrap:anywhere; word-break:break-word; }
+    .legacy-body img, .legacy-body svg { max-width:100%; height:auto; }
+    .legacy-tools { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; color:#1d4ed8; font-size:12px; }
+    .legacy-tool { cursor:pointer; border-bottom:1px dotted #1d4ed8; }
+    .legacy-reply-box { min-height:36px; margin-top:10px; padding:8px; border:1px dashed #cbd5e1; border-radius:6px; background:#f8fafc; color:#475467; }
+    .legacy-reply-box:empty::before { content:attr(data-placeholder); color:#98a2b3; }
+    .legacy-nested-replies { margin:10px 0 0 18px; border-left:3px solid #e5e7eb; padding-left:10px; color:#475467; font-size:13px; }
     .side-stack { display:grid; gap:14px; }
     .side-card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
     .side-card h3 { margin:0 0 10px; font-size:15px; letter-spacing:0; }
@@ -2252,10 +2396,17 @@ function renderLiveStoredPage(req, room = liveDefaultRoom) {
           </article>
           <section class="panel" aria-label="Live stored comments">
             <div class="panel-head">
-              <h2>Fetched Server Feed</h2>
-              <p>Seeded payload comments and visitor submissions render together in arrival order.</p>
+              <h2>Semantic Comment Thread</h2>
+              <p>Seeded payload comments and visitor submissions render with articles, headers, buttons, reply forms, and nested replies.</p>
             </div>
-            <div id="live-feed"><div class="story-body">Loading stored comments...</div></div>
+            <div id="semantic-live-feed"><div class="story-body">Loading stored comments...</div></div>
+          </section>
+          <section class="panel legacy-region">
+            <div class="panel-head">
+              <h2>Legacy Comment Stream</h2>
+              <p>The same stored feed is mirrored into div-only rows with class-based comment, reply, vote, and flag controls.</p>
+            </div>
+            <div id="legacy-live-feed"><div class="story-body">Loading legacy comments...</div></div>
           </section>
         </main>
         <aside class="side-stack">
