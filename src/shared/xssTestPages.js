@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,11 +9,26 @@ const catalogPath = path.resolve(__dirname, 'xss-test-pages', 'catalog.json');
 const publicMountPath = '/test/pages';
 const pageSize = 200;
 const reactGroupSize = 12;
+const liveDefaultRoom = 'global';
+const liveStoreMaxCommentsPerRoom = 200;
+const liveStoreMaxEventsPerRoom = 300;
+const liveAllowedSinks = new Set([
+  'innerHTML',
+  'insertAdjacentHTML',
+  'rangeFragment',
+  'templateClone',
+  'shadowDom',
+  'iframeSrcdoc',
+  'webComponent',
+  'shadyDom',
+  'angularSanitized',
+]);
 
 let cachedCatalog = null;
 let cachedMtimeMs = 0;
 let cachedReactGroups = null;
 let cachedReactGroupsKey = '';
+let liveStoreWriteQueue = Promise.resolve();
 
 const frameworkSurfaces = [
   {
@@ -360,6 +376,158 @@ function csvEscape(value) {
   return `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
 }
 
+function normalizeLiveRoom(value) {
+  const room = String(value || liveDefaultRoom)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return room || liveDefaultRoom;
+}
+
+function resolveLiveStorePath(options = {}) {
+  const artifactRoot = options.artifactRoot
+    ? path.resolve(options.artifactRoot)
+    : path.resolve(process.cwd(), 'output', 'artifacts');
+  return path.join(artifactRoot, 'xss-test-pages', 'live-comments.json');
+}
+
+function safeLiveSession(value) {
+  const session = compactText(value, 96).replace(/[^\w:.-]+/g, '-');
+  return session || 'anonymous';
+}
+
+function liveSessionFromRequest(req) {
+  return safeLiveSession(
+    (req.body && req.body.session_id)
+      || req.get('x-xss-live-session')
+      || req.query.session
+      || 'anonymous',
+  );
+}
+
+function liveEventId(prefix = 'live') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function shortDigest(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 12);
+}
+
+function livePayloadMetadata(bodyHtml, source = 'live-submission') {
+  const payload = String(bodyHtml || '');
+  const events = Array.from(payload.matchAll(/\bon[a-zA-Z0-9:-]+(?=\s*=)/g))
+    .map((match) => match[0].toLowerCase())
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .sort();
+  const tagMatch = payload.match(/<\s*\/?\s*([a-zA-Z][a-zA-Z0-9:-]*)/);
+  const lower = payload.toLowerCase();
+  const sinkTypes = [];
+  if (/<\s*script\b/.test(lower)) sinkTypes.push('script-tag');
+  if (/\bon[a-z0-9:-]+\s*=/.test(lower)) sinkTypes.push('inline-event-handler');
+  if (/\bjavascript\s*:/.test(lower)) sinkTypes.push('javascript-url');
+  if (/<\s*(svg|math|img|video|audio|iframe|object|embed)\b/.test(lower)) sinkTypes.push('active-markup');
+  if (/\bsrcdoc\s*=/.test(lower)) sinkTypes.push('srcdoc');
+  if (/\bfetch\s*\(|sendbeacon\s*\(|new\s+image\s*\(/.test(lower)) sinkTypes.push('network-callback');
+  return {
+    id: `${source}-${shortDigest(payload || source)}`,
+    number: null,
+    source,
+    title: events.length ? events.join(', ') : 'Live stored payload',
+    tag: tagMatch ? tagMatch[1].toLowerCase() : '',
+    events,
+    sink_types: Array.from(new Set(sinkTypes)),
+  };
+}
+
+function normalizeLiveStore(value) {
+  const rooms = value && typeof value === 'object' && value.rooms && typeof value.rooms === 'object'
+    ? value.rooms
+    : {};
+  return {
+    schema_version: 1,
+    updated_at: value && value.updated_at ? String(value.updated_at) : '',
+    rooms,
+  };
+}
+
+async function readLiveStore(storePath) {
+  try {
+    const raw = await fs.promises.readFile(storePath, 'utf8');
+    return normalizeLiveStore(JSON.parse(raw));
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return normalizeLiveStore(null);
+    if (error instanceof SyntaxError) return normalizeLiveStore(null);
+    throw error;
+  }
+}
+
+async function writeLiveStore(storePath, store) {
+  await fs.promises.mkdir(path.dirname(storePath), { recursive: true });
+  const next = {
+    ...normalizeLiveStore(store),
+    updated_at: new Date().toISOString(),
+  };
+  const tempPath = `${storePath}.${process.pid}.${Date.now()}.tmp`;
+  await fs.promises.writeFile(tempPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  await fs.promises.rename(tempPath, storePath);
+}
+
+function updateLiveStore(storePath, updater) {
+  liveStoreWriteQueue = liveStoreWriteQueue
+    .catch(() => {})
+    .then(async () => {
+      const store = await readLiveStore(storePath);
+      const result = await updater(store);
+      await writeLiveStore(storePath, store);
+      return result;
+    });
+  return liveStoreWriteQueue;
+}
+
+function getLiveRoomRecord(store, room) {
+  const normalized = normalizeLiveRoom(room);
+  if (!store.rooms[normalized] || typeof store.rooms[normalized] !== 'object') {
+    store.rooms[normalized] = { comments: [], events: [] };
+  }
+  const record = store.rooms[normalized];
+  if (!Array.isArray(record.comments)) record.comments = [];
+  if (!Array.isArray(record.events)) record.events = [];
+  return record;
+}
+
+async function readLiveRoom(storePath, room) {
+  const store = await readLiveStore(storePath);
+  const record = getLiveRoomRecord(store, room);
+  return {
+    comments: record.comments.slice(-liveStoreMaxCommentsPerRoom),
+    events: record.events.slice(-liveStoreMaxEventsPerRoom),
+  };
+}
+
+async function appendLiveComment(storePath, room, comment) {
+  return updateLiveStore(storePath, (store) => {
+    const record = getLiveRoomRecord(store, room);
+    record.comments.push(comment);
+    if (record.comments.length > liveStoreMaxCommentsPerRoom) {
+      record.comments = record.comments.slice(-liveStoreMaxCommentsPerRoom);
+    }
+    return comment;
+  });
+}
+
+async function appendLiveEvent(storePath, room, event) {
+  return updateLiveStore(storePath, (store) => {
+    const record = getLiveRoomRecord(store, room);
+    record.events.push(event);
+    if (record.events.length > liveStoreMaxEventsPerRoom) {
+      record.events = record.events.slice(-liveStoreMaxEventsPerRoom);
+    }
+    return event;
+  });
+}
+
 function loadCatalog() {
   let stat;
   try {
@@ -657,6 +825,103 @@ function buildReactStoredComments(group) {
   return normalBefore.concat(payloadComments, normalAfter);
 }
 
+function buildLiveSeedComments(room) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const beaconPath = `${publicMountPath}/live/${normalizedRoom}/beacon`;
+  const badImagePath = `${publicMountPath}/assets/live-missing-${normalizedRoom}.png`;
+  const seedPayloads = [
+    {
+      id: 'seed-img-onerror',
+      author: 'server cached image user',
+      sink: 'innerHTML',
+      body_html: `<img src="${badImagePath}" loading="eager" decoding="sync" onerror="fetch('${beaconPath}?kind=seed-img-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-img-onerror')"><span>Image attachment failed to load.</span>`,
+    },
+    {
+      id: 'seed-svg-onload',
+      author: 'server svg preview user',
+      sink: 'insertAdjacentHTML',
+      body_html: `<svg width="160" height="34" onload="fetch('${beaconPath}?kind=seed-svg-onload&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-svg-onload')" xmlns="http://www.w3.org/2000/svg"><rect width="160" height="34" fill="#eef2f7"/><text x="8" y="22" font-size="14">inline svg preview</text></svg>`,
+    },
+    {
+      id: 'seed-template-img-onerror',
+      author: 'server template user',
+      sink: 'templateClone',
+      body_html: `<section><strong>Template-rendered attachment</strong><img src="${badImagePath}?template=1" onerror="fetch('${beaconPath}?kind=seed-template-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-template-onerror')"></section>`,
+    },
+    {
+      id: 'seed-shadow-img-onerror',
+      author: 'server shadow user',
+      sink: 'shadowDom',
+      body_html: `<p>Shadow-root comment import</p><img src="${badImagePath}?shadow=1" onerror="fetch('${beaconPath}?kind=seed-shadow-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-shadow-onerror')">`,
+    },
+    {
+      id: 'seed-web-component',
+      author: 'server custom element user',
+      sink: 'webComponent',
+      body_html: `<img src="${badImagePath}?component=1" onerror="fetch('${beaconPath}?kind=seed-web-component-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-web-component-onerror')"><span>web component body</span>`,
+    },
+    {
+      id: 'seed-shady-dom',
+      author: 'server shady dom user',
+      sink: 'shadyDom',
+      body_html: `<img src="${badImagePath}?shady=1" onerror="fetch('${beaconPath}?kind=seed-shady-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('live-shady-onerror')"><span>distributed light DOM body</span>`,
+    },
+    {
+      id: 'seed-iframe-srcdoc',
+      author: 'server embed user',
+      sink: 'iframeSrcdoc',
+      body_html: `<body onload="fetch('${beaconPath}?kind=seed-iframe-onload&session='+encodeURIComponent(parent.__xssLiveSession||''));parent.postMessage({type:'xss-test-iframe-onload',detail:'live iframe srcdoc'},'*')"><img src='${badImagePath}?iframe=1' onerror="parent.postMessage({type:'xss-test-iframe-img-onerror',detail:'iframe image'},'*')">iframe stored body</body>`,
+    },
+    {
+      id: 'seed-angular-sanitized',
+      author: 'server sanitizer control',
+      sink: 'angularSanitized',
+      body_html: `<img src="${badImagePath}?sanitized=1" onerror="fetch('${beaconPath}?kind=should-not-run-sanitized&session='+encodeURIComponent(window.__xssLiveSession||''));alert('sanitized-control')"><span>sanitized control copy remains visible</span>`,
+    },
+  ];
+
+  const normal = [
+    {
+      id: `live-${normalizedRoom}-normal-1`,
+      author: 'Case manager',
+      role: 'staff',
+      content_type: 'text',
+      body_text: 'The imported thread below is fetched from the server-side stored comment feed.',
+      sink: 'textContent',
+      stored: true,
+      source: 'server-seeded-live-fixture',
+      created_at: '2026-09-20T07:00:00.000Z',
+      session_id: 'server-fixture',
+    },
+    {
+      id: `live-${normalizedRoom}-normal-2`,
+      author: 'Reviewer',
+      role: 'member',
+      content_type: 'text',
+      body_text: 'The first payload batch is already stored before the client renders the page.',
+      sink: 'textContent',
+      stored: true,
+      source: 'server-seeded-live-fixture',
+      created_at: '2026-09-20T07:01:00.000Z',
+      session_id: 'server-fixture',
+    },
+  ];
+
+  return normal.concat(seedPayloads.map((payload, index) => ({
+    id: `live-${normalizedRoom}-${payload.id}`,
+    author: payload.author,
+    role: index % 2 === 0 ? 'member' : 'new account',
+    content_type: 'html',
+    body_html: payload.body_html,
+    sink: payload.sink,
+    stored: true,
+    source: 'server-seeded-live-fixture',
+    created_at: new Date(Date.UTC(2026, 8, 20, 7, 2 + index, 0)).toISOString(),
+    session_id: 'server-fixture',
+    payload: livePayloadMetadata(payload.body_html, payload.id),
+  })));
+}
+
 function reactGroupSummary(group, surface = defaultFrameworkSurface()) {
   return {
     number: group.number,
@@ -782,6 +1047,7 @@ function renderIndex(req, catalog, allEntries = false) {
       <a class="button secondary" href="${publicMountPath}/urls.csv">Download URL CSV</a>
       <a class="button secondary" href="${publicMountPath}/catalog.json">Open catalog JSON</a>
       <a class="button secondary" href="${publicMountPath}/all">Show all links</a>
+      <a class="button secondary" href="${publicMountPath}/live">Live stored feed</a>
       <a class="button secondary" href="${publicMountPath}/react">Dynamic grouped comment apps</a>
     </div>
     <table>
@@ -1306,6 +1572,7 @@ function renderFrameworkIndex(req, catalog, surface = defaultFrameworkSurface())
   <main class="wrap">
     <div class="actions">
       <a class="button secondary" href="${publicMountPath}">Single-payload pages</a>
+      <a class="button secondary" href="${publicMountPath}/live">Live stored feed</a>
       <a class="button secondary" href="${publicMountPath}/frameworks">Framework families</a>
       <a class="button secondary" href="${publicMountPath}/${surface.id}/groups.json">Groups JSON</a>
       <a class="button secondary" href="${publicMountPath}/${surface.id}/urls.csv">Download grouped URL CSV</a>
@@ -1374,7 +1641,7 @@ function renderFrameworkFamiliesIndex(req, catalog) {
     </div>
   </header>
   <main class="wrap">
-    <p><a href="${publicMountPath}">Single-payload index</a> · <a href="${publicMountPath}/react">React family</a></p>
+    <p><a href="${publicMountPath}">Single-payload index</a> · <a href="${publicMountPath}/live">Live stored feed</a> · <a href="${publicMountPath}/react">React family</a></p>
     <table>
       <thead><tr><th>Family</th><th>URL Prefix</th><th>Sink Model</th><th>Pages</th><th>Exports</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -1639,6 +1906,419 @@ function renderReactAppScript(config) {
   else init();
 }());
 </script>`;
+}
+
+function renderLiveStoredScript(config) {
+  return `<script>
+(function () {
+  var config = ${safeJson(config)};
+  var state = { comments: [] };
+  var auto = new URLSearchParams(window.location.search).get('auto') !== '0';
+  var delayParam = Number(new URLSearchParams(window.location.search).get('delay'));
+  var delay = Number.isFinite(delayParam) && delayParam >= 0 ? delayParam : 80;
+
+  function $(id) { return document.getElementById(id); }
+  function text(value) { return String(value == null ? '' : value); }
+  function initial(name) {
+    return text(name).split(/\\s+/).filter(Boolean).slice(0, 2).map(function (part) { return part.charAt(0).toUpperCase(); }).join('') || 'U';
+  }
+  function sessionId() {
+    var key = 'domkeeper-live-session';
+    var value = '';
+    try { value = window.localStorage.getItem(key) || ''; } catch (_) {}
+    if (!value) {
+      value = 'live-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      try { window.localStorage.setItem(key, value); } catch (_) {}
+    }
+    window.__xssLiveSession = value;
+    document.documentElement.setAttribute('data-xss-live-session', value);
+    var node = $('session-id');
+    if (node) node.textContent = value;
+    return value;
+  }
+  function setStatus(value) {
+    var node = $('live-status');
+    if (node) node.textContent = value;
+  }
+  function arm(root) {
+    if (auto && window.__domKeeperArmPayloads) window.__domKeeperArmPayloads(root);
+  }
+  function sanitizeAngularHtml(html) {
+    var template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    Array.prototype.slice.call(template.content.querySelectorAll('script, iframe, object, embed, applet, meta, base, link')).forEach(function (node) {
+      node.remove();
+    });
+    Array.prototype.slice.call(template.content.querySelectorAll('*')).forEach(function (node) {
+      Array.prototype.slice.call(node.attributes || []).forEach(function (attribute) {
+        if (/^on/i.test(attribute.name) || /javascript:/i.test(attribute.value || '') || attribute.name === 'srcdoc') {
+          node.removeAttribute(attribute.name);
+        }
+      });
+    });
+    return template.innerHTML;
+  }
+  function defineLiveElement() {
+    if (window.customElements && !window.customElements.get('live-stored-comment')) {
+      window.customElements.define('live-stored-comment', class extends HTMLElement {
+        connectedCallback() {
+          if (this.shadowRoot) return;
+          var shadow = this.attachShadow({ mode: 'open' });
+          var style = document.createElement('style');
+          style.textContent = ':host{display:block}.body{font:14px Arial,sans-serif;color:#18212f}.body *{max-width:100%}';
+          var body = document.createElement('div');
+          body.className = 'body';
+          body.innerHTML = this.getAttribute('payload-html') || '';
+          shadow.appendChild(style);
+          shadow.appendChild(body);
+          arm(shadow);
+        }
+      });
+    }
+  }
+  function iframeDoc(html) {
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><base target="_top"><script>window.alert=function(v){parent.postMessage({type:"xss-test-iframe-alert",detail:String(v)},"*")};window.fetch=function(u){parent.postMessage({type:"xss-test-iframe-fetch",detail:String(u)},"*");return Promise.resolve(new Response("",{status:204}))};<\\/script></head><body><main class="stored-comment">' + html + '</main></body></html>';
+  }
+  function renderHtml(target, comment) {
+    var html = text(comment.body_html);
+    var sink = comment.sink || 'innerHTML';
+    target.setAttribute('data-comment-sink', sink);
+    target.setAttribute('data-live-source', comment.source || '');
+
+    if (comment.content_type === 'text') {
+      target.textContent = text(comment.body_text);
+      return;
+    }
+    if (sink === 'angularSanitized') {
+      target.innerHTML = sanitizeAngularHtml(html);
+      arm(target);
+      return;
+    }
+    if (sink === 'insertAdjacentHTML') {
+      target.textContent = '';
+      target.insertAdjacentHTML('beforeend', html);
+      arm(target);
+      return;
+    }
+    if (sink === 'rangeFragment') {
+      target.textContent = '';
+      var range = document.createRange();
+      range.selectNode(target);
+      target.appendChild(range.createContextualFragment(html));
+      arm(target);
+      return;
+    }
+    if (sink === 'templateClone') {
+      var template = document.createElement('template');
+      template.innerHTML = '<div class="stored-template-body">' + html + '</div>';
+      target.replaceChildren(template.content.cloneNode(true));
+      arm(target);
+      return;
+    }
+    if (sink === 'shadowDom') {
+      target.textContent = '';
+      var host = document.createElement('div');
+      host.className = 'comment-shadow-host';
+      target.appendChild(host);
+      var shadow = host.attachShadow({ mode: 'open' });
+      var style = document.createElement('style');
+      style.textContent = '.shadow-comment{font:14px Arial,sans-serif;color:#18212f}.shadow-comment *{max-width:100%}';
+      var body = document.createElement('div');
+      body.className = 'shadow-comment';
+      body.innerHTML = html;
+      shadow.appendChild(style);
+      shadow.appendChild(body);
+      arm(shadow);
+      return;
+    }
+    if (sink === 'iframeSrcdoc') {
+      target.textContent = '';
+      var frame = document.createElement('iframe');
+      frame.className = 'stored-comment-frame';
+      frame.title = 'Stored comment attachment';
+      frame.srcdoc = iframeDoc(html);
+      target.appendChild(frame);
+      return;
+    }
+    if (sink === 'webComponent') {
+      defineLiveElement();
+      target.textContent = '';
+      var custom = document.createElement('live-stored-comment');
+      custom.setAttribute('payload-html', html);
+      target.appendChild(custom);
+      return;
+    }
+    if (sink === 'shadyDom') {
+      window.ShadyDOM = window.ShadyDOM || { inUse: true, handlesDynamicScoping: true };
+      target.textContent = '';
+      var host = document.createElement('live-stored-comment');
+      host.setAttribute('data-shady-host', '');
+      var distributed = document.createElement('div');
+      distributed.className = 'shady-distributed-comment';
+      distributed.setAttribute('data-shady-root', '');
+      distributed.innerHTML = html;
+      host.appendChild(distributed);
+      target.appendChild(host);
+      arm(host);
+      return;
+    }
+    target.innerHTML = html;
+    arm(target);
+  }
+  function renderComments() {
+    var root = $('live-feed');
+    if (!root) return;
+    root.textContent = '';
+    state.comments.forEach(function (comment, index) {
+      var article = document.createElement('article');
+      article.className = 'comment-card' + (comment.content_type === 'html' ? ' attack-comment' : '');
+      article.setAttribute('data-stored-comment-id', comment.id || '');
+      article.setAttribute('data-session-id', comment.session_id || '');
+      var avatar = document.createElement('div');
+      avatar.className = 'avatar tone-' + (index % 6);
+      avatar.textContent = initial(comment.author);
+      var panel = document.createElement('div');
+      panel.className = 'comment-panel';
+      var meta = document.createElement('div');
+      meta.className = 'comment-meta';
+      var author = document.createElement('strong');
+      author.textContent = text(comment.author);
+      var badge = document.createElement('span');
+      badge.textContent = comment.content_type === 'html' ? text(comment.sink) : 'stored text';
+      meta.appendChild(author);
+      meta.appendChild(badge);
+      var body = document.createElement('div');
+      body.className = 'comment-body';
+      panel.appendChild(meta);
+      panel.appendChild(body);
+      article.appendChild(avatar);
+      article.appendChild(panel);
+      root.appendChild(article);
+      renderHtml(body, comment);
+    });
+  }
+  async function loadComments() {
+    var session = sessionId();
+    setStatus('Fetching stored comments for room ' + config.room + '...');
+    var response = await fetch(config.commentsUrl, {
+      headers: {
+        Accept: 'application/json',
+        'X-XSS-Live-Session': session
+      }
+    });
+    if (!response.ok) throw new Error('comments fetch failed: ' + response.status);
+    var data = await response.json();
+    state.comments = data.comments || [];
+    setStatus('Fetched ' + state.comments.length + ' stored comments from ' + data.storage.source + '.');
+    renderComments();
+  }
+  async function submitComment(event) {
+    event.preventDefault();
+    var session = sessionId();
+    var textarea = $('live-comment-body');
+    var author = $('live-comment-author');
+    var sink = $('live-comment-sink');
+    var response = await fetch(config.submitUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-XSS-Live-Session': session
+      },
+      body: JSON.stringify({
+        session_id: session,
+        author: author ? author.value : '',
+        sink: sink ? sink.value : 'innerHTML',
+        body_html: textarea ? textarea.value : ''
+      })
+    });
+    if (!response.ok) throw new Error('stored submit failed: ' + response.status);
+    var data = await response.json();
+    state.comments.push(data.comment);
+    setStatus('Persisted ' + data.comment.id + ' for room ' + config.room + '.');
+    renderComments();
+  }
+  function initForm() {
+    var textarea = $('live-comment-body');
+    var form = $('live-comment-form');
+    var author = $('live-comment-author');
+    if (textarea && !textarea.value) textarea.value = config.defaultPayload || '';
+    if (author && !author.value) author.value = 'visitor ' + sessionId().slice(-6);
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        submitComment(event).catch(function (error) { setStatus(error.message || String(error)); });
+      });
+    }
+  }
+  window.addEventListener('message', function (event) {
+    if (event && event.data && /^xss-test/.test(event.data.type || '') && window.__xssTestRecord) {
+      window.__xssTestRecord(event.data.type, event.data.detail);
+    }
+  });
+  function init() {
+    sessionId();
+    initForm();
+    window.setTimeout(function () {
+      loadComments().catch(function (error) { setStatus(error.message || String(error)); });
+    }, delay);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+}());
+</script>`;
+}
+
+function renderLiveStoredPage(req, room = liveDefaultRoom) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const baseUrl = getBaseUrl(req);
+  const roomPath = `${publicMountPath}/live/${normalizedRoom}`;
+  const commentsUrl = `${roomPath}/comments.json${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+  const submitUrl = `${roomPath}/comments`;
+  const beaconPath = `${roomPath}/beacon`;
+  const defaultPayload = `<img src="${publicMountPath}/assets/live-submitted-${normalizedRoom}.png" onerror="fetch('${beaconPath}?kind=submitted-img-onerror&session='+encodeURIComponent(window.__xssLiveSession||''));alert('submitted-live-xss')"><span>submitted stored image payload</span>`;
+  const config = {
+    room: normalizedRoom,
+    commentsUrl,
+    submitUrl,
+    beaconUrl: beaconPath,
+    defaultPayload,
+  };
+  const sinkOptions = Array.from(liveAllowedSinks).map((sink) => {
+    const selected = sink === 'innerHTML' ? ' selected' : '';
+    return `<option value="${escapeAttribute(sink)}"${selected}>${escapeHtml(sink)}</option>`;
+  }).join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="canonical" href="${escapeAttribute(`${baseUrl}/live/${normalizedRoom}`)}">
+  <title>Live Stored Comment Feed</title>
+  ${renderCaptureHarness()}
+  <style>
+    :root { color-scheme:light; --ink:#172033; --muted:#667085; --line:#d5dbe6; --paper:#fff; --soft:#f5f7fb; --accent:#0f766e; --blue:#1d4ed8; --violet:#7c3aed; --rose:#be123c; --amber:#b45309; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, Helvetica, sans-serif; color:var(--ink); background:#eef2f7; }
+    a { color:var(--blue); text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .app-shell { min-height:100vh; display:grid; grid-template-columns:260px minmax(0,1fr); }
+    .sidebar { background:#111827; color:#fff; padding:22px 18px; }
+    .brand { font-weight:800; font-size:18px; margin-bottom:22px; }
+    .nav-link { display:block; color:#e5e7eb; padding:9px 10px; border-radius:6px; margin-bottom:4px; }
+    .nav-link.active { background:#1f2937; color:#fff; }
+    .main { min-width:0; }
+    .topbar { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 26px; background:#fff; border-bottom:1px solid var(--line); }
+    .topbar strong { font-size:15px; }
+    .workspace { max-width:1180px; margin:0 auto; padding:24px; display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px; align-items:start; }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .panel-head { padding:18px 20px; border-bottom:1px solid var(--line); background:#fff; }
+    .panel-head h1, .panel-head h2 { margin:0 0 6px; font-size:24px; letter-spacing:0; }
+    .panel-head p { margin:0; color:var(--muted); line-height:1.45; }
+    .story-body { padding:20px; color:#263244; line-height:1.65; }
+    .story-body p { margin:0 0 14px; }
+    #live-feed { padding:18px; }
+    .comment-card { display:grid; grid-template-columns:42px minmax(0,1fr); gap:12px; margin-bottom:14px; }
+    .avatar { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:12px; }
+    .tone-0 { background:var(--accent); } .tone-1 { background:var(--violet); } .tone-2 { background:var(--amber); } .tone-3 { background:var(--blue); } .tone-4 { background:var(--rose); } .tone-5 { background:#475467; }
+    .comment-panel { min-width:0; border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px 14px; }
+    .attack-comment .comment-panel { border-color:#a7b2c3; background:#fffdfa; }
+    .comment-meta { display:flex; align-items:center; justify-content:space-between; gap:10px; color:var(--muted); font-size:12px; margin-bottom:8px; }
+    .comment-meta strong { color:#1f2937; font-size:14px; }
+    .comment-body { color:#263244; line-height:1.5; overflow-wrap:anywhere; word-break:break-word; }
+    .comment-body img, .comment-body svg { max-width:100%; height:auto; }
+    .stored-comment-frame { width:100%; min-height:120px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; }
+    .comment-shadow-host, live-stored-comment { display:block; border:1px dashed #98a2b3; border-radius:6px; padding:10px; background:#f8fafc; }
+    .shady-distributed-comment { padding:8px; border-left:3px solid var(--amber); background:#fff8ed; }
+    .side-stack { display:grid; gap:14px; }
+    .side-card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .side-card h3 { margin:0 0 10px; font-size:15px; letter-spacing:0; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chips span { display:inline-flex; border:1px solid #cbd5e1; background:#f8fafc; border-radius:999px; padding:4px 8px; font-size:12px; color:#475467; }
+    .status, .event-log { border-radius:6px; background:#0b1220; color:#d1fae5; padding:10px; font:12px Consolas, Monaco, monospace; white-space:pre-wrap; overflow:auto; }
+    .status { min-height:42px; }
+    .event-log { min-height:82px; max-height:180px; }
+    label { display:block; font-size:12px; font-weight:700; color:#344054; margin:10px 0 5px; }
+    input, select, textarea, button { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; color:var(--ink); }
+    textarea { min-height:150px; resize:vertical; font:12px Consolas, Monaco, monospace; }
+    button { margin-top:10px; background:var(--accent); border-color:var(--accent); color:#fff; cursor:pointer; }
+    @media (max-width:940px) {
+      .app-shell { grid-template-columns:1fr; }
+      .sidebar { display:none; }
+      .workspace { grid-template-columns:1fr; padding:16px; }
+      .topbar { padding:12px 16px; align-items:flex-start; flex-direction:column; }
+    }
+  </style>
+</head>
+<body data-xss-live-room="${escapeAttribute(normalizedRoom)}">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">CommentOps</div>
+      <a class="nav-link active" href="${roomPath}">Live stored feed</a>
+      <a class="nav-link" href="${publicMountPath}">Payload index</a>
+      <a class="nav-link" href="${publicMountPath}/frameworks">Framework families</a>
+      <a class="nav-link" href="${publicMountPath}/react/1">React grouped page</a>
+    </aside>
+    <section class="main">
+      <header class="topbar">
+        <strong>Live Room: ${escapeHtml(normalizedRoom)}</strong>
+        <span>Session <code id="session-id">pending</code></span>
+      </header>
+      <div class="workspace">
+        <main>
+          <article class="panel">
+            <div class="panel-head">
+              <h1>Stored Comment Stream</h1>
+              <p>Fetched from <code>${escapeHtml(commentsUrl)}</code> and rendered during client startup.</p>
+            </div>
+            <div class="story-body">
+              <p>Incident notes, attachment previews, profile imports, and embedded replies share the same persisted room.</p>
+            </div>
+          </article>
+          <section class="panel" aria-label="Live stored comments">
+            <div class="panel-head">
+              <h2>Fetched Server Feed</h2>
+              <p>Seeded payload comments and visitor submissions render together in arrival order.</p>
+            </div>
+            <div id="live-feed"><div class="story-body">Loading stored comments...</div></div>
+          </section>
+        </main>
+        <aside class="side-stack">
+          <section class="side-card">
+            <h3>Room URLs</h3>
+            <div class="chips">
+              <span>${escapeHtml(roomPath)}</span>
+              <span>${escapeHtml(commentsUrl)}</span>
+            </div>
+          </section>
+          <section class="side-card">
+            <h3>Persist Stored Comment</h3>
+            <form id="live-comment-form">
+              <label for="live-comment-author">Author</label>
+              <input id="live-comment-author" autocomplete="off">
+              <label for="live-comment-sink">Render sink</label>
+              <select id="live-comment-sink">${sinkOptions}</select>
+              <label for="live-comment-body">Stored body</label>
+              <textarea id="live-comment-body" spellcheck="false"></textarea>
+              <button type="submit">Save to Room</button>
+            </form>
+          </section>
+          <section class="side-card">
+            <h3>Status</h3>
+            <div id="live-status" class="status">Waiting for client fetch...</div>
+          </section>
+          <section class="side-card">
+            <h3>Captured Events</h3>
+            <div id="xss-event-log" class="event-log">Waiting for payload activity...</div>
+          </section>
+        </aside>
+      </div>
+    </section>
+  </div>
+  ${renderLiveStoredScript(config)}
+</body>
+</html>`;
 }
 
 function renderFrameworkAppPage(req, group, surface = defaultFrameworkSurface()) {
@@ -1968,6 +2648,88 @@ function receiveFrameworkStoredComment(req, res, surface = defaultFrameworkSurfa
   });
 }
 
+async function sendLiveCommentsJson(req, res, storePath, room = liveDefaultRoom) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const stored = await readLiveRoom(storePath, normalizedRoom);
+  const seedComments = buildLiveSeedComments(normalizedRoom);
+  const sessionId = liveSessionFromRequest(req);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    schema_version: 1,
+    room: normalizedRoom,
+    session_id: sessionId,
+    storage: {
+      source: 'server-side persisted live comment store',
+      route: `${publicMountPath}/live/${normalizedRoom}/comments.json`,
+      submit_route: `${publicMountPath}/live/${normalizedRoom}/comments`,
+      fetched_at: new Date().toISOString(),
+      persistence: 'JSON store under the API artifact directory; comments are shared by room',
+      seeded_comment_count: seedComments.length,
+      persisted_comment_count: stored.comments.length,
+    },
+    comments: seedComments.concat(stored.comments),
+  });
+}
+
+async function receiveLiveStoredComment(req, res, storePath, room = liveDefaultRoom) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const body = req.body || {};
+  const requestedSink = String(body.sink || 'innerHTML');
+  const bodyHtml = String(body.body_html || '').slice(0, 50000);
+  const sessionId = liveSessionFromRequest(req);
+  const comment = {
+    id: liveEventId('live-comment'),
+    room: normalizedRoom,
+    author: compactText(body.author || `visitor ${sessionId.slice(-6)}`, 80),
+    role: 'visitor submission',
+    content_type: 'html',
+    body_html: bodyHtml,
+    sink: liveAllowedSinks.has(requestedSink) ? requestedSink : 'innerHTML',
+    stored: true,
+    source: 'visitor-live-store',
+    created_at: new Date().toISOString(),
+    session_id: sessionId,
+    payload: livePayloadMetadata(bodyHtml, 'visitor-live-submission'),
+  };
+
+  await appendLiveComment(storePath, normalizedRoom, comment);
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(201).json({
+    ok: true,
+    room: normalizedRoom,
+    comment,
+  });
+}
+
+async function receiveLiveBeacon(req, res, storePath, room = liveDefaultRoom) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const event = {
+    id: liveEventId('live-event'),
+    room: normalizedRoom,
+    type: compactText(body.type || req.query.type || req.query.kind || 'payload-beacon', 80),
+    detail: compactText(body.detail || req.query.detail || req.query.kind || '', 400),
+    session_id: liveSessionFromRequest(req),
+    created_at: new Date().toISOString(),
+    method: req.method,
+    user_agent: compactText(req.get('user-agent') || '', 180),
+  };
+  await appendLiveEvent(storePath, normalizedRoom, event);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true, room: normalizedRoom, event });
+}
+
+async function sendLiveEventsJson(req, res, storePath, room = liveDefaultRoom) {
+  const normalizedRoom = normalizeLiveRoom(room);
+  const stored = await readLiveRoom(storePath, normalizedRoom);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    schema_version: 1,
+    room: normalizedRoom,
+    events: stored.events,
+  });
+}
+
 function createSilentWav() {
   const sampleRate = 8000;
   const seconds = 0.25;
@@ -2016,8 +2778,12 @@ function sendAsset(req, res, next) {
   next();
 }
 
-function createXssTestPagesRouter() {
+function createXssTestPagesRouter(options = {}) {
   const router = express.Router();
+  const liveStorePath = resolveLiveStorePath(options);
+  const asyncRoute = (handler) => (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next);
+  };
 
   router.use((req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
@@ -2042,6 +2808,22 @@ function createXssTestPagesRouter() {
     const catalog = loadCatalog();
     res.setHeader('Cache-Control', 'no-store');
     res.type('html').send(renderFrameworkFamiliesIndex(req, catalog));
+  });
+  router.get(['/live', '/live/'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(renderLiveStoredPage(req, liveDefaultRoom));
+  });
+  router.get('/live/comments.json', asyncRoute((req, res) => sendLiveCommentsJson(req, res, liveStorePath, liveDefaultRoom)));
+  router.post('/live/comments', asyncRoute((req, res) => receiveLiveStoredComment(req, res, liveStorePath, liveDefaultRoom)));
+  router.all('/live/beacon', asyncRoute((req, res) => receiveLiveBeacon(req, res, liveStorePath, liveDefaultRoom)));
+  router.get('/live/events.json', asyncRoute((req, res) => sendLiveEventsJson(req, res, liveStorePath, liveDefaultRoom)));
+  router.get('/live/:room/comments.json', asyncRoute((req, res) => sendLiveCommentsJson(req, res, liveStorePath, req.params.room)));
+  router.post('/live/:room/comments', asyncRoute((req, res) => receiveLiveStoredComment(req, res, liveStorePath, req.params.room)));
+  router.all('/live/:room/beacon', asyncRoute((req, res) => receiveLiveBeacon(req, res, liveStorePath, req.params.room)));
+  router.get('/live/:room/events.json', asyncRoute((req, res) => sendLiveEventsJson(req, res, liveStorePath, req.params.room)));
+  router.get('/live/:room', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(renderLiveStoredPage(req, req.params.room));
   });
   router.get('/:surface/groups.json', (req, res, next) => {
     const surface = getFrameworkSurface(req.params.surface);

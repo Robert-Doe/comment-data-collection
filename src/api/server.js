@@ -362,7 +362,9 @@ function createApp(config = getConfig()) {
     scanUrl: (normalizedUrl, options = {}) => scanUrl(normalizedUrl, options),
     getJobLabelSummaries: () => getJobLabelSummaries(config.databaseUrl),
   }));
-  app.use(xssTestPagesMountPath, createXssTestPagesRouter());
+  app.use(xssTestPagesMountPath, createXssTestPagesRouter({
+    artifactRoot: config.artifactRoot,
+  }));
 
   // ── Auth + Admin routes ───────────────────────────────────────────────────────
   // Auth middleware is applied per-route (not globally) so existing unprotected
